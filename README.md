@@ -83,6 +83,21 @@ proyek ini dirancang bisa berjalan di luar Supabase juga.
 
 ---
 
+## Menyimpan ke GitHub & Deploy
+
+Lihat `DEPLOY.md` — mencakup cara mendorong ke GitHub (repositori git
+lokal sudah diinisialisasi dengan riwayat commit yang bermakna), serta
+tiga opsi deploy (VPS + Docker Compose, Render.com, atau Railway).
+
+**Catatan jujur:** `Dockerfile` dan `docker-compose.yml` ditulis mengikuti
+pola standar dan sintaksnya sudah divalidasi, tapi **belum pernah benar-
+benar dijalankan** — lingkungan kerja saya tidak punya Docker terpasang.
+Berbeda dari seluruh kode aplikasi (yang diuji berkali-kali lewat HTTP dan
+browser sungguhan sepanjang percakapan ini), berkas Docker ini perlu diuji
+dulu di staging sebelum produksi. Detail lengkap ada di `DEPLOY.md`.
+
+---
+
 ## Menjalankan secara lokal
 
 ### 1. Siapkan PostgreSQL

@@ -1,0 +1,55 @@
+# docker-compose.yml
+#
+# Menjalankan PostgreSQL 16 + server aplikasi sekaligus, untuk pengembangan
+# lokal atau demo. Untuk produksi sungguhan, sebagian besar penyedia hosting
+# (Railway, Render, Fly.io) lebih baik memakai add-on Postgres terkelola
+# mereka sendiri daripada menjalankan Postgres di dalam container yang sama
+# dengan aplikasi — lihat README bagian "Deploy ke hosting" untuk itu.
+#
+# Menjalankan:
+#   docker compose up -d db          # nyalakan Postgres dulu
+#   docker compose run --rm app npm run migrate
+#   docker compose run --rm app npm run seed
+#   docker compose up -d app
+
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: mikkdev
+      POSTGRES_DB: mikk_portal
+    ports:
+      - "5544:5432"
+    volumes:
+      - mikk_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Di dalam jaringan docker-compose, host database adalah nama
+      # servicenya ("db"), bukan "localhost".
+      DATABASE_URL: postgresql://postgres:mikkdev@db:5432/mikk_portal
+      APP_DATABASE_URL: postgresql://mikk_app:ganti_ini_sebelum_produksi@db:5432/mikk_portal
+      JWT_SECRET: ${JWT_SECRET:?wajib diset — lihat README}
+      PORT: 4000
+      NODE_ENV: production
+    ports:
+      - "4000:4000"
+    volumes:
+      - mikk_uploads:/app/uploads
+
+volumes:
+  mikk_pgdata:
+  mikk_uploads:
