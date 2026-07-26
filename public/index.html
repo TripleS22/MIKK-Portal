@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIKK Client Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<section class="screen" id="screenLogin">
+  <div class="authcard">
+    <div class="mark">M</div>
+    <h2>MIKK Client Portal</h2>
+    <p class="sub">Masuk untuk melanjutkan ke workspace Anda.</p>
+    <div class="err" id="loginErr"></div>
+    <form id="loginForm">
+      <div class="f"><label for="email">Email</label>
+        <input id="email" type="email" required autocomplete="username"></div>
+      <div class="f"><label for="password">Kata sandi</label>
+        <input id="password" type="password" required autocomplete="current-password"></div>
+      <button class="btn gold" id="loginBtn" type="submit">Masuk</button>
+    </form>
+    <div class="demo">
+      Akun demo (Fase 1) — kata sandi sama untuk semua: <code>MikkDemo!2026</code><br>
+      <code>irfan@mikklaws.com</code> — Managing Partner (semua klien)<br>
+      <code>putri@mikklaws.com</code> — Associate (klien yang ditugaskan)<br>
+      <code>legal@nhc.co.id</code> — PIC klien NHC
+    </div>
+  </div>
+</section>
+
+<!-- PEMILIH WORKSPACE -->
+<section class="screen" id="screenWorkspace" style="display:none">
+  <div class="wschoose">
+    <h2>Pilih workspace</h2>
+    <p class="sub">Anda terdaftar di lebih dari satu peran. Pilih salah satu untuk melanjutkan.</p>
+    <div class="wsgrid" id="wsGrid"></div>
+  </div>
+</section>
+
+<!-- APLIKASI -->
+<div id="screenApp" style="display:none">
+  <header class="hdr">
+    <div class="mark">M</div>
+    <div>
+      <h1>MIKK Advocates &amp; Counsellors</h1>
+      <div class="sub" id="hdrSub">Portal Klien Retainer</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="chip" id="langBtn"><span>ID</span></button>
+    <button class="switchLink" id="switchWsBtn" style="display:none">Ganti workspace</button>
+    <div class="who">
+      <div class="av" id="avInit">—</div>
+      <div style="line-height:1.25">
+        <div style="font-size:12px;font-weight:600" id="whoName">—</div>
+        <div style="font-size:10px;color:#94a3b8" id="whoRole">—</div>
+      </div>
+    </div>
+    <button class="chip" id="logoutBtn" style="margin-left:2px">Keluar</button>
+  </header>
+
+  <div class="wrap">
+    <div class="errbar" id="apiErr"></div>
+
+    <div class="seg" id="modSeg" style="margin-bottom:16px;flex-wrap:wrap">
+      <button id="modKontrakBtn" class="on">CRM Kontrak</button>
+      <button id="modPermitsBtn">Perizinan</button>
+      <button id="modCasesBtn">Litigasi &amp; Sidang</button>
+      <button id="modProjectsBtn">Proyek Legal</button>
+      <button id="modPendampinganBtn">Hub Pendampingan</button>
+      <button id="modDocsBtn">Arsip Dokumen</button>
+    </div>
+
+    <div id="secKontrak">
+    <section class="hero">
+      <div class="hero-top">
+        <div style="flex:1;min-width:250px">
+          <div class="eyebrow" id="eyebrow">CRM Kontrak</div>
+          <h2 id="heroTitle">Peta kelengkapan data</h2>
+          <p id="heroDesc"></p>
+        </div>
+        <div style="text-align:right">
+          <div class="big"><span id="pctBig">0</span><small>%</small></div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px" id="pctSub"></div>
+        </div>
+      </div>
+      <div class="ledger">
+        <div class="led-labels" id="ledLabels"></div>
+        <div class="led-scroll"><div class="led-grid" id="ledGrid"></div></div>
+      </div>
+      <div class="led-cap" id="ledCap"></div>
+    </section>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="bar">
+      <div class="seg">
+        <button id="vTable" class="on">Tabel</button>
+        <button id="vQuick">Isi cepat</button>
+      </div>
+      <input class="fld" id="q" placeholder="Cari nomor atau judul…" style="flex:1;min-width:170px">
+      <select class="fld" id="fKat"></select>
+      <select class="fld" id="fStat"></select>
+      <select class="fld" id="fLengkap"></select>
+      <button class="btn ghost" id="resetBtn">Bersihkan</button>
+    </div>
+
+    <div id="viewTable">
+      <div class="panel">
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th style="width:34px">#</th><th>Nomor dokumen</th><th>Judul kontrak</th>
+            <th>Lawan pihak</th><th>Kategori</th>
+            <th class="srt" data-s="akhir">Berakhir</th><th class="srt" data-s="sisa">Sisa</th>
+            <th>Status</th><th class="srt" data-s="skor">Lengkap</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table></div>
+        <div class="empty" id="empty" style="display:none"></div>
+        <div class="foot"><span id="count"></span><div class="pg" id="pg"></div></div>
+      </div>
+    </div>
+
+    <div id="viewQuick" style="display:none">
+      <div class="quick">
+        <div class="qcard" id="qCard"></div>
+        <aside class="side"><h4 id="sideTitle"></h4><ol id="sideList"></ol></aside>
+      </div>
+    </div>
+    </div>
+
+    <div id="secPermits" style="display:none">
+      <section class="hero">
+        <div class="hero-top">
+          <div style="flex:1;min-width:250px">
+            <div class="eyebrow">Manajemen Perizinan</div>
+            <h2>Kepatuhan &amp; masa berlaku izin</h2>
+            <p>Daftar izin usaha, tanggal kedaluwarsa, dan kesenjangan perizinan berdasarkan sektor usaha klien.</p>
+          </div>
+          <button class="btn gold" id="addPermitBtn">+ Tambah Izin</button>
+        </div>
+      </section>
+      <div class="cards" id="permitCards"></div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th style="width:34px">#</th><th>Nama izin</th><th>Nomor izin</th><th>Instansi</th>
+            <th>Terbit</th><th>Kedaluwarsa</th><th>Sisa</th><th>Status</th><th>PIC</th>
+          </tr></thead>
+          <tbody id="permitBody"></tbody>
+        </table></div>
+        <div class="empty" id="permitEmpty" style="display:none">
+          <h3>Belum ada izin tercatat</h3><p>Tambahkan izin pertama lewat tombol di atas.</p>
+        </div>
+      </div>
+      <div class="panel" id="gapPanel">
+        <div class="p-15" style="padding:15px 18px;border-bottom:1px solid var(--line)">
+          <h3 style="font-family:var(--serif);font-weight:600;margin:0;font-size:15px">Gap Analysis — izin yang belum dimiliki</h3>
+          <p style="margin:3px 0 0;font-size:12px;color:var(--muted)">Digerakkan oleh sektor usaha (KBLI) klien, bukan daftar tetap.</p>
+        </div>
+        <div id="gapBody" style="padding:15px 18px"></div>
+      </div>
+    </div>
+
+    <!-- LITIGASI & SIDANG -->
+    <div id="secCases" style="display:none">
+      <section class="hero">
+        <div class="hero-top">
+          <div style="flex:1;min-width:250px">
+            <div class="eyebrow">Litigasi &amp; Sidang</div>
+            <h2>Monitoring perkara &amp; jadwal sidang</h2>
+            <p>Daftar perkara aktif, tahapan, dan sidang yang akan datang.</p>
+          </div>
+          <button class="btn gold" id="addCaseBtn">+ Tambah Perkara</button>
+        </div>
+      </section>
+      <div class="cards" id="caseCards"></div>
+      <div class="panel">
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th style="width:34px">#</th><th>Nomor perkara</th><th>Jenis &amp; peran</th>
+            <th>Pengadilan</th><th>Tahap</th><th>Sidang terdekat</th><th>Status</th><th>PIC</th>
+          </tr></thead>
+          <tbody id="caseBody"></tbody>
+        </table></div>
+        <div class="empty" id="caseEmpty" style="display:none">
+          <h3>Belum ada perkara tercatat</h3><p>Tambahkan perkara pertama lewat tombol di atas.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROYEK LEGAL -->
+    <div id="secProjects" style="display:none">
+      <section class="hero">
+        <div class="hero-top">
+          <div style="flex:1;min-width:250px">
+            <div class="eyebrow">Proyek Legal Departemen</div>
+            <h2>Progres proyek hukum korporasi</h2>
+            <p>Penyusunan peraturan, RUPS, restrukturisasi, dan proyek legal lainnya.</p>
+          </div>
+          <button class="btn gold" id="addProjectBtn">+ Buat Proyek</button>
+        </div>
+      </section>
+      <div class="cards" id="projectCards"></div>
+      <div class="panel">
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th style="width:34px">#</th><th>Nama proyek</th><th>Kategori</th>
+            <th>Progress</th><th>Target selesai</th><th>Sisa</th><th>Status</th><th>PIC</th>
+          </tr></thead>
+          <tbody id="projectBody"></tbody>
+        </table></div>
+        <div class="empty" id="projectEmpty" style="display:none">
+          <h3>Belum ada proyek tercatat</h3><p>Buat proyek pertama lewat tombol di atas.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- HUB PENDAMPINGAN -->
+    <div id="secPendampingan" style="display:none">
+      <section class="hero">
+        <div class="hero-top">
+          <div style="flex:1;min-width:250px">
+            <div class="eyebrow">Hub Pendampingan</div>
+            <h2>Permintaan pendampingan lapangan</h2>
+            <p>Mediasi, negosiasi, due diligence, atau audit yang butuh pendampingan langsung.</p>
+          </div>
+          <button class="btn gold" id="addPendampinganBtn">+ Ajukan Pendampingan</button>
+        </div>
+      </section>
+      <div class="cards" id="pendampinganCards"></div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th style="width:34px">#</th><th>Jenis</th><th>Tanggal</th><th>Lokasi</th>
+            <th>Pihak terlibat</th><th>Status</th><th>PIC</th>
+          </tr></thead>
+          <tbody id="pendampinganBody"></tbody>
+        </table></div>
+        <div class="empty" id="pendampinganEmpty" style="display:none">
+          <h3>Belum ada permintaan pendampingan</h3><p>Ajukan permintaan pertama lewat tombol di atas.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div style="padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <h4 style="font-family:var(--serif);font-size:15px;margin:0 0 3px">Chat langsung ke Managing Partner</h4>
+            <p style="margin:0;font-size:12px;color:var(--muted)">Untuk kebutuhan mendesak, hubungi langsung lewat WhatsApp.</p>
+          </div>
+          <a id="waLink" href="#" target="_blank" rel="noopener" class="btn" style="background:#15803d">Chat via WhatsApp</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARSIP DOKUMEN -->
+    <div id="secDocs" style="display:none">
+      <section class="hero">
+        <div class="hero-top">
+          <div style="flex:1;min-width:250px">
+            <div class="eyebrow">Arsip Dokumen Digital</div>
+            <h2>Repositori dokumen klien</h2>
+            <p>Semua unggahan tersimpan privat, hanya bisa diunduh oleh pengguna yang berhak.</p>
+          </div>
+        </div>
+      </section>
+      <div class="cards" id="docCards"></div>
+      <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+        <h4 style="font-family:var(--serif);font-size:15px;margin:0 0 10px">Unggah dokumen baru</h4>
+        <div class="grid2">
+          <div class="f"><label>Berkas</label><input type="file" id="docFile"></div>
+          <div class="f"><label>Kategori arsip</label>
+            <select id="docKategori">
+              <option value="kontrak">Kontrak</option><option value="izin">Perizinan</option>
+              <option value="perkara">Perkara</option><option value="korespondensi">Korespondensi</option>
+              <option value="lainnya">Lainnya</option>
+            </select></div>
+        </div>
+        <button class="btn gold" id="docUploadBtn" style="margin-top:10px">Unggah</button>
+        <div class="hint" id="docUploadHint" style="margin-top:6px"></div>
+      </div>
+      <div class="panel">
+        <div class="tscroll"><table>
+          <thead><tr>
+            <th style="width:34px">#</th><th>Nama berkas</th><th>Kategori</th>
+            <th>Ukuran</th><th>Diunggah</th><th>Oleh</th><th style="width:80px">Aksi</th>
+          </tr></thead>
+          <tbody id="docBody"></tbody>
+        </table></div>
+        <div class="empty" id="docEmpty" style="display:none">
+          <h3>Belum ada dokumen diunggah</h3><p>Unggah berkas pertama lewat formulir di atas.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DRAWER GENERIK — dipakai Litigasi, Proyek Legal, Hub Pendampingan -->
+<aside class="drawer" id="auxDrawer" role="dialog" aria-modal="true">
+  <div class="dhead"><h3 id="auxDTitle">Detail</h3><button class="x" id="auxDClose" aria-label="Tutup">✕</button></div>
+  <div class="dbody" id="auxDBody"></div>
+  <div class="dfoot"><button class="btn ghost" id="auxDCancel">Batal</button><button class="btn gold" id="auxDSave">Simpan</button></div>
+</aside>
+
+<!-- DRAWER PERIZINAN -->
+<aside class="drawer" id="permitDrawer" role="dialog" aria-modal="true">
+  <div class="dhead"><h3 id="permitDTitle">Detail izin</h3><button class="x" id="permitDClose" aria-label="Tutup">✕</button></div>
+  <div class="dbody" id="permitDBody"></div>
+  <div class="dfoot"><button class="btn ghost" id="permitDCancel">Batal</button><button class="btn gold" id="permitDSave">Simpan</button></div>
+</aside>
+
+<div class="veil" id="veil"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true">
+  <div class="dhead"><h3 id="dTitle">Detail kontrak</h3><button class="x" id="dClose" aria-label="Tutup">✕</button></div>
+  <div class="dbody" id="dBody"></div>
+  <div class="dfoot"><button class="btn ghost" id="dCancel">Batal</button><button class="btn gold" id="dSave">Simpan</button></div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
