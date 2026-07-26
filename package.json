@@ -1,0 +1,25 @@
+{
+  "name": "mikk-client-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MIKK Advocates & Counsellors — Client & Administration Portal (Fase 1: CLM Kontrak)",
+  "type": "commonjs",
+  "scripts": {
+    "migrate": "node server/scripts/migrate.js",
+    "seed": "node server/scripts/seed.js",
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "test:api": "node server/scripts/test-api.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^2.2.0",
+    "pg": "^8.11.5"
+  }
+}
