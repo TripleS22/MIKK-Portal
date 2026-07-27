@@ -32,9 +32,7 @@ a{color:inherit}
   display:flex;align-items:center;gap:16px;padding:0 20px;height:56px;
 }
 .mark{
-  width:30px;height:30px;border-radius:6px;flex:none;
-  background:linear-gradient(150deg,#d9ac5c,#8a6621);
-  display:grid;place-items:center;font-family:var(--serif);font-weight:600;font-size:15px;color:#1a1206;
+  width:30px;height:auto;flex:none;object-fit:contain;
 }
 .hdr h1{font-family:var(--serif);font-size:15px;font-weight:500;letter-spacing:.02em;margin:0}
 .hdr .sub{font-size:11px;color:#94a3b8;margin-top:-2px}
@@ -232,7 +230,7 @@ tbody tr{cursor:pointer}
 /* ---------- login & workspace picker (ditambahkan untuk versi fullstack) ---------- */
 .screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--paper)}
 .authcard{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px 30px;box-shadow:0 20px 50px rgba(15,23,42,.06)}
-.authcard .mark{width:44px;height:44px;border-radius:10px;margin:0 auto 16px;font-size:20px}
+.authcard .mark{width:44px;height:auto;display:block;margin:0 auto 16px}
 .authcard h2{font-family:var(--serif);font-size:21px;font-weight:500;text-align:center;margin:0 0 4px}
 .authcard p.sub{text-align:center;color:var(--muted);font-size:12.5px;margin:0 0 22px}
 .authcard .f{margin-bottom:13px}
