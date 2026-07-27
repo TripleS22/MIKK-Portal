@@ -18,14 +18,14 @@
   <div class="authcard">
     <img class="mark" src="/img/logo.png" alt="MIKK">
     <h2>MIKK Client Portal</h2>
-    <p class="sub">Masuk untuk melanjutkan ke workspace Anda.</p>
+    <p class="sub" data-i18n="login.subtitle">Masuk untuk melanjutkan ke workspace Anda.</p>
     <div class="err" id="loginErr"></div>
     <form id="loginForm">
-      <div class="f"><label for="email">Email</label>
+      <div class="f"><label for="email" data-i18n="login.email">Email</label>
         <input id="email" type="email" required autocomplete="username"></div>
-      <div class="f"><label for="password">Kata sandi</label>
+      <div class="f"><label for="password" data-i18n="login.password">Kata sandi</label>
         <input id="password" type="password" required autocomplete="current-password"></div>
-      <button class="btn gold" id="loginBtn" type="submit">Masuk</button>
+      <button class="btn gold" id="loginBtn" type="submit" data-i18n="login.submit">Masuk</button>
     </form>
   </div>
 </section>
@@ -33,8 +33,8 @@
 <!-- PEMILIH WORKSPACE -->
 <section class="screen" id="screenWorkspace" style="display:none">
   <div class="wschoose">
-    <h2>Pilih workspace</h2>
-    <p class="sub">Anda terdaftar di lebih dari satu peran. Pilih salah satu untuk melanjutkan.</p>
+    <h2 data-i18n="workspace.title">Pilih workspace</h2>
+    <p class="sub" data-i18n="workspace.subtitle">Anda terdaftar di lebih dari satu peran. Pilih salah satu untuk melanjutkan.</p>
     <div class="wsgrid" id="wsGrid"></div>
   </div>
 </section>
@@ -45,11 +45,11 @@
     <img class="mark" src="/img/logo.png" alt="MIKK">
     <div>
       <h1>MIKK Advocates &amp; Counsellors</h1>
-      <div class="sub" id="hdrSub">Portal Klien Retainer</div>
+      <div class="sub" id="hdrSub" data-i18n="header.subtitle">Portal Klien Retainer</div>
     </div>
     <div class="spacer"></div>
-    <button class="chip" id="langBtn"><span>ID</span></button>
-    <button class="switchLink" id="switchWsBtn" style="display:none">Ganti workspace</button>
+    <button class="chip" id="langBtn"><span id="langBtnLabel">ID</span></button>
+    <button class="switchLink" id="switchWsBtn" style="display:none" data-i18n="common.switchWorkspace">Ganti workspace</button>
     <div class="who">
       <div class="av" id="avInit">—</div>
       <div style="line-height:1.25">
@@ -57,27 +57,27 @@
         <div style="font-size:10px;color:#94a3b8" id="whoRole">—</div>
       </div>
     </div>
-    <button class="chip" id="logoutBtn" style="margin-left:2px">Keluar</button>
+    <button class="chip" id="logoutBtn" style="margin-left:2px" data-i18n="common.logout">Keluar</button>
   </header>
 
   <div class="wrap">
     <div class="errbar" id="apiErr"></div>
 
     <div class="seg" id="modSeg" style="margin-bottom:16px;flex-wrap:wrap">
-      <button id="modKontrakBtn" class="on">CRM Kontrak</button>
-      <button id="modPermitsBtn">Perizinan</button>
-      <button id="modCasesBtn">Litigasi &amp; Sidang</button>
-      <button id="modProjectsBtn">Proyek Legal</button>
-      <button id="modPendampinganBtn">Hub Pendampingan</button>
-      <button id="modDocsBtn">Arsip Dokumen</button>
+      <button id="modKontrakBtn" class="on" data-i18n="nav.kontrak">CRM Kontrak</button>
+      <button id="modPermitsBtn" data-i18n="nav.permits">Perizinan</button>
+      <button id="modCasesBtn" data-i18n="nav.cases">Litigasi &amp; Sidang</button>
+      <button id="modProjectsBtn" data-i18n="nav.projects">Proyek Legal</button>
+      <button id="modPendampinganBtn" data-i18n="nav.pendampingan">Hub Pendampingan</button>
+      <button id="modDocsBtn" data-i18n="nav.docs">Arsip Dokumen</button>
     </div>
 
     <div id="secKontrak">
     <section class="hero">
       <div class="hero-top">
         <div style="flex:1;min-width:250px">
-          <div class="eyebrow" id="eyebrow">CRM Kontrak</div>
-          <h2 id="heroTitle">Peta kelengkapan data</h2>
+          <div class="eyebrow" id="eyebrow" data-i18n="kontrak.eyebrow">CRM Kontrak</div>
+          <h2 id="heroTitle" data-i18n="kontrak.heroTitle">Peta kelengkapan data</h2>
           <p id="heroDesc"></p>
         </div>
         <div style="text-align:right">
@@ -96,24 +96,24 @@
 
     <div class="bar">
       <div class="seg">
-        <button id="vTable" class="on">Tabel</button>
-        <button id="vQuick">Isi cepat</button>
+        <button id="vTable" class="on" data-i18n="kontrak.view.table">Tabel</button>
+        <button id="vQuick" data-i18n="kontrak.view.quick">Isi cepat</button>
       </div>
-      <input class="fld" id="q" placeholder="Cari nomor atau judul…" style="flex:1;min-width:170px">
+      <input class="fld" id="q" placeholder="Cari nomor atau judul…" data-i18n-ph="kontrak.searchPh" style="flex:1;min-width:170px">
       <select class="fld" id="fKat"></select>
       <select class="fld" id="fStat"></select>
       <select class="fld" id="fLengkap"></select>
-      <button class="btn ghost" id="resetBtn">Bersihkan</button>
+      <button class="btn ghost" id="resetBtn" data-i18n="kontrak.reset">Bersihkan</button>
     </div>
 
     <div id="viewTable">
       <div class="panel">
         <div class="tscroll"><table>
           <thead><tr>
-            <th style="width:34px">#</th><th>Nomor dokumen</th><th>Judul kontrak</th>
-            <th>Lawan pihak</th><th>Kategori</th>
-            <th class="srt" data-s="akhir">Berakhir</th><th class="srt" data-s="sisa">Sisa</th>
-            <th>Status</th><th class="srt" data-s="skor">Lengkap</th>
+            <th style="width:34px">#</th><th data-i18n="kontrak.th.nomor">Nomor dokumen</th><th data-i18n="kontrak.th.judul">Judul kontrak</th>
+            <th data-i18n="kontrak.th.lawan">Lawan pihak</th><th data-i18n="kontrak.th.kategori">Kategori</th>
+            <th class="srt" data-s="akhir" data-i18n="kontrak.th.berakhir">Berakhir</th><th class="srt" data-s="sisa" data-i18n="kontrak.th.sisa">Sisa</th>
+            <th data-i18n="kontrak.th.status">Status</th><th class="srt" data-s="skor" data-i18n="kontrak.th.lengkap">Lengkap</th>
           </tr></thead>
           <tbody id="tbody"></tbody>
         </table></div>
@@ -134,30 +134,30 @@
       <section class="hero">
         <div class="hero-top">
           <div style="flex:1;min-width:250px">
-            <div class="eyebrow">Manajemen Perizinan</div>
-            <h2>Kepatuhan &amp; masa berlaku izin</h2>
-            <p>Daftar izin usaha, tanggal kedaluwarsa, dan kesenjangan perizinan berdasarkan sektor usaha klien.</p>
+            <div class="eyebrow" data-i18n="permits.eyebrow">Manajemen Perizinan</div>
+            <h2 data-i18n="permits.h2">Kepatuhan &amp; masa berlaku izin</h2>
+            <p data-i18n="permits.desc">Daftar izin usaha, tanggal kedaluwarsa, dan kesenjangan perizinan berdasarkan sektor usaha klien.</p>
           </div>
-          <button class="btn gold" id="addPermitBtn">+ Tambah Izin</button>
+          <button class="btn gold" id="addPermitBtn" data-i18n="permits.add">+ Tambah Izin</button>
         </div>
       </section>
       <div class="cards" id="permitCards"></div>
       <div class="panel" style="margin-bottom:16px">
         <div class="tscroll"><table>
           <thead><tr>
-            <th style="width:34px">#</th><th>Nama izin</th><th>Nomor izin</th><th>Instansi</th>
-            <th>Terbit</th><th>Kedaluwarsa</th><th>Sisa</th><th>Status</th><th>PIC</th>
+            <th style="width:34px">#</th><th data-i18n="permits.th.nama">Nama izin</th><th data-i18n="permits.th.nomor">Nomor izin</th><th data-i18n="permits.th.instansi">Instansi</th>
+            <th data-i18n="permits.th.terbit">Terbit</th><th data-i18n="permits.th.kedaluwarsa">Kedaluwarsa</th><th data-i18n="permits.th.sisa">Sisa</th><th data-i18n="permits.th.status">Status</th><th data-i18n="permits.th.pic">PIC</th>
           </tr></thead>
           <tbody id="permitBody"></tbody>
         </table></div>
         <div class="empty" id="permitEmpty" style="display:none">
-          <h3>Belum ada izin tercatat</h3><p>Tambahkan izin pertama lewat tombol di atas.</p>
+          <h3 data-i18n="permits.empty.title">Belum ada izin tercatat</h3><p data-i18n="permits.empty.desc">Tambahkan izin pertama lewat tombol di atas.</p>
         </div>
       </div>
       <div class="panel" id="gapPanel">
         <div class="p-15" style="padding:15px 18px;border-bottom:1px solid var(--line)">
-          <h3 style="font-family:var(--serif);font-weight:600;margin:0;font-size:15px">Gap Analysis — izin yang belum dimiliki</h3>
-          <p style="margin:3px 0 0;font-size:12px;color:var(--muted)">Digerakkan oleh sektor usaha (KBLI) klien, bukan daftar tetap.</p>
+          <h3 style="font-family:var(--serif);font-weight:600;margin:0;font-size:15px" data-i18n="permits.gap.title">Gap Analysis — izin yang belum dimiliki</h3>
+          <p style="margin:3px 0 0;font-size:12px;color:var(--muted)" data-i18n="permits.gap.desc">Digerakkan oleh sektor usaha (KBLI) klien, bukan daftar tetap.</p>
         </div>
         <div id="gapBody" style="padding:15px 18px"></div>
       </div>
@@ -168,24 +168,24 @@
       <section class="hero">
         <div class="hero-top">
           <div style="flex:1;min-width:250px">
-            <div class="eyebrow">Litigasi &amp; Sidang</div>
-            <h2>Monitoring perkara &amp; jadwal sidang</h2>
-            <p>Daftar perkara aktif, tahapan, dan sidang yang akan datang.</p>
+            <div class="eyebrow" data-i18n="cases.eyebrow">Litigasi &amp; Sidang</div>
+            <h2 data-i18n="cases.h2">Monitoring perkara &amp; jadwal sidang</h2>
+            <p data-i18n="cases.desc">Daftar perkara aktif, tahapan, dan sidang yang akan datang.</p>
           </div>
-          <button class="btn gold" id="addCaseBtn">+ Tambah Perkara</button>
+          <button class="btn gold" id="addCaseBtn" data-i18n="cases.add">+ Tambah Perkara</button>
         </div>
       </section>
       <div class="cards" id="caseCards"></div>
       <div class="panel">
         <div class="tscroll"><table>
           <thead><tr>
-            <th style="width:34px">#</th><th>Nomor perkara</th><th>Jenis &amp; peran</th>
-            <th>Pengadilan</th><th>Tahap</th><th>Sidang terdekat</th><th>Status</th><th>PIC</th>
+            <th style="width:34px">#</th><th data-i18n="cases.th.nomor">Nomor perkara</th><th data-i18n="cases.th.jenisPeran">Jenis &amp; peran</th>
+            <th data-i18n="cases.th.pengadilan">Pengadilan</th><th data-i18n="cases.th.tahap">Tahap</th><th data-i18n="cases.th.sidang">Sidang terdekat</th><th data-i18n="cases.th.status">Status</th><th data-i18n="cases.th.pic">PIC</th>
           </tr></thead>
           <tbody id="caseBody"></tbody>
         </table></div>
         <div class="empty" id="caseEmpty" style="display:none">
-          <h3>Belum ada perkara tercatat</h3><p>Tambahkan perkara pertama lewat tombol di atas.</p>
+          <h3 data-i18n="cases.empty.title">Belum ada perkara tercatat</h3><p data-i18n="cases.empty.desc">Tambahkan perkara pertama lewat tombol di atas.</p>
         </div>
       </div>
     </div>
@@ -195,24 +195,24 @@
       <section class="hero">
         <div class="hero-top">
           <div style="flex:1;min-width:250px">
-            <div class="eyebrow">Proyek Legal Departemen</div>
-            <h2>Progres proyek hukum korporasi</h2>
-            <p>Penyusunan peraturan, RUPS, restrukturisasi, dan proyek legal lainnya.</p>
+            <div class="eyebrow" data-i18n="projects.eyebrow">Proyek Legal Departemen</div>
+            <h2 data-i18n="projects.h2">Progres proyek hukum korporasi</h2>
+            <p data-i18n="projects.desc">Penyusunan peraturan, RUPS, restrukturisasi, dan proyek legal lainnya.</p>
           </div>
-          <button class="btn gold" id="addProjectBtn">+ Buat Proyek</button>
+          <button class="btn gold" id="addProjectBtn" data-i18n="projects.add">+ Buat Proyek</button>
         </div>
       </section>
       <div class="cards" id="projectCards"></div>
       <div class="panel">
         <div class="tscroll"><table>
           <thead><tr>
-            <th style="width:34px">#</th><th>Nama proyek</th><th>Kategori</th>
-            <th>Progress</th><th>Target selesai</th><th>Sisa</th><th>Status</th><th>PIC</th>
+            <th style="width:34px">#</th><th data-i18n="projects.th.nama">Nama proyek</th><th data-i18n="projects.th.kategori">Kategori</th>
+            <th data-i18n="projects.th.progress">Progress</th><th data-i18n="projects.th.target">Target selesai</th><th data-i18n="projects.th.sisa">Sisa</th><th data-i18n="projects.th.status">Status</th><th data-i18n="projects.th.pic">PIC</th>
           </tr></thead>
           <tbody id="projectBody"></tbody>
         </table></div>
         <div class="empty" id="projectEmpty" style="display:none">
-          <h3>Belum ada proyek tercatat</h3><p>Buat proyek pertama lewat tombol di atas.</p>
+          <h3 data-i18n="projects.empty.title">Belum ada proyek tercatat</h3><p data-i18n="projects.empty.desc">Buat proyek pertama lewat tombol di atas.</p>
         </div>
       </div>
     </div>
@@ -222,33 +222,33 @@
       <section class="hero">
         <div class="hero-top">
           <div style="flex:1;min-width:250px">
-            <div class="eyebrow">Hub Pendampingan</div>
-            <h2>Permintaan pendampingan lapangan</h2>
-            <p>Mediasi, negosiasi, due diligence, atau audit yang butuh pendampingan langsung.</p>
+            <div class="eyebrow" data-i18n="pendampingan.eyebrow">Hub Pendampingan</div>
+            <h2 data-i18n="pendampingan.h2">Permintaan pendampingan lapangan</h2>
+            <p data-i18n="pendampingan.desc">Mediasi, negosiasi, due diligence, atau audit yang butuh pendampingan langsung.</p>
           </div>
-          <button class="btn gold" id="addPendampinganBtn">+ Ajukan Pendampingan</button>
+          <button class="btn gold" id="addPendampinganBtn" data-i18n="pendampingan.add">+ Ajukan Pendampingan</button>
         </div>
       </section>
       <div class="cards" id="pendampinganCards"></div>
       <div class="panel" style="margin-bottom:16px">
         <div class="tscroll"><table>
           <thead><tr>
-            <th style="width:34px">#</th><th>Jenis</th><th>Tanggal</th><th>Lokasi</th>
-            <th>Pihak terlibat</th><th>Status</th><th>PIC</th>
+            <th style="width:34px">#</th><th data-i18n="pendampingan.th.jenis">Jenis</th><th data-i18n="pendampingan.th.tanggal">Tanggal</th><th data-i18n="pendampingan.th.lokasi">Lokasi</th>
+            <th data-i18n="pendampingan.th.pihak">Pihak terlibat</th><th data-i18n="pendampingan.th.status">Status</th><th data-i18n="pendampingan.th.pic">PIC</th>
           </tr></thead>
           <tbody id="pendampinganBody"></tbody>
         </table></div>
         <div class="empty" id="pendampinganEmpty" style="display:none">
-          <h3>Belum ada permintaan pendampingan</h3><p>Ajukan permintaan pertama lewat tombol di atas.</p>
+          <h3 data-i18n="pendampingan.empty.title">Belum ada permintaan pendampingan</h3><p data-i18n="pendampingan.empty.desc">Ajukan permintaan pertama lewat tombol di atas.</p>
         </div>
       </div>
       <div class="panel">
         <div style="padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
           <div style="flex:1;min-width:220px">
-            <h4 style="font-family:var(--serif);font-size:15px;margin:0 0 3px">Chat langsung ke Managing Partner</h4>
-            <p style="margin:0;font-size:12px;color:var(--muted)">Untuk kebutuhan mendesak, hubungi langsung lewat WhatsApp.</p>
+            <h4 style="font-family:var(--serif);font-size:15px;margin:0 0 3px" data-i18n="pendampingan.chatTitle">Chat langsung ke Managing Partner</h4>
+            <p style="margin:0;font-size:12px;color:var(--muted)" data-i18n="pendampingan.chatDesc">Untuk kebutuhan mendesak, hubungi langsung lewat WhatsApp.</p>
           </div>
-          <a id="waLink" href="#" target="_blank" rel="noopener" class="btn" style="background:#15803d">Chat via WhatsApp</a>
+          <a id="waLink" href="#" target="_blank" rel="noopener" class="btn" style="background:#15803d" data-i18n="pendampingan.chatBtn">Chat via WhatsApp</a>
         </div>
       </div>
     </div>
@@ -258,37 +258,37 @@
       <section class="hero">
         <div class="hero-top">
           <div style="flex:1;min-width:250px">
-            <div class="eyebrow">Arsip Dokumen Digital</div>
-            <h2>Repositori dokumen klien</h2>
-            <p>Semua unggahan tersimpan privat, hanya bisa diunduh oleh pengguna yang berhak.</p>
+            <div class="eyebrow" data-i18n="docs.eyebrow">Arsip Dokumen Digital</div>
+            <h2 data-i18n="docs.h2">Repositori dokumen klien</h2>
+            <p data-i18n="docs.desc">Semua unggahan tersimpan privat, hanya bisa diunduh oleh pengguna yang berhak.</p>
           </div>
         </div>
       </section>
       <div class="cards" id="docCards"></div>
       <div class="panel" style="padding:16px 18px;margin-bottom:16px">
-        <h4 style="font-family:var(--serif);font-size:15px;margin:0 0 10px">Unggah dokumen baru</h4>
+        <h4 style="font-family:var(--serif);font-size:15px;margin:0 0 10px" data-i18n="docs.uploadTitle">Unggah dokumen baru</h4>
         <div class="grid2">
-          <div class="f"><label>Berkas</label><input type="file" id="docFile"></div>
-          <div class="f"><label>Kategori arsip</label>
+          <div class="f"><label data-i18n="docs.f.berkas">Berkas</label><input type="file" id="docFile"></div>
+          <div class="f"><label data-i18n="docs.f.kategori">Kategori arsip</label>
             <select id="docKategori">
-              <option value="kontrak">Kontrak</option><option value="izin">Perizinan</option>
-              <option value="perkara">Perkara</option><option value="korespondensi">Korespondensi</option>
-              <option value="lainnya">Lainnya</option>
+              <option value="kontrak" data-i18n="docs.kat.kontrak">Kontrak</option><option value="izin" data-i18n="docs.kat.izin">Perizinan</option>
+              <option value="perkara" data-i18n="docs.kat.perkara">Perkara</option><option value="korespondensi" data-i18n="docs.kat.korespondensi">Korespondensi</option>
+              <option value="lainnya" data-i18n="docs.kat.lainnya">Lainnya</option>
             </select></div>
         </div>
-        <button class="btn gold" id="docUploadBtn" style="margin-top:10px">Unggah</button>
+        <button class="btn gold" id="docUploadBtn" style="margin-top:10px" data-i18n="docs.uploadBtn">Unggah</button>
         <div class="hint" id="docUploadHint" style="margin-top:6px"></div>
       </div>
       <div class="panel">
         <div class="tscroll"><table>
           <thead><tr>
-            <th style="width:34px">#</th><th>Nama berkas</th><th>Kategori</th>
-            <th>Ukuran</th><th>Diunggah</th><th>Oleh</th><th style="width:80px">Aksi</th>
+            <th style="width:34px">#</th><th data-i18n="docs.th.nama">Nama berkas</th><th data-i18n="docs.th.kategori">Kategori</th>
+            <th data-i18n="docs.th.ukuran">Ukuran</th><th data-i18n="docs.th.diunggah">Diunggah</th><th data-i18n="docs.th.oleh">Oleh</th><th style="width:80px" data-i18n="docs.th.aksi">Aksi</th>
           </tr></thead>
           <tbody id="docBody"></tbody>
         </table></div>
         <div class="empty" id="docEmpty" style="display:none">
-          <h3>Belum ada dokumen diunggah</h3><p>Unggah berkas pertama lewat formulir di atas.</p>
+          <h3 data-i18n="docs.empty.title">Belum ada dokumen diunggah</h3><p data-i18n="docs.empty.desc">Unggah berkas pertama lewat formulir di atas.</p>
         </div>
       </div>
     </div>
@@ -297,27 +297,28 @@
 
 <!-- DRAWER GENERIK — dipakai Litigasi, Proyek Legal, Hub Pendampingan -->
 <aside class="drawer" id="auxDrawer" role="dialog" aria-modal="true">
-  <div class="dhead"><h3 id="auxDTitle">Detail</h3><button class="x" id="auxDClose" aria-label="Tutup">✕</button></div>
+  <div class="dhead"><h3 id="auxDTitle" data-i18n="common.detail">Detail</h3><button class="x" id="auxDClose" aria-label="Tutup" data-i18n-aria="common.close">✕</button></div>
   <div class="dbody" id="auxDBody"></div>
-  <div class="dfoot"><button class="btn ghost" id="auxDCancel">Batal</button><button class="btn gold" id="auxDSave">Simpan</button></div>
+  <div class="dfoot"><button class="btn ghost" id="auxDCancel" data-i18n="common.cancel">Batal</button><button class="btn gold" id="auxDSave" data-i18n="common.save">Simpan</button></div>
 </aside>
 
 <!-- DRAWER PERIZINAN -->
 <aside class="drawer" id="permitDrawer" role="dialog" aria-modal="true">
-  <div class="dhead"><h3 id="permitDTitle">Detail izin</h3><button class="x" id="permitDClose" aria-label="Tutup">✕</button></div>
+  <div class="dhead"><h3 id="permitDTitle" data-i18n="permits.drawerTitle">Detail izin</h3><button class="x" id="permitDClose" aria-label="Tutup" data-i18n-aria="common.close">✕</button></div>
   <div class="dbody" id="permitDBody"></div>
-  <div class="dfoot"><button class="btn ghost" id="permitDCancel">Batal</button><button class="btn gold" id="permitDSave">Simpan</button></div>
+  <div class="dfoot"><button class="btn ghost" id="permitDCancel" data-i18n="common.cancel">Batal</button><button class="btn gold" id="permitDSave" data-i18n="common.save">Simpan</button></div>
 </aside>
 
 <div class="veil" id="veil"></div>
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true">
-  <div class="dhead"><h3 id="dTitle">Detail kontrak</h3><button class="x" id="dClose" aria-label="Tutup">✕</button></div>
+  <div class="dhead"><h3 id="dTitle" data-i18n="kontrak.drawerTitle">Detail kontrak</h3><button class="x" id="dClose" aria-label="Tutup" data-i18n-aria="common.close">✕</button></div>
   <div class="dbody" id="dBody"></div>
-  <div class="dfoot"><button class="btn ghost" id="dCancel">Batal</button><button class="btn gold" id="dSave">Simpan</button></div>
+  <div class="dfoot"><button class="btn ghost" id="dCancel" data-i18n="common.cancel">Batal</button><button class="btn gold" id="dSave" data-i18n="common.save">Simpan</button></div>
 </aside>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="/js/i18n.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/app.js"></script>
 </body>

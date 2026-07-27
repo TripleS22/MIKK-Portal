@@ -10,17 +10,13 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 
-const PERAN_LABEL = {
-  admin_klien: 'Admin Klien', legal_manager: 'Legal Manager', viewer: 'Viewer',
-  pic_utama: 'PIC Utama', pendukung: 'PIC Pendukung', supervisi: 'Supervisi',
-  managing_partner: 'Managing Partner', admin_staf: 'Admin Staf',
-};
-const STATUS_NAMA = { aman:'Aman', pantau:'Pantau', peringatan:'Akan berakhir', kritis:'Kritis',
-  kedaluwarsa:'Kedaluwarsa', digantikan:'Sudah diperpanjang', tanpa_batas:'Tanpa batas', tidak_dipantau:'Belum ditetapkan' };
-const SIKLUS_NAMA = { draf:'Draf', dalam_review:'Dalam review', aktif:'Aktif', selesai:'Selesai',
-  dibatalkan:'Dibatalkan', diputus:'Diputus', digantikan:'Digantikan' };
-const RELASI_NAMA = { perpanjangan:'Perpanjangan', addendum:'Addendum', amandemen:'Amandemen', penggantian:'Penggantian' };
-const ROWS_LEDGER = ['Nomor dokumen','Lawan pihak','Tanggal mulai','Tanggal berakhir','Nilai kontrak'];
+const PERAN_LABEL = nameProxy('peran');
+const STATUS_NAMA = nameProxy('status');
+const SIKLUS_NAMA = nameProxy('siklus');
+const RELASI_NAMA = nameProxy('relasi');
+const ROWS_LEDGER = () => [t('kontrak.row.nomor'), t('kontrak.row.lawan'), t('kontrak.row.mulai'), t('kontrak.row.akhir'), t('kontrak.row.nilai')];
+const STATUS_KEYS = ['aman', 'pantau', 'peringatan', 'kritis', 'kedaluwarsa', 'digantikan', 'tanpa_batas', 'tidak_dipantau'];
+const PERMIT_STATUS_NAMA = nameProxy('permitStatus');
 
 const S = {
   user: null, ws: null, wsList: [],
@@ -66,7 +62,7 @@ async function goWorkspacePicker() {
   S.wsList = list;
 
   if (list.length === 0) {
-    showApiErr('Akun ini belum ditugaskan ke klien mana pun. Hubungi Admin MIKK.');
+    showApiErr(t('workspace.noAssignment'));
     return;
   }
   if (list.length === 1) return enterWorkspace(list[0]);
@@ -114,7 +110,7 @@ async function muatSemua() {
     await Promise.all([muatDashboard(), muatDaftar()]);
     render();
   } catch (err) {
-    showApiErr(err.message || 'Gagal memuat data. Coba muat ulang halaman.');
+    showApiErr(err.message || t('kontrak.loadError'));
   }
 }
 async function muatDashboard() {
@@ -130,26 +126,27 @@ async function muatDaftar() {
 }
 function isiSelectReferensi() {
   const r = S.reference;
-  $('#fKat').innerHTML = `<option value="">Semua kategori</option>` +
+  $('#fKat').innerHTML = `<option value="">${esc(t('kontrak.filter.allKategori'))}</option>` +
     r.kategori.map((k) => `<option value="${esc(k.nama)}">${esc(k.nama)}</option>`).join('');
-  $('#fStat').innerHTML = `<option value="">Semua status</option>` +
-    Object.entries(STATUS_NAMA).map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+  $('#fStat').innerHTML = `<option value="">${esc(t('kontrak.filter.allStatus'))}</option>` +
+    STATUS_KEYS.map((v) => `<option value="${v}">${esc(STATUS_NAMA[v])}</option>`).join('');
 }
 
 /* ---------------------------------------------------------------- turunan tampilan */
-const rupiah = (n) => (n == null ? '—' : 'Rp ' + Number(n).toLocaleString('id-ID'));
+const rupiah = (n) => (n == null ? '—' : 'Rp ' + Number(n).toLocaleString(LANG === 'en' ? 'en-US' : 'id-ID'));
 const tglTampil = (iso) => !iso ? null : new Date(iso + 'T00:00:00')
-  .toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  .toLocaleDateString(LANG === 'en' ? 'en-GB' : 'id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+const sisaTeks = (d) => d < 0 ? t('common.daysAgo', { n: Math.abs(d) }) : t('common.daysLeft', { n: d });
 
 /* ---------------------------------------------------------------- render: hero + kartu */
 function renderHero() {
-  $('#heroDesc').textContent = 'Tiap kolom satu kontrak, tiap baris satu kolom data. Klik label baris untuk melengkapi kontrak yang masih kosong pada kolom itu.';
-  $('#pctSub').textContent = 'terisi dari 5 kolom inti';
+  $('#heroDesc').textContent = t('kontrak.heroDesc');
+  $('#pctSub').textContent = t('kontrak.pctSub');
   const d = S.dashboard || {};
   const pct = Number(d.kelengkapan_persen) || 0;
   $('#pctBig').textContent = pct.toFixed ? Math.round(pct) : pct;
 
-  $('#ledLabels').innerHTML = ROWS_LEDGER.map((r, i) =>
+  $('#ledLabels').innerHTML = ROWS_LEDGER().map((r, i) =>
     `<button data-row="${i}" class="${S.ledRow === i ? 'on' : ''}">${esc(r)}</button>`).join('');
   const FIELD_KEYS = ['f_nomor', 'f_lawan', 'f_mulai', 'f_akhir', 'f_nilai'];
   $('#ledGrid').innerHTML = S.ledger.map((c) =>
@@ -162,19 +159,19 @@ function ledCap(idOrNull, row) {
   const L = $('#ledCap');
   if (!idOrNull) { L.innerHTML = ''; return; }
   const c = S.ledger.find((x) => x.id === idOrNull);
-  L.innerHTML = c ? `<b>${esc(c.judul)}</b> · ${esc(ROWS_LEDGER[row])}` : '';
+  L.innerHTML = c ? `<b>${esc(c.judul)}</b> · ${esc(ROWS_LEDGER()[row])}` : '';
 }
 function renderCards() {
   const d = S.dashboard || {};
   const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
     <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#cards').innerHTML = [
-    item('TOTAL KONTRAK', d.total_kontrak ?? 0, '', 'tidak termasuk yang sudah diperpanjang'),
-    item('KONTRAK AKTIF', d.kontrak_aktif ?? 0, 'acc-ok', 'berjalan normal'),
-    item('AKAN BERAKHIR ≤90 HARI', d.akan_berakhir_90h ?? 0, 'acc-warn', 'perlu tindakan PIC'),
-    item('KEDALUWARSA', d.kedaluwarsa ?? 0, 'acc-crit', 'tanpa perpanjangan tercatat'),
-    item('SUDAH DIPERPANJANG', d.sudah_diperpanjang ?? 0, 'acc-repl', 'tidak dihitung kedaluwarsa'),
-    item('NILAI TERCATAT', rupiah(d.total_nilai), '', `dari ${d.jumlah_bernilai ?? 0} kontrak`),
+    item(t('kontrak.card.total'), d.total_kontrak ?? 0, '', t('kontrak.card.total.note')),
+    item(t('kontrak.card.aktif'), d.kontrak_aktif ?? 0, 'acc-ok', t('kontrak.card.aktif.note')),
+    item(t('kontrak.card.akanBerakhir'), d.akan_berakhir_90h ?? 0, 'acc-warn', t('kontrak.card.akanBerakhir.note')),
+    item(t('kontrak.card.kedaluwarsa'), d.kedaluwarsa ?? 0, 'acc-crit', t('kontrak.card.kedaluwarsa.note')),
+    item(t('kontrak.card.diperpanjang'), d.sudah_diperpanjang ?? 0, 'acc-repl', t('kontrak.card.diperpanjang.note')),
+    item(t('kontrak.card.nilai'), rupiah(d.total_nilai), '', t('kontrak.card.nilai.note', { n: d.jumlah_bernilai ?? 0 })),
   ].join('');
 }
 
@@ -183,30 +180,30 @@ function renderTable() {
   const { rows, total } = S.list;
   const pages = Math.max(1, Math.ceil(total / S.per));
   $('#empty').style.display = rows.length ? 'none' : 'block';
-  $('#empty').innerHTML = `<h3>Tidak ada kontrak yang cocok</h3><p>Ubah kata kunci atau bersihkan penyaring.</p>`;
+  $('#empty').innerHTML = `<h3>${esc(t('kontrak.empty.title'))}</h3><p>${esc(t('kontrak.empty.desc'))}</p>`;
 
   const a = (S.page - 1) * S.per;
   $('#tbody').innerHTML = rows.map((c, i) => {
     const sw = c.status_waktu, d = c.sisa_hari, sk = Math.round((c.skor_kelengkapan || 0) * 5);
     const sisa = (sw === 'tanpa_batas' || d == null) ? `<span class="days na">—</span>`
-      : `<span class="days ${d < 0 ? 'neg' : d <= 90 ? 'soon' : ''}">${d < 0 ? Math.abs(d) + ' hari lalu' : d + ' hari'}</span>`;
+      : `<span class="days ${d < 0 ? 'neg' : d <= 90 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
     return `<tr data-id="${c.id}">
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${a + i + 1}</td>
-      <td>${c.nomor_dokumen ? `<span class="doc">${esc(c.nomor_dokumen)}</span>` : `<span class="doc none">belum ada nomor</span>`}</td>
+      <td>${c.nomor_dokumen ? `<span class="doc">${esc(c.nomor_dokumen)}</span>` : `<span class="doc none">${esc(t('common.noNumberYet'))}</span>`}</td>
       <td><div class="ttl">${esc(c.judul)}</div>
         ${c.relasi_ke_induk ? `<div class="sub">↳ ${esc(RELASI_NAMA[c.relasi_ke_induk] || c.relasi_ke_induk)}</div>` : ''}
         ${c.catatan_migrasi ? `<div class="flag"><span>⚑</span><span>${esc(c.catatan_migrasi)}</span></div>` : ''}</td>
-      <td>${c.lawan_pihak ? esc(c.lawan_pihak) : `<span style="color:var(--muted-2)">belum diisi</span>`}</td>
+      <td>${c.lawan_pihak ? esc(c.lawan_pihak) : `<span style="color:var(--muted-2)">${esc(t('kontrak.belumDiisi'))}</span>`}</td>
       <td>${c.kategori_nama ? `<span class="tag">${esc(c.kategori_nama)}</span>` : '—'}</td>
       <td>${c.tanggal_berakhir ? `<span class="doc">${esc(tglTampil(c.tanggal_berakhir))}</span>`
-             : `<span style="color:var(--muted-2)">${c.tanpa_batas_waktu ? 'tanpa batas' : '—'}</span>`}</td>
+             : `<span style="color:var(--muted-2)">${c.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—'}</span>`}</td>
       <td>${sisa}</td>
       <td><span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span></td>
       <td><div class="meter" title="${sk}/5">${[0,1,2,3,4].map((n) => `<i class="${n < sk ? 'f' : ''}"></i>`).join('')}</div></td>
     </tr>`;
   }).join('');
 
-  $('#count').textContent = total ? `Menampilkan ${a + 1}–${Math.min(a + S.per, total)} dari ${total} kontrak` : '';
+  $('#count').textContent = total ? t('kontrak.count', { a: a + 1, b: Math.min(a + S.per, total), total }) : '';
   const btn = (lbl, pg, on, dis) => `<button data-pg="${pg}" class="${on ? 'on' : ''}" ${dis ? 'disabled' : ''}>${lbl}</button>`;
   let html = btn('‹', S.page - 1, false, S.page === 1);
   const win = []; for (let i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - S.page) <= 1) win.push(i);
@@ -223,7 +220,7 @@ function opsi(arr, val, ph) {
 function formHTML(c, err) {
   const d = S.draft, r = S.reference;
   const migrasi = c && c.catatan_migrasi
-    ? `<div class="warnbox wb-warn"><span class="ic">⚑</span><div><b>Catatan migrasi</b> ${esc(c.catatan_migrasi)}</div></div>` : '';
+    ? `<div class="warnbox wb-warn"><span class="ic">⚑</span><div><b>${esc(t('kontrak.migrasi'))}</b> ${esc(c.catatan_migrasi)}</div></div>` : '';
   const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
   const miss = (k) => !d[k] ? 'miss' : '';
   const induk = r.induk.filter((x) => x.id !== (c && c.id))
@@ -233,53 +230,53 @@ function formHTML(c, err) {
   ${migrasi}
   <div id="conflictBox"></div>
   <div class="grid2">
-    <div class="f"><label>Nomor dokumen</label>
+    <div class="f"><label>${t('kontrak.f.nomor')}</label>
       <input id="i_nomor" class="${miss('nomor')}" value="${esc(d.nomor || '')}">
-      <div class="hint">Ambil persis dari dokumen asli.</div>${e('nomor')}</div>
-    <div class="f"><label>Kategori</label>
-      <select id="i_kategori">${opsi(r.kategori.map((k) => ({ v: k.id, l: k.nama })), d.kategoriId, '— pilih —')}</select></div>
+      <div class="hint">${t('kontrak.f.nomorHint')}</div>${e('nomor')}</div>
+    <div class="f"><label>${t('kontrak.f.kategori')}</label>
+      <select id="i_kategori">${opsi(r.kategori.map((k) => ({ v: k.id, l: k.nama })), d.kategoriId, t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Judul kontrak <span class="req">*</span></label>
+  <div class="f" style="margin-top:12px"><label>${t('kontrak.f.judul')} <span class="req">*</span></label>
     <input id="i_judul" value="${esc(d.judul || '')}">${e('judul')}</div>
-  <div class="f" style="margin-top:12px"><label>Lawan pihak</label>
+  <div class="f" style="margin-top:12px"><label>${t('kontrak.f.lawan')}</label>
     <input id="i_lawan" list="dl_lawan" class="${miss('lawanPihakNama')}" value="${esc(d.lawanPihakNama || '')}"
-      placeholder="Ketik atau pilih dari daftar…" autocomplete="off">
+      placeholder="${esc(t('kontrak.f.lawanPh'))}" autocomplete="off">
     <datalist id="dl_lawan">${r.lawanPihak.map((p) => `<option value="${esc(p.nama_legal)}">`).join('')}</datalist>
-    <div class="hint">Ketik nama lengkap sesuai akta. Nama yang sudah ada akan disarankan otomatis — pilih itu, jangan menulis ejaan baru.</div></div>
+    <div class="hint">${t('kontrak.f.lawanHint')}</div></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Jenis dokumen</label>
-      <select id="i_jenis">${opsi(r.jenisDokumen.map((j) => ({ v: j, l: j })), d.jenis, '— pilih —')}</select></div>
-    <div class="f"><label>PIC Legal</label>
-      <select id="i_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), d.picLegalId, '— pilih —')}</select></div>
+    <div class="f"><label>${t('kontrak.f.jenis')}</label>
+      <select id="i_jenis">${opsi(r.jenisDokumen.map((j) => ({ v: j, l: j })), d.jenis, t('common.none'))}</select></div>
+    <div class="f"><label>${t('kontrak.f.pic')}</label>
+      <select id="i_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), d.picLegalId, t('common.none'))}</select></div>
   </div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Tanggal mulai</label>
+    <div class="f"><label>${t('kontrak.f.mulai')}</label>
       <input type="date" id="i_mulai" class="${miss('mulai')}" value="${esc(d.mulai || '')}"></div>
-    <div class="f"><label>Tanggal berakhir</label>
+    <div class="f"><label>${t('kontrak.f.akhir')}</label>
       <input type="date" id="i_akhir" class="${miss('akhir')}" value="${esc(d.akhir || '')}" ${d.tanpaBatas ? 'disabled' : ''}>${e('akhir')}</div>
   </div>
   <label class="chk"><input type="checkbox" id="i_batas" ${d.tanpaBatas ? 'checked' : ''}>
-    <span><b>Tanpa batas waktu</b>Dokumen tidak punya tanggal berakhir. Tanggal berakhir akan dikosongkan.</span></label>
-  <div class="f" style="margin-top:6px"><label>Nilai kontrak (Rp)</label>
+    <span><b>${t('kontrak.f.tanpaBatas')}</b>${t('kontrak.f.tanpaBatasDesc')}</span></label>
+  <div class="f" style="margin-top:6px"><label>${t('kontrak.f.nilai')}</label>
     <input id="i_nilai" inputmode="numeric" class="${miss('nilai')}" value="${d.nilai != null ? d.nilai : ''}" ${d.nilaiTidakRelevan ? 'disabled' : ''}>
-    <div class="hint">Ketik angka saja, tanpa Rp, titik, atau koma.</div>${e('nilai')}</div>
+    <div class="hint">${t('kontrak.f.nilaiHint')}</div>${e('nilai')}</div>
   <label class="chk"><input type="checkbox" id="i_nirnilai" ${d.nilaiTidakRelevan ? 'checked' : ''}>
-    <span><b>Tidak bernilai rupiah</b>Untuk NDA, MOU, dan surat yang memang tidak memuat nilai kontrak.</span></label>
+    <span><b>${t('kontrak.f.nirnilai')}</b>${t('kontrak.f.nirnilaiDesc')}</span></label>
   <div class="grid2" style="margin-top:6px">
-    <div class="f"><label>Status siklus</label>
-      <select id="i_status">${opsi(r.statusSiklus.map((v) => ({ v, l: SIKLUS_NAMA[v] || v })), d.status, '— pilih —')}</select></div>
-    <div class="f"><label>Notice (hari)</label>
+    <div class="f"><label>${t('kontrak.f.status')}</label>
+      <select id="i_status">${opsi(r.statusSiklus.map((v) => ({ v, l: SIKLUS_NAMA[v] || v })), d.status, t('common.none'))}</select></div>
+    <div class="f"><label>${t('kontrak.f.notice')}</label>
       <input id="i_notice" inputmode="numeric" value="${d.notice != null ? d.notice : ''}"></div>
   </div>
   <label class="chk"><input type="checkbox" id="i_renew" ${d.autoRenew ? 'checked' : ''}>
-    <span><b>Diperpanjang otomatis</b>Berlaku terus kecuali ada pemberitahuan tertulis sebelum berakhir.</span></label>
+    <span><b>${t('kontrak.f.renew')}</b>${t('kontrak.f.renewDesc')}</span></label>
   <div class="grid2" style="margin-top:6px">
-    <div class="f"><label>Kontrak induk</label>
-      <select id="i_induk">${opsi(induk, d.indukId, '— tidak ada —')}</select></div>
-    <div class="f"><label>Relasi ke induk</label>
-      <select id="i_relasi">${opsi(r.relasi.map((v) => ({ v, l: RELASI_NAMA[v] || v })), d.relasi, '— tidak ada —')}</select>${e('relasi')}</div>
+    <div class="f"><label>${t('kontrak.f.induk')}</label>
+      <select id="i_induk">${opsi(induk, d.indukId, t('common.noneParent'))}</select></div>
+    <div class="f"><label>${t('kontrak.f.relasi')}</label>
+      <select id="i_relasi">${opsi(r.relasi.map((v) => ({ v, l: RELASI_NAMA[v] || v })), d.relasi, t('common.noneParent'))}</select>${e('relasi')}</div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Keterangan</label>
+  <div class="f" style="margin-top:12px"><label>${t('kontrak.f.keterangan')}</label>
     <textarea id="i_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>`;
 }
 function bacaForm() {
@@ -307,9 +304,9 @@ function bacaForm() {
 }
 function validasi(id) {
   const d = S.draft, err = {};
-  if (!d.judul) err.judul = 'Judul kontrak wajib diisi.';
-  if (d.mulai && d.akhir && d.akhir < d.mulai) err.akhir = 'Tanggal berakhir tidak boleh mendahului tanggal mulai.';
-  if (d.relasi && !d.indukId) err.relasi = 'Pilih kontrak induk lebih dulu, atau kosongkan relasinya.';
+  if (!d.judul) err.judul = t('kontrak.err.judul');
+  if (d.mulai && d.akhir && d.akhir < d.mulai) err.akhir = t('kontrak.err.akhir');
+  if (d.relasi && !d.indukId) err.relasi = t('kontrak.err.relasi');
   return Object.keys(err).length ? err : null;
 }
 function pasangFormEvent(rerender) {
@@ -341,7 +338,7 @@ function renderConflictBox(res) {
   const isCrit = res.putusan === 'terbentur';
   box.innerHTML = `<div class="warnbox ${isCrit ? 'wb-crit' : 'wb-warn'}">
     <span class="ic">${isCrit ? '⚠' : '◆'}</span>
-    <div><b>${isCrit ? 'Perhatian — benturan kepentingan' : 'Perlu ditinjau Managing Partner'}</b>
+    <div><b>${isCrit ? t('kontrak.conflict.crit') : t('kontrak.conflict.warn')}</b>
     ${esc(res.alasan || '')}</div></div>`;
 }
 function draftKosong() {
@@ -371,7 +368,7 @@ function bukaDrawer(row) {
   setTimeout(() => { const el = $('#i_nomor'); if (el) el.focus(); }, 60);
 }
 function gambarDrawer(err) {
-  $('#dTitle').textContent = 'Detail kontrak';
+  $('#dTitle').textContent = t('kontrak.drawerTitle');
   $('#dBody').innerHTML = formHTML(drawerRow, err);
   pasangFormEvent(() => gambarDrawer());
 }
@@ -389,11 +386,11 @@ async function simpanDrawer() {
     tutupDrawer();
     await Promise.all([muatDashboard(), muatDaftar(), refreshLedgerRow()]);
     render();
-    toast('Perubahan tersimpan.');
+    toast(t('common.saved'));
   } catch (e) {
     gambarDrawer({ _umum: e.message });
-    toast(e.message || 'Gagal menyimpan.');
-  } finally { btn.disabled = false; btn.textContent = 'Simpan'; }
+    toast(e.message || t('common.saveFailed'));
+  } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 async function refreshLedgerRow() {
   const led = await Api.ledger(S.ws.client_org_id);
@@ -414,17 +411,14 @@ function antreanLokal() {
 }
 async function renderQuick() {
   const q = antreanLokal();
-  $('#sideTitle').textContent = 'Cara kerja mode ini';
+  $('#sideTitle').textContent = t('kontrak.quick.sideTitle');
   $('#sideList').innerHTML = [
-    'Kontrak yang datanya paling banyak kosong tampil lebih dulu.',
-    'Sekali berkas kontrak dibuka, isi <b>semua</b> kolom sekaligus. Membuka berkas yang sama berkali-kali adalah pemborosan terbesar dalam pekerjaan ini.',
-    'Kalau data tidak ditemukan, kosongkan dan tulis alasannya di Keterangan.',
-    'Tekan <b>Simpan &amp; lanjut</b> untuk pindah ke kontrak berikutnya.',
+    t('kontrak.quick.tip1'), t('kontrak.quick.tip2'), t('kontrak.quick.tip3'), t('kontrak.quick.tip4'),
   ].map((s) => `<li>${s}</li>`).join('');
 
   if (!q.length) {
-    $('#qCard').innerHTML = `<div class="empty"><h3>Semua kontrak sudah lengkap</h3>
-      <p>Tidak ada lagi kontrak yang menunggu dilengkapi pada penyaring saat ini.</p></div>`;
+    $('#qCard').innerHTML = `<div class="empty"><h3>${esc(t('kontrak.quick.doneTitle'))}</h3>
+      <p>${esc(t('kontrak.quick.doneDesc'))}</p></div>`;
     return;
   }
   if (S.quickIdx >= q.length) S.quickIdx = 0;
@@ -442,17 +436,17 @@ function gambarQuick(q, c, err) {
   $('#qCard').innerHTML = `
     <div class="qhead">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <span class="doc">${c.nomor_dokumen ? esc(c.nomor_dokumen) : `<span class="doc none">belum ada nomor</span>`}</span>
+        <span class="doc">${c.nomor_dokumen ? esc(c.nomor_dokumen) : `<span class="doc none">${esc(t('common.noNumberYet'))}</span>`}</span>
         <span style="font-size:11.5px;color:var(--muted);font-family:var(--mono)">${S.quickIdx + 1} / ${q.length} · ${sk}/5</span>
       </div>
       <h3>${esc(c.judul)}</h3>
     </div>
     ${formHTML(c, err)}
     <div class="qnav">
-      <button class="btn ghost" id="qPrev" ${S.quickIdx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
+      <button class="btn ghost" id="qPrev" ${S.quickIdx === 0 ? 'disabled' : ''}>${t('kontrak.quick.prev')}</button>
       <div style="display:flex;gap:8px">
-        <button class="btn ghost" id="qSkip">Lewati</button>
-        <button class="btn gold" id="qNext">Simpan &amp; lanjut →</button>
+        <button class="btn ghost" id="qSkip">${t('kontrak.quick.skip')}</button>
+        <button class="btn gold" id="qNext">${t('kontrak.quick.next')}</button>
       </div>
     </div>`;
   pasangFormEvent(() => gambarQuick(q, c));
@@ -470,9 +464,9 @@ function gambarQuick(q, c, err) {
       await Api.updateContract(c.id, S.draft);
       S.draft = null;
       await Promise.all([muatDashboard(), refreshLedgerRow()]);
-      toast('Perubahan tersimpan.');
+      toast(t('common.saved'));
       renderCards(); renderHero(); renderQuick();
-    } catch (e) { toast(e.message || 'Gagal menyimpan.'); btn.disabled = false; btn.textContent = 'Simpan & lanjut →'; }
+    } catch (e) { toast(e.message || t('common.saveFailed')); btn.disabled = false; btn.innerHTML = t('kontrak.quick.next'); }
   };
 }
 
@@ -499,8 +493,8 @@ $('#loginForm').addEventListener('submit', async (e) => {
     await Api.login($('#email').value.trim(), $('#password').value);
     await goWorkspacePicker();
   } catch (err) {
-    errEl.textContent = err.message || 'Gagal masuk.'; errEl.classList.add('on');
-  } finally { btn.disabled = false; btn.textContent = 'Masuk'; }
+    errEl.textContent = err.message || t('login.genericError'); errEl.classList.add('on');
+  } finally { btn.disabled = false; btn.textContent = t('login.submit'); }
 });
 
 $('#logoutBtn').onclick = () => { Api.logout(); S.user = null; S.ws = null; goLogin(); };
@@ -528,8 +522,8 @@ $('#q').oninput = (e) => {
 };
 $('#fKat').onchange = (e) => { S.kat = e.target.value; S.page = 1; terapkanFilterLaluRender(); };
 $('#fStat').onchange = (e) => { S.stat = e.target.value; S.page = 1; terapkanFilterLaluRender(); };
-$('#fLengkap').innerHTML = `<option value="">Semua kelengkapan</option>
-  <option value="belum">Belum lengkap</option><option value="sudah">Sudah lengkap</option>`;
+$('#fLengkap').innerHTML = `<option value="">${esc(t('kontrak.filter.allLengkap'))}</option>
+  <option value="belum">${esc(t('kontrak.filter.belum'))}</option><option value="sudah">${esc(t('kontrak.filter.sudah'))}</option>`;
 $('#fLengkap').onchange = (e) => { S.lengkap = e.target.value; S.page = 1; terapkanFilterLaluRender(); };
 $('#resetBtn').onclick = () => {
   S.q = ''; S.kat = ''; S.stat = ''; S.lengkap = ''; S.ledRow = null; S.page = 1;
@@ -558,7 +552,7 @@ $('#ledGrid').onclick = async (e) => {
   try {
     const { row } = await Api.getContract(b.dataset.id);
     bukaDrawer(row);
-  } catch (err) { toast(err.message || 'Gagal membuka kontrak.'); }
+  } catch (err) { toast(err.message || t('kontrak.openError')); }
 };
 $('#ledGrid').onmouseover = (e) => { const b = e.target.closest('button[data-id]'); if (b) ledCap(b.dataset.id, Number(b.dataset.row)); };
 $('#ledGrid').onmouseleave = () => ledCap(null);
@@ -594,7 +588,7 @@ async function muatPermitsSemua() {
     P.ref = ref; P.rows = list.rows; P.dashboard = dash.dashboard; P.gap = gap.rows; P.loaded = true;
     renderPermitCards(); renderPermitTable(); renderGap();
   } catch (err) {
-    showApiErr(err.message || 'Gagal memuat data perizinan.');
+    showApiErr(err.message || t('permits.loadError'));
   }
 }
 
@@ -603,12 +597,12 @@ function renderPermitCards() {
   const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
     <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#permitCards').innerHTML = [
-    item('TOTAL IZIN', d.total_izin ?? 0, '', 'semua izin tercatat'),
-    item('IZIN AKTIF', d.izin_aktif ?? 0, 'acc-ok', 'berlaku normal'),
-    item('AKAN BERAKHIR', d.akan_berakhir ?? 0, 'acc-warn', '≤60 hari'),
-    item('KEDALUWARSA', d.kedaluwarsa ?? 0, 'acc-crit', 'perlu segera diperbarui'),
-    item('DALAM PENGURUSAN', d.dalam_pengurusan ?? 0, '', 'sedang diproses'),
-    item('GAP WAJIB', d.gap_wajib ?? 0, d.gap_wajib > 0 ? 'acc-crit' : 'acc-ok', 'izin wajib yang belum dimiliki'),
+    item(t('permits.card.total'), d.total_izin ?? 0, '', t('permits.card.total.note')),
+    item(t('permits.card.aktif'), d.izin_aktif ?? 0, 'acc-ok', t('permits.card.aktif.note')),
+    item(t('permits.card.akanBerakhir'), d.akan_berakhir ?? 0, 'acc-warn', t('permits.card.akanBerakhir.note')),
+    item(t('permits.card.kedaluwarsa'), d.kedaluwarsa ?? 0, 'acc-crit', t('permits.card.kedaluwarsa.note')),
+    item(t('permits.card.pengurusan'), d.dalam_pengurusan ?? 0, '', t('permits.card.pengurusan.note')),
+    item(t('permits.card.gap'), d.gap_wajib ?? 0, d.gap_wajib > 0 ? 'acc-crit' : 'acc-ok', t('permits.card.gap.note')),
   ].join('');
 }
 function renderPermitTable() {
@@ -616,15 +610,15 @@ function renderPermitTable() {
   $('#permitBody').innerHTML = P.rows.map((p, i) => {
     const sw = p.status_waktu, d = p.sisa_hari;
     const sisa = (sw === 'tanpa_batas' || d == null) ? `<span class="days na">—</span>`
-      : `<span class="days ${d < 0 ? 'neg' : d <= 60 ? 'soon' : ''}">${d < 0 ? Math.abs(d) + ' hari lalu' : d + ' hari'}</span>`;
+      : `<span class="days ${d < 0 ? 'neg' : d <= 60 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
     const pic = P.ref?.pic.find((x) => x.id === p.pic_id);
     return `<tr data-id="${p.id}">
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
       <td><div class="ttl">${esc(p.nama_izin)}</div></td>
-      <td>${p.nomor_izin ? `<span class="doc">${esc(p.nomor_izin)}</span>` : `<span class="doc none">belum ada nomor</span>`}</td>
+      <td>${p.nomor_izin ? `<span class="doc">${esc(p.nomor_izin)}</span>` : `<span class="doc none">${esc(t('common.noNumberYet'))}</span>`}</td>
       <td>${esc(p.instansi_penerbit || '—')}</td>
       <td>${p.tanggal_terbit ? esc(tglTampil(p.tanggal_terbit)) : '—'}</td>
-      <td>${p.tanggal_kedaluwarsa ? esc(tglTampil(p.tanggal_kedaluwarsa)) : (p.tanpa_batas_waktu ? 'tanpa batas' : '—')}</td>
+      <td>${p.tanggal_kedaluwarsa ? esc(tglTampil(p.tanggal_kedaluwarsa)) : (p.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—')}</td>
       <td>${sisa}</td>
       <td><span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span></td>
       <td>${pic ? esc(pic.nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
@@ -636,14 +630,14 @@ function renderPermitTable() {
 }
 function renderGap() {
   if (!P.gap.length) {
-    $('#gapBody').innerHTML = `<p style="font-size:12.5px;color:var(--muted);margin:0">Tidak ada kesenjangan izin terdeteksi untuk sektor usaha klien ini.</p>`;
+    $('#gapBody').innerHTML = `<p style="font-size:12.5px;color:var(--muted);margin:0">${esc(t('permits.gap.none'))}</p>`;
     return;
   }
   $('#gapBody').innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">` +
     P.gap.map((g) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;background:#f8fafc;border-radius:8px">
       <div><b style="font-size:12.5px">${esc(g.nama)}</b>
         <div style="font-size:11px;color:var(--muted)">${esc(g.instansi || '')}</div></div>
-      <span class="pill ${g.wajib ? 'p-kritis' : 'p-pantau'}">${g.wajib ? 'Wajib' : 'Opsional'}</span>
+      <span class="pill ${g.wajib ? 'p-kritis' : 'p-pantau'}">${g.wajib ? esc(t('permits.gap.wajib')) : esc(t('permits.gap.opsional'))}</span>
     </div>`).join('') + `</div>`;
 }
 
@@ -655,27 +649,27 @@ function permitFormHTML(err) {
   const d = P.draft, r = P.ref, e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
   return `
   <div class="grid2">
-    <div class="f"><label>Jenis izin (referensi)</label>
-      <select id="p_type">${permitOpsi(r.permitTypes.map((t) => ({ v: t.id, l: t.nama + (t.wajib ? ' · wajib' : '') })), d.permitTypeId, '— pilih —')}</select></div>
-    <div class="f"><label>PIC</label>
-      <select id="p_pic">${permitOpsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), d.picId, '— pilih —')}</select></div>
+    <div class="f"><label>${t('permits.f.jenis')}</label>
+      <select id="p_type">${permitOpsi(r.permitTypes.map((pt) => ({ v: pt.id, l: pt.nama + (pt.wajib ? t('permits.f.wajib') : '') })), d.permitTypeId, t('common.none'))}</select></div>
+    <div class="f"><label>${t('permits.f.pic')}</label>
+      <select id="p_pic">${permitOpsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), d.picId, t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Nama izin <span class="req">*</span></label>
+  <div class="f" style="margin-top:12px"><label>${t('permits.f.nama')} <span class="req">*</span></label>
     <input id="p_nama" value="${esc(d.namaIzin || '')}">${e('namaIzin')}</div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Nomor izin</label><input id="p_nomor" value="${esc(d.nomorIzin || '')}"></div>
-    <div class="f"><label>Instansi penerbit</label><input id="p_instansi" value="${esc(d.instansiPenerbit || '')}"></div>
+    <div class="f"><label>${t('permits.f.nomor')}</label><input id="p_nomor" value="${esc(d.nomorIzin || '')}"></div>
+    <div class="f"><label>${t('permits.f.instansi')}</label><input id="p_instansi" value="${esc(d.instansiPenerbit || '')}"></div>
   </div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Tanggal terbit</label><input type="date" id="p_terbit" value="${esc(d.tanggalTerbit || '')}"></div>
-    <div class="f"><label>Tanggal kedaluwarsa</label>
+    <div class="f"><label>${t('permits.f.terbit')}</label><input type="date" id="p_terbit" value="${esc(d.tanggalTerbit || '')}"></div>
+    <div class="f"><label>${t('permits.f.kedaluwarsa')}</label>
       <input type="date" id="p_kadaluarsa" value="${esc(d.tanggalKedaluwarsa || '')}" ${d.tanpaBatas ? 'disabled' : ''}>${e('tanggalKedaluwarsa')}</div>
   </div>
   <label class="chk"><input type="checkbox" id="p_batas" ${d.tanpaBatas ? 'checked' : ''}>
-    <span><b>Tanpa batas waktu</b>Untuk izin seperti NIB/NPWP yang tidak punya tanggal kedaluwarsa.</span></label>
-  <div class="f" style="margin-top:6px"><label>Status siklus</label>
-    <select id="p_status">${permitOpsi(r.statusSiklus.map((v) => ({ v, l: v.replace('_', ' ').replace(/^\w/, (c) => c.toUpperCase()) })), d.status, '— pilih —')}</select></div>
-  <div class="f" style="margin-top:12px"><label>Keterangan</label><textarea id="p_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>`;
+    <span><b>${t('permits.f.tanpaBatas')}</b>${t('permits.f.tanpaBatasDesc')}</span></label>
+  <div class="f" style="margin-top:6px"><label>${t('permits.f.status')}</label>
+    <select id="p_status">${permitOpsi(r.statusSiklus.map((v) => ({ v, l: PERMIT_STATUS_NAMA[v] || v })), d.status, t('common.none'))}</select></div>
+  <div class="f" style="margin-top:12px"><label>${t('permits.f.keterangan')}</label><textarea id="p_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>`;
 }
 function bacaPermitForm() {
   const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
@@ -693,9 +687,9 @@ function bacaPermitForm() {
 }
 function validasiPermit() {
   const d = P.draft, err = {};
-  if (!d.namaIzin) err.namaIzin = 'Nama izin wajib diisi.';
+  if (!d.namaIzin) err.namaIzin = t('permits.err.nama');
   if (d.tanggalTerbit && d.tanggalKedaluwarsa && d.tanggalKedaluwarsa < d.tanggalTerbit)
-    err.tanggalKedaluwarsa = 'Tanggal kedaluwarsa tidak boleh mendahului tanggal terbit.';
+    err.tanggalKedaluwarsa = t('permits.err.kedaluwarsa');
   return Object.keys(err).length ? err : null;
 }
 function bukaPermitDrawer(row) {
@@ -712,7 +706,7 @@ function bukaPermitDrawer(row) {
   setTimeout(() => { const el = $('#p_nama'); if (el) el.focus(); }, 60);
 }
 function gambarPermitDrawer(err) {
-  $('#permitDTitle').textContent = P.editing ? 'Detail izin' : 'Tambah izin baru';
+  $('#permitDTitle').textContent = P.editing ? t('permits.drawerTitle') : t('permits.drawerTitleNew');
   $('#permitDBody').innerHTML = permitFormHTML(err);
   const batas = $('#p_batas');
   if (batas) batas.addEventListener('change', () => { bacaPermitForm(); gambarPermitDrawer(); });
@@ -731,11 +725,11 @@ async function simpanPermit() {
     else await Api.createPermit({ ...P.draft, clientOrgId: S.ws.client_org_id });
     tutupPermitDrawer();
     await muatPermitsSemua();
-    toast('Perubahan tersimpan.');
+    toast(t('common.saved'));
   } catch (e) {
     gambarPermitDrawer({ _umum: e.message });
-    toast(e.message || 'Gagal menyimpan.');
-  } finally { btn.disabled = false; btn.textContent = 'Simpan'; }
+    toast(e.message || t('common.saveFailed'));
+  } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 $('#addPermitBtn').onclick = () => bukaPermitDrawer(null);
 $('#permitDClose').onclick = tutupPermitDrawer;
@@ -785,10 +779,9 @@ function tutupAuxDrawer() {
 }
 $('#auxDClose').onclick = tutupAuxDrawer; $('#auxDCancel').onclick = tutupAuxDrawer;
 
-const TAHAP_NAMA = { pendaftaran:'Pendaftaran', mediasi:'Mediasi', persidangan:'Persidangan',
-  pembuktian:'Pembuktian', putusan:'Putusan', banding:'Banding', kasasi:'Kasasi', pk:'PK', selesai:'Selesai' };
-const PERAN_KLIEN_NAMA = { penggugat:'Penggugat', tergugat:'Tergugat', pemohon:'Pemohon',
-  termohon:'Termohon', pelapor:'Pelapor', terlapor:'Terlapor', lainnya:'Lainnya' };
+const TAHAP_NAMA = nameProxy('tahap');
+const PERAN_KLIEN_NAMA = nameProxy('peranKlien');
+const CASE_STATUS_NAMA = nameProxy('caseStatus');
 
 /* ================================================================
    MODUL LITIGASI & SIDANG
@@ -803,17 +796,17 @@ async function muatCasesSemua() {
     ]);
     CS.ref = ref; CS.rows = list.rows; CS.dashboard = dash.dashboard; CS.loaded = true;
     renderCaseCards(); renderCaseTable();
-  } catch (err) { showApiErr(err.message || 'Gagal memuat data litigasi.'); }
+  } catch (err) { showApiErr(err.message || t('cases.loadError')); }
 }
 function renderCaseCards() {
   const d = CS.dashboard || {};
   const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
     <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#caseCards').innerHTML = [
-    item('PERKARA AKTIF', d.perkara_aktif ?? 0, '', 'semua perkara berjalan'),
-    item('SIDANG HARI INI', d.sidang_hari_ini ?? 0, 'acc-warn', 'perlu persiapan segera'),
-    item('SIDANG ≤7 HARI', d.sidang_7_hari ?? 0, 'acc-warn', 'jadwal minggu ini'),
-    item('TAHAP KASASI/PK', d.tahap_tertinggi ?? 0, '', 'tahap tertinggi'),
+    item(t('cases.card.aktif'), d.perkara_aktif ?? 0, '', t('cases.card.aktif.note')),
+    item(t('cases.card.sidangHariIni'), d.sidang_hari_ini ?? 0, 'acc-warn', t('cases.card.sidangHariIni.note')),
+    item(t('cases.card.sidang7hari'), d.sidang_7_hari ?? 0, 'acc-warn', t('cases.card.sidang7hari.note')),
+    item(t('cases.card.tahapTinggi'), d.tahap_tertinggi ?? 0, '', t('cases.card.tahapTinggi.note')),
   ].join('');
 }
 function renderCaseTable() {
@@ -821,8 +814,8 @@ function renderCaseTable() {
   $('#caseBody').innerHTML = CS.rows.map((c, i) => {
     const pic = CS.ref?.pic.find((x) => x.id === c.pic_legal_id);
     const sidang = c.sidang_terdekat_tanggal
-      ? `${esc(tglTampil(c.sidang_terdekat_tanggal))}${c.hari_ke_sidang != null ? ` <span class="days ${c.hari_ke_sidang <= 7 ? 'soon' : ''}">(${c.hari_ke_sidang} hari)</span>` : ''}`
-      : '<span style="color:var(--muted-2)">belum dijadwalkan</span>';
+      ? `${esc(tglTampil(c.sidang_terdekat_tanggal))}${c.hari_ke_sidang != null ? ` <span class="days ${c.hari_ke_sidang <= 7 ? 'soon' : ''}">(${t('common.daysLeft', { n: c.hari_ke_sidang })})</span>` : ''}`
+      : `<span style="color:var(--muted-2)">${esc(t('cases.belumDijadwalkan'))}</span>`;
     return `<tr data-id="${c.id}">
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
       <td><div class="ttl">${esc(c.nomor_perkara)}</div>${c.lawan_pihak_teks ? `<div class="sub">vs ${esc(c.lawan_pihak_teks)}</div>` : ''}</td>
@@ -830,7 +823,7 @@ function renderCaseTable() {
       <td>${esc(c.pengadilan || '—')}</td>
       <td><span class="tag">${esc(TAHAP_NAMA[c.tahap] || c.tahap)}</span></td>
       <td>${sidang}</td>
-      <td><span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${c.status_siklus === 'aktif' ? 'Aktif' : (c.status_siklus === 'selesai' ? 'Selesai' : 'Dicabut')}</span></td>
+      <td><span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span></td>
       <td>${pic ? esc(pic.nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
     </tr>`;
   }).join('');
@@ -842,71 +835,71 @@ function caseFormHTML(row, hearings, minutes) {
   const r = CS.ref;
   return `
   <div class="grid2">
-    <div class="f"><label>Nomor perkara <span class="req">*</span></label>
+    <div class="f"><label>${t('cases.f.nomor')} <span class="req">*</span></label>
       <input id="cs_nomor" value="${esc(row?.nomor_perkara || '')}"></div>
-    <div class="f"><label>Pengadilan</label><input id="cs_pengadilan" value="${esc(row?.pengadilan || '')}"></div>
+    <div class="f"><label>${t('cases.f.pengadilan')}</label><input id="cs_pengadilan" value="${esc(row?.pengadilan || '')}"></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Jenis perkara</label>
-    <input id="cs_jenis" placeholder="mis. Perdata - Wanprestasi" value="${esc(row?.jenis_perkara || '')}"></div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.jenis')}</label>
+    <input id="cs_jenis" placeholder="${esc(t('cases.f.jenisPh'))}" value="${esc(row?.jenis_perkara || '')}"></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Peran klien</label>
-      <select id="cs_peran">${opsi(r.peranKlien.map((v) => ({ v, l: PERAN_KLIEN_NAMA[v] })), row?.peran_klien, '— pilih —')}</select></div>
-    <div class="f"><label>Tahap</label>
-      <select id="cs_tahap">${opsi(r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row?.tahap || 'pendaftaran', '— pilih —')}</select></div>
+    <div class="f"><label>${t('cases.f.peran')}</label>
+      <select id="cs_peran">${opsi(r.peranKlien.map((v) => ({ v, l: PERAN_KLIEN_NAMA[v] })), row?.peran_klien, t('common.none'))}</select></div>
+    <div class="f"><label>${t('cases.f.tahap')}</label>
+      <select id="cs_tahap">${opsi(r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row?.tahap || 'pendaftaran', t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Lawan pihak (ringkasan para pihak)</label>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.lawan')}</label>
     <input id="cs_lawan" value="${esc(row?.lawan_pihak_teks || '')}"></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Tanggal daftar</label><input type="date" id="cs_tgldaftar" value="${esc(row?.tanggal_daftar ? row.tanggal_daftar.slice(0,10) : '')}"></div>
-    <div class="f"><label>PIC Legal</label><select id="cs_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, '— pilih —')}</select></div>
+    <div class="f"><label>${t('cases.f.tglDaftar')}</label><input type="date" id="cs_tgldaftar" value="${esc(row?.tanggal_daftar ? row.tanggal_daftar.slice(0,10) : '')}"></div>
+    <div class="f"><label>${t('cases.f.pic')}</label><select id="cs_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Status</label>
-    <select id="cs_status">${opsi(r.statusSiklus.map((v) => ({ v, l: v.replace(/^\w/, (c) => c.toUpperCase()) })), row?.status_siklus || 'aktif', '— pilih —')}</select></div>
-  <div class="f" style="margin-top:12px"><label>Keterangan</label><textarea id="cs_ket" rows="2">${esc(row?.keterangan || '')}</textarea></div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.status')}</label>
+    <select id="cs_status">${opsi(r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row?.status_siklus || 'aktif', t('common.none'))}</select></div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.keterangan')}</label><textarea id="cs_ket" rows="2">${esc(row?.keterangan || '')}</textarea></div>
   ${row ? `
   <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
-    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">Jadwal Sidang</h4>
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('cases.hearingTitle')}</h4>
     <div id="hearingList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
       ${hearings.map((h) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:12px">
         <span><b>${esc(tglTampil(h.tanggal_sidang))}</b> ${h.jam_sidang ? esc(h.jam_sidang.slice(0,5)) : ''} — ${esc(h.agenda || '')}</span>
-        <span class="tag">${esc(h.status)}</span></div>`).join('') || '<p style="font-size:12px;color:var(--muted);margin:0">Belum ada jadwal sidang.</p>'}
+        <span class="tag">${esc(h.status)}</span></div>`).join('') || `<p style="font-size:12px;color:var(--muted);margin:0">${esc(t('cases.hearingEmpty'))}</p>`}
     </div>
     <div class="grid2">
-      <div class="f"><label>Tanggal</label><input type="date" id="cs_h_tgl"></div>
-      <div class="f"><label>Jam</label><input type="time" id="cs_h_jam"></div>
+      <div class="f"><label>${t('cases.f.tanggal')}</label><input type="date" id="cs_h_tgl"></div>
+      <div class="f"><label>${t('cases.f.jam')}</label><input type="time" id="cs_h_jam"></div>
     </div>
-    <div class="f" style="margin-top:8px"><input id="cs_h_agenda" placeholder="Agenda sidang"></div>
-    <button class="btn ghost" id="cs_h_add" type="button" style="margin-top:8px">+ Tambah Jadwal Sidang</button>
+    <div class="f" style="margin-top:8px"><input id="cs_h_agenda" placeholder="${esc(t('cases.f.agendaPh'))}"></div>
+    <button class="btn ghost" id="cs_h_add" type="button" style="margin-top:8px">${t('cases.addHearing')}</button>
   </div>
   <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
-    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">Hearing Minutes</h4>
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('cases.minutesTitle')}</h4>
     <div id="minuteList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
       ${minutes.map((m) => `<div style="padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:12px">
         <div class="sub" style="margin-bottom:3px">${esc(tglTampil(m.created_at.slice(0,10)))} · ${esc(m.dicatat_oleh_nama || '—')} · ${esc(m.status)}</div>
-        ${esc(m.isi)}</div>`).join('') || '<p style="font-size:12px;color:var(--muted);margin:0">Belum ada catatan sidang.</p>'}
+        ${esc(m.isi)}</div>`).join('') || `<p style="font-size:12px;color:var(--muted);margin:0">${esc(t('cases.minutesEmpty'))}</p>`}
     </div>
-    <textarea id="cs_m_isi" rows="2" placeholder="Catatan hasil sidang…"></textarea>
-    <button class="btn ghost" id="cs_m_add" type="button" style="margin-top:8px">+ Tambah Catatan</button>
+    <textarea id="cs_m_isi" rows="2" placeholder="${esc(t('cases.minutePh'))}"></textarea>
+    <button class="btn ghost" id="cs_m_add" type="button" style="margin-top:8px">${t('cases.addMinute')}</button>
   </div>` : ''}`;
 }
 async function bukaCaseDrawer(id) {
   CS.editing = id;
   let row = null, hearings = [], minutes = [];
   if (id) { const r = await Api.getCase(id); row = r.row; hearings = r.hearings; minutes = r.minutes; }
-  bukaAuxDrawer('case', id ? 'Detail perkara' : 'Tambah perkara baru', caseFormHTML(row, hearings, minutes), simpanCase);
+  bukaAuxDrawer('case', id ? t('cases.drawerTitle') : t('cases.drawerTitleNew'), caseFormHTML(row, hearings, minutes), simpanCase);
   if (id) {
     $('#cs_h_add').onclick = async () => {
       const tgl = $('#cs_h_tgl').value, jam = $('#cs_h_jam').value, agenda = $('#cs_h_agenda').value;
-      if (!tgl) return toast('Tanggal sidang wajib diisi.');
+      if (!tgl) return toast(t('cases.err.tglSidang'));
       try { await Api.addHearing(id, { tanggalSidang: tgl, jamSidang: jam || null, agenda: agenda || null });
-        toast('Jadwal sidang ditambahkan.'); await bukaCaseDrawer(id); await muatCasesSemua();
+        toast(t('cases.hearingAdded')); await bukaCaseDrawer(id); await muatCasesSemua();
       } catch (e) { toast(e.message); }
     };
     $('#cs_m_add').onclick = async () => {
       const isi = $('#cs_m_isi').value.trim();
-      if (!isi) return toast('Isi catatan wajib diisi.');
+      if (!isi) return toast(t('cases.err.isiCatatan'));
       try { await Api.addMinute(id, { isi, status: 'final' });
-        toast('Catatan sidang ditambahkan.'); await bukaCaseDrawer(id);
+        toast(t('cases.minuteAdded')); await bukaCaseDrawer(id);
       } catch (e) { toast(e.message); }
     };
   }
@@ -919,12 +912,12 @@ async function simpanCase() {
     tanggalDaftar: $('#cs_tgldaftar').value || null, picLegalId: $('#cs_pic').value || null,
     statusSiklus: $('#cs_status').value, keterangan: $('#cs_ket').value.trim() || null,
   };
-  if (!body.nomorPerkara) return toast('Nomor perkara wajib diisi.');
+  if (!body.nomorPerkara) return toast(t('cases.err.nomor'));
   try {
     if (CS.editing) await Api.updateCase(CS.editing, body);
     else await Api.createCase({ ...body, clientOrgId: S.ws.client_org_id });
-    tutupAuxDrawer(); await muatCasesSemua(); toast('Perubahan tersimpan.');
-  } catch (e) { toast(e.message || 'Gagal menyimpan.'); }
+    tutupAuxDrawer(); await muatCasesSemua(); toast(t('common.saved'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
 }
 $('#addCaseBtn').onclick = () => bukaCaseDrawer(null);
 
@@ -932,7 +925,8 @@ $('#addCaseBtn').onclick = () => bukaCaseDrawer(null);
    MODUL PROYEK LEGAL
    ================================================================ */
 const PJ = { rows: [], ref: null, dashboard: null, loaded: false, editing: null };
-const PROJECT_STATUS_NAMA = { berjalan:'Berjalan', selesai:'Selesai', tertunda:'Tertunda', dibatalkan:'Dibatalkan' };
+const PROJECT_STATUS_NAMA = nameProxy('projStatus');
+const PROJECT_SW_NAMA = nameProxy('projSW');
 
 async function muatProjectsSemua() {
   showApiErr('');
@@ -942,28 +936,27 @@ async function muatProjectsSemua() {
     ]);
     PJ.ref = ref; PJ.rows = list.rows; PJ.dashboard = dash.dashboard; PJ.loaded = true;
     renderProjectCards(); renderProjectTable();
-  } catch (err) { showApiErr(err.message || 'Gagal memuat data proyek.'); }
+  } catch (err) { showApiErr(err.message || t('projects.loadError')); }
 }
 function renderProjectCards() {
   const d = PJ.dashboard || {};
   const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
     <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#projectCards').innerHTML = [
-    item('TOTAL PROYEK', d.total_proyek ?? 0, '', 'semua proyek legal'),
-    item('BERJALAN', d.berjalan ?? 0, 'acc-ok', 'sedang dikerjakan'),
-    item('SEGERA SELESAI', d.segera_selesai ?? 0, 'acc-warn', '≤7 hari lagi'),
-    item('TERLAMBAT', d.terlambat ?? 0, 'acc-crit', 'lewat target'),
-    item('SELESAI', d.selesai ?? 0, '', 'sudah tuntas'),
+    item(t('projects.card.total'), d.total_proyek ?? 0, '', t('projects.card.total.note')),
+    item(t('projects.card.berjalan'), d.berjalan ?? 0, 'acc-ok', t('projects.card.berjalan.note')),
+    item(t('projects.card.segeraSelesai'), d.segera_selesai ?? 0, 'acc-warn', t('projects.card.segeraSelesai.note')),
+    item(t('projects.card.terlambat'), d.terlambat ?? 0, 'acc-crit', t('projects.card.terlambat.note')),
+    item(t('projects.card.selesai'), d.selesai ?? 0, '', t('projects.card.selesai.note')),
   ].join('');
 }
 function renderProjectTable() {
   $('#projectEmpty').style.display = PJ.rows.length ? 'none' : 'block';
-  const SW = { aman:'Aman', pantau:'Pantau', segera_selesai:'Segera Selesai', terlambat:'Terlambat', tanpa_batas:'Tanpa Target', tidak_dipantau:'—' };
   $('#projectBody').innerHTML = PJ.rows.map((p, i) => {
     const pic = PJ.ref?.pic.find((x) => x.id === p.pic_legal_id);
     const d = p.sisa_hari;
     const sisa = (p.status_waktu === 'tanpa_batas' || d == null) ? '—'
-      : `<span class="days ${d < 0 ? 'neg' : d <= 7 ? 'soon' : ''}">${d < 0 ? Math.abs(d) + ' hari lalu' : d + ' hari'}</span>`;
+      : `<span class="days ${d < 0 ? 'neg' : d <= 7 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
     return `<tr data-id="${p.id}">
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
       <td><div class="ttl">${esc(p.nama_proyek)}</div></td>
@@ -971,7 +964,7 @@ function renderProjectTable() {
       <td><div class="meter" title="${p.progress_persen}%">${[0,20,40,60,80].map((n) => `<i class="${p.progress_persen > n ? 'f' : ''}"></i>`).join('')}<span style="font-size:11px;margin-left:5px;color:var(--muted)">${p.progress_persen}%</span></div></td>
       <td>${p.target_selesai ? esc(tglTampil(p.target_selesai)) : '—'}</td>
       <td>${sisa}</td>
-      <td><span class="pill p-${p.status_waktu === 'terlambat' ? 'kritis' : p.status_waktu === 'segera_selesai' ? 'peringatan' : p.status === 'selesai' ? 'aman' : 'pantau'}">${esc(SW[p.status_waktu] || PROJECT_STATUS_NAMA[p.status])}</span></td>
+      <td><span class="pill p-${p.status_waktu === 'terlambat' ? 'kritis' : p.status_waktu === 'segera_selesai' ? 'peringatan' : p.status === 'selesai' ? 'aman' : 'pantau'}">${esc(PROJECT_SW_NAMA[p.status_waktu] || PROJECT_STATUS_NAMA[p.status])}</span></td>
       <td>${pic ? esc(pic.nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
     </tr>`;
   }).join('');
@@ -982,22 +975,22 @@ function renderProjectTable() {
 function projectFormHTML(row) {
   const r = PJ.ref;
   return `
-  <div class="f"><label>Nama proyek <span class="req">*</span></label><input id="pj_nama" value="${esc(row?.nama_proyek || '')}"></div>
+  <div class="f"><label>${t('projects.f.nama')} <span class="req">*</span></label><input id="pj_nama" value="${esc(row?.nama_proyek || '')}"></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Kategori</label><input id="pj_kategori" placeholder="mis. Korporasi, Ketenagakerjaan" value="${esc(row?.kategori || '')}"></div>
-    <div class="f"><label>PIC Legal</label><select id="pj_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, '— pilih —')}</select></div>
+    <div class="f"><label>${t('projects.f.kategori')}</label><input id="pj_kategori" placeholder="${esc(t('projects.f.kategoriPh'))}" value="${esc(row?.kategori || '')}"></div>
+    <div class="f"><label>${t('projects.f.pic')}</label><select id="pj_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Progress: <span id="pj_progress_val">${row?.progress_persen ?? 0}</span>%</label>
+  <div class="f" style="margin-top:12px"><label>${t('projects.f.progress')}<span id="pj_progress_val">${row?.progress_persen ?? 0}</span>%</label>
     <input type="range" id="pj_progress" min="0" max="100" step="5" value="${row?.progress_persen ?? 0}"></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Target selesai</label><input type="date" id="pj_target" value="${esc(row?.target_selesai ? row.target_selesai.slice(0,10) : '')}"></div>
-    <div class="f"><label>Status</label><select id="pj_status">${opsi(r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', '— pilih —')}</select></div>
+    <div class="f"><label>${t('projects.f.target')}</label><input type="date" id="pj_target" value="${esc(row?.target_selesai ? row.target_selesai.slice(0,10) : '')}"></div>
+    <div class="f"><label>${t('projects.f.status')}</label><select id="pj_status">${opsi(r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Keterangan</label><textarea id="pj_ket" rows="3">${esc(row?.keterangan || '')}</textarea></div>`;
+  <div class="f" style="margin-top:12px"><label>${t('projects.f.keterangan')}</label><textarea id="pj_ket" rows="3">${esc(row?.keterangan || '')}</textarea></div>`;
 }
 async function bukaProjectDrawer(row) {
   PJ.editing = row ? row.id : null;
-  bukaAuxDrawer('project', row ? 'Detail proyek' : 'Buat proyek baru', projectFormHTML(row), simpanProject);
+  bukaAuxDrawer('project', row ? t('projects.drawerTitle') : t('projects.drawerTitleNew'), projectFormHTML(row), simpanProject);
   const range = $('#pj_progress');
   if (range) range.addEventListener('input', () => { $('#pj_progress_val').textContent = range.value; });
 }
@@ -1008,12 +1001,12 @@ async function simpanProject() {
     targetSelesai: $('#pj_target').value || null, status: $('#pj_status').value,
     keterangan: $('#pj_ket').value.trim() || null,
   };
-  if (!body.namaProyek) return toast('Nama proyek wajib diisi.');
+  if (!body.namaProyek) return toast(t('projects.err.nama'));
   try {
     if (PJ.editing) await Api.updateProject(PJ.editing, body);
     else await Api.createProject({ ...body, clientOrgId: S.ws.client_org_id });
-    tutupAuxDrawer(); await muatProjectsSemua(); toast('Perubahan tersimpan.');
-  } catch (e) { toast(e.message || 'Gagal menyimpan.'); }
+    tutupAuxDrawer(); await muatProjectsSemua(); toast(t('common.saved'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
 }
 $('#addProjectBtn').onclick = () => bukaProjectDrawer(null);
 
@@ -1021,8 +1014,8 @@ $('#addProjectBtn').onclick = () => bukaProjectDrawer(null);
    MODUL HUB PENDAMPINGAN
    ================================================================ */
 const PD = { rows: [], ref: null, loaded: false, editing: null };
-const JENIS_PD_NAMA = { mediasi:'Mediasi', negosiasi:'Negosiasi', due_diligence:'Due Diligence', audit:'Pendampingan Audit', lainnya:'Lainnya' };
-const STATUS_PD_NAMA = { menunggu:'Menunggu', diproses:'Diproses', selesai:'Selesai', dibatalkan:'Dibatalkan' };
+const JENIS_PD_NAMA = nameProxy('jenisPd');
+const STATUS_PD_NAMA = nameProxy('statusPd');
 
 async function muatPendampinganSemua() {
   showApiErr('');
@@ -1030,18 +1023,18 @@ async function muatPendampinganSemua() {
     const [ref, list] = await Promise.all([Api.pendampinganReference(S.ws.client_org_id), Api.pendampingan(S.ws.client_org_id)]);
     PD.ref = ref; PD.rows = list.rows; PD.loaded = true;
     renderPendampinganCards(); renderPendampinganTable();
-    $('#waLink').href = 'https://wa.me/62800000000?text=' + encodeURIComponent(`Halo Pak Irfan, saya dari ${S.ws.nama_singkat} ingin konsultasi.`);
-  } catch (err) { showApiErr(err.message || 'Gagal memuat data pendampingan.'); }
+    $('#waLink').href = 'https://wa.me/62800000000?text=' + encodeURIComponent(t('pendampingan.waText', { ws: S.ws.nama_singkat }));
+  } catch (err) { showApiErr(err.message || t('pendampingan.loadError')); }
 }
 function renderPendampinganCards() {
   const n = (s) => PD.rows.filter((r) => r.status === s).length;
   const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
     <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#pendampinganCards').innerHTML = [
-    item('TOTAL PERMINTAAN', PD.rows.length, '', 'semua status'),
-    item('MENUNGGU', n('menunggu'), 'acc-warn', 'belum diproses'),
-    item('DIPROSES', n('diproses'), '', 'sedang berjalan'),
-    item('SELESAI', n('selesai'), 'acc-ok', 'sudah tuntas'),
+    item(t('pendampingan.card.total'), PD.rows.length, '', t('pendampingan.card.total.note')),
+    item(t('pendampingan.card.menunggu'), n('menunggu'), 'acc-warn', t('pendampingan.card.menunggu.note')),
+    item(t('pendampingan.card.diproses'), n('diproses'), '', t('pendampingan.card.diproses.note')),
+    item(t('pendampingan.card.selesai'), n('selesai'), 'acc-ok', t('pendampingan.card.selesai.note')),
   ].join('');
 }
 function renderPendampinganTable() {
@@ -1063,21 +1056,21 @@ function pendampinganFormHTML(row) {
   const r = PD.ref;
   return `
   <div class="grid2">
-    <div class="f"><label>Jenis <span class="req">*</span></label>
-      <select id="pd_jenis">${opsi(r.jenis.map((v) => ({ v, l: JENIS_PD_NAMA[v] })), row?.jenis, '— pilih —')}</select></div>
-    <div class="f"><label>Tanggal kegiatan</label><input type="date" id="pd_tanggal" value="${esc(row?.tanggal_kegiatan ? row.tanggal_kegiatan.slice(0,10) : '')}"></div>
+    <div class="f"><label>${t('pendampingan.f.jenis')} <span class="req">*</span></label>
+      <select id="pd_jenis">${opsi(r.jenis.map((v) => ({ v, l: JENIS_PD_NAMA[v] })), row?.jenis, t('common.none'))}</select></div>
+    <div class="f"><label>${t('pendampingan.f.tanggal')}</label><input type="date" id="pd_tanggal" value="${esc(row?.tanggal_kegiatan ? row.tanggal_kegiatan.slice(0,10) : '')}"></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>Lokasi</label><input id="pd_lokasi" value="${esc(row?.lokasi || '')}"></div>
-  <div class="f" style="margin-top:12px"><label>Pihak terlibat</label><input id="pd_pihak" value="${esc(row?.pihak_terlibat || '')}"></div>
-  <div class="f" style="margin-top:12px"><label>Deskripsi</label><textarea id="pd_deskripsi" rows="3">${esc(row?.deskripsi || '')}</textarea></div>
+  <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.lokasi')}</label><input id="pd_lokasi" value="${esc(row?.lokasi || '')}"></div>
+  <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.pihak')}</label><input id="pd_pihak" value="${esc(row?.pihak_terlibat || '')}"></div>
+  <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.deskripsi')}</label><textarea id="pd_deskripsi" rows="3">${esc(row?.deskripsi || '')}</textarea></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>Status</label><select id="pd_status">${opsi(r.status.map((v) => ({ v, l: STATUS_PD_NAMA[v] })), row?.status || 'menunggu', '— pilih —')}</select></div>
-    <div class="f"><label>PIC</label><select id="pd_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_id, '— pilih —')}</select></div>
+    <div class="f"><label>${t('pendampingan.f.status')}</label><select id="pd_status">${opsi(r.status.map((v) => ({ v, l: STATUS_PD_NAMA[v] })), row?.status || 'menunggu', t('common.none'))}</select></div>
+    <div class="f"><label>${t('pendampingan.f.pic')}</label><select id="pd_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_id, t('common.none'))}</select></div>
   </div>`;
 }
 async function bukaPendampinganDrawer(row) {
   PD.editing = row ? row.id : null;
-  bukaAuxDrawer('pendampingan', row ? 'Detail permintaan' : 'Ajukan pendampingan baru', pendampinganFormHTML(row), simpanPendampingan);
+  bukaAuxDrawer('pendampingan', row ? t('pendampingan.drawerTitle') : t('pendampingan.drawerTitleNew'), pendampinganFormHTML(row), simpanPendampingan);
 }
 async function simpanPendampingan() {
   const body = {
@@ -1086,12 +1079,12 @@ async function simpanPendampingan() {
     deskripsi: $('#pd_deskripsi').value.trim() || null, status: $('#pd_status').value,
     picId: $('#pd_pic').value || null,
   };
-  if (!body.jenis) return toast('Jenis pendampingan wajib dipilih.');
+  if (!body.jenis) return toast(t('pendampingan.err.jenis'));
   try {
     if (PD.editing) await Api.updatePendampingan(PD.editing, body);
     else await Api.createPendampingan({ ...body, clientOrgId: S.ws.client_org_id });
-    tutupAuxDrawer(); await muatPendampinganSemua(); toast('Perubahan tersimpan.');
-  } catch (e) { toast(e.message || 'Gagal menyimpan.'); }
+    tutupAuxDrawer(); await muatPendampinganSemua(); toast(t('common.saved'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
 }
 $('#addPendampinganBtn').onclick = () => bukaPendampinganDrawer(null);
 
@@ -1111,14 +1104,14 @@ async function muatDocsSemua() {
     const list = await Api.documents(S.ws.client_org_id);
     DC.rows = list.rows; DC.loaded = true;
     renderDocCards(); renderDocTable();
-  } catch (err) { showApiErr(err.message || 'Gagal memuat arsip dokumen.'); }
+  } catch (err) { showApiErr(err.message || t('docs.loadError')); }
 }
 function renderDocCards() {
   const totalBytes = DC.rows.reduce((s, d) => s + Number(d.ukuran_byte || 0), 0);
   const item = (k, v, note) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#docCards').innerHTML = [
-    item('TOTAL DOKUMEN', DC.rows.length, 'seluruh arsip klien'),
-    item('TOTAL UKURAN', fmtUkuran(totalBytes), 'penyimpanan terpakai'),
+    item(t('docs.card.total'), DC.rows.length, t('docs.card.total.note')),
+    item(t('docs.card.ukuran'), fmtUkuran(totalBytes), t('docs.card.ukuran.note')),
   ].join('');
 }
 function renderDocTable() {
@@ -1130,32 +1123,57 @@ function renderDocTable() {
       <td>${fmtUkuran(d.ukuran_byte)}</td>
       <td>${esc(tglTampil(d.uploaded_at.slice(0,10)))}</td>
       <td>${esc(d.uploaded_by_nama || '—')}</td>
-      <td><button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 10px;font-size:11px">Unduh</button></td>
+      <td><button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 10px;font-size:11px">${t('docs.download')}</button></td>
     </tr>`).join('');
   document.querySelectorAll('#docBody button[data-dl]').forEach((btn) => {
     btn.onclick = async () => {
       try { await Api.downloadDocument(btn.dataset.dl, btn.dataset.fn); }
-      catch (e) { toast(e.message || 'Gagal mengunduh.'); }
+      catch (e) { toast(e.message || t('docs.downloadFail')); }
     };
   });
 }
 $('#docUploadBtn').onclick = async () => {
   const fileEl = $('#docFile'), hint = $('#docUploadHint');
-  if (!fileEl.files.length) { hint.textContent = 'Pilih berkas terlebih dahulu.'; return; }
+  if (!fileEl.files.length) { hint.textContent = t('docs.uploadHint.pilih'); return; }
   const fd = new FormData();
   fd.append('file', fileEl.files[0]);
   fd.append('clientOrgId', S.ws.client_org_id);
   fd.append('kategoriArsip', $('#docKategori').value);
-  hint.textContent = 'Mengunggah…';
+  hint.textContent = t('docs.uploadHint.progress');
   try {
     await Api.uploadDocument(fd);
     fileEl.value = ''; hint.textContent = '';
-    await muatDocsSemua(); toast('Dokumen berhasil diunggah.');
-  } catch (e) { hint.textContent = e.message || 'Gagal mengunggah.'; }
+    await muatDocsSemua(); toast(t('docs.uploaded'));
+  } catch (e) { hint.textContent = e.message || t('docs.uploadHint.fail'); }
 };
+
+/* ---------------------------------------------------------------- bahasa */
+$('#langBtn').onclick = () => {
+  const next = LANG === 'en' ? 'id' : 'en';
+  setLang(next);
+};
+onLangChange((lang) => {
+  $('#langBtnLabel').textContent = lang.toUpperCase();
+  applyStaticI18n();
+  if (!S.ws) return;
+  isiSelectReferensi();
+  $('#fKat').value = S.kat; $('#fStat').value = S.stat;
+  $('#fLengkap').innerHTML = `<option value="">${esc(t('kontrak.filter.allLengkap'))}</option>
+    <option value="belum">${esc(t('kontrak.filter.belum'))}</option><option value="sudah">${esc(t('kontrak.filter.sudah'))}</option>`;
+  $('#fLengkap').value = S.lengkap;
+  $('#q').value = S.q;
+  render();
+  if (P.loaded) { renderPermitCards(); renderPermitTable(); renderGap(); }
+  if (CS.loaded) { renderCaseCards(); renderCaseTable(); }
+  if (PJ.loaded) { renderProjectCards(); renderProjectTable(); }
+  if (PD.loaded) { renderPendampinganCards(); renderPendampinganTable(); }
+  if (DC.loaded) { renderDocCards(); renderDocTable(); }
+});
 
 /* ---------------------------------------------------------------- mulai */
 (async () => {
+  applyStaticI18n();
+  $('#langBtnLabel').textContent = LANG.toUpperCase();
   if (Api.isLoggedIn()) {
     try { await goWorkspacePicker(); } catch (e) { goLogin(); }
   } else {
