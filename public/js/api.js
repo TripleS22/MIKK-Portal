@@ -64,6 +64,11 @@ const Api = (() => {
     createBooking: (id, body) => call(`/prospects/consultations/${id}/booking`, { method: 'POST', body }),
     previewCoupon: (body) => call('/prospects/coupons/preview', { method: 'POST', body }),
 
+    /* ---- Tarif layanan (hanya Managing Partner yang boleh mengubah) ---- */
+    serviceRates: () => call('/service-rates'),
+    createRate: (body) => call('/service-rates', { method: 'POST', body }),
+    updateRate: (id, body) => call(`/service-rates/${id}`, { method: 'PATCH', body }),
+
     permits: (clientOrgId) => call('/permits', { qs: { clientOrgId } }),
     permitsDashboard: (clientOrgId) => call('/permits/dashboard', { qs: { clientOrgId } }),
     permitGap: (clientOrgId) => call('/permits/gap', { qs: { clientOrgId } }),

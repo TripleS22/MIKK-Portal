@@ -218,6 +218,11 @@ async function enterWorkspace(ws) {
   $('#whoRole').textContent = PERAN_LABEL[ws.peran] || ws.peran;
   $('#avInit').textContent = initials(S.user.nama);
   $('#sbLabel').textContent = t(ws.tipe === 'staf_firma' ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
+  // Tarif hanya relevan bagi Managing Partner. Menyembunyikan tombolnya
+  // bukan pengamanan — RLS yang menahan penulisan; ini sekadar tidak
+  // menawarkan pintu yang memang terkunci.
+  const bolehTarif = ws.tipe === 'staf_firma' && ws.peran === 'managing_partner';
+  $('#modRatesBtn').style.display = bolehTarif ? 'flex' : 'none';
   S.masukPada = new Date();
   gambarKepalaHalaman();
 
@@ -895,6 +900,7 @@ const MODULES = [
   { id: 'projects',     sec: 'secProjects',     btn: 'modProjectsBtn',     crumb: 'nav.projects',     desc: 'projects.desc' },
   { id: 'pendampingan', sec: 'secPendampingan', btn: 'modPendampinganBtn', crumb: 'nav.pendampingan', desc: 'pendampingan.desc' },
   { id: 'docs',         sec: 'secDocs',         btn: 'modDocsBtn',         crumb: 'nav.docs',         desc: 'docs.desc' },
+  { id: 'rates',        sec: 'secRates',        btn: 'modRatesBtn',        crumb: 'nav.rates',        desc: 'rates.desc' },
 ];
 let modAktif = 'dashboard';
 
@@ -912,6 +918,7 @@ function switchModuleAll(mod) {
   if (mod === 'projects' && !PJ.loaded) muatProjectsSemua();
   if (mod === 'pendampingan' && !PD.loaded) muatPendampinganSemua();
   if (mod === 'docs' && !DC.loaded) muatDocsSemua();
+  if (mod === 'rates' && !RT.loaded) muatTarifSemua();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1456,6 +1463,7 @@ onLangChange(() => {
   if (PJ.loaded) { renderProjectCards(); renderProjectTable(); }
   if (PD.loaded) { renderPendampinganCards(); renderPendampinganTable(); }
   if (DC.loaded) { renderDocCards(); renderDocTable(); }
+  if (RT.loaded) renderTarifTable();
 });
 
 /* ---------------------------------------------------------------- mulai */
@@ -1471,3 +1479,190 @@ onLangChange(() => {
     goLogin();
   }
 })();
+
+/* ================================================================
+   MODUL TARIF LAYANAN
+   Penetapan tarif adalah keputusan bisnis: PRD Bagian 4 menyebut
+   Managing Partner sebagai satu-satunya yang boleh menetapkannya, dan
+   RLS (kebijakan rates_tulis) yang benar-benar menegakkannya. Antarmuka
+   ini hanya menyembunyikan tombol yang memang tidak akan berhasil.
+
+   Mengubah tarif TIDAK mengubah pemesanan yang sudah terjadi — harga
+   dibekukan ke consultation_bookings saat pemesanan.
+   ================================================================ */
+const RT = { rows: [], loaded: false, bolehUbah: false, editing: null, draft: null };
+
+const SATUAN_NAMA = nameProxy('satuan');
+const LAYANAN_NAMA = nameProxy('layanan');
+
+async function muatTarifSemua() {
+  showApiErr('');
+  try {
+    const { rows, bolehUbah } = await Api.serviceRates();
+    RT.rows = rows; RT.bolehUbah = bolehUbah; RT.loaded = true;
+    renderTarifTable();
+  } catch (err) { showApiErr(err.message || t('rates.loadError')); }
+}
+
+function renderTarifTable() {
+  $('#addRateBtn').style.display = RT.bolehUbah ? 'inline-flex' : 'none';
+  $('#ratesNote').style.display = RT.bolehUbah ? 'none' : 'flex';
+  $('#ratesEmpty').style.display = RT.rows.length ? 'none' : 'block';
+
+  $('#ratesBody').innerHTML = RT.rows.map((r, i) => {
+    const harga = r.butuh_penawaran
+      ? `<span style="color:var(--muted)">${esc(t('rates.penawaran'))}</span>`
+      : `<span class="doc">${rupiah(r.harga)}</span>${r.harga_termasuk_ppn
+          ? `<div class="sub">${esc(t('rates.termasukPpn'))}</div>` : ''}`;
+    const berlaku = `${esc(tglTampil(r.berlaku_sejak) || '—')}${r.berlaku_sampai
+      ? ' – ' + esc(tglTampil(r.berlaku_sampai)) : ''}`;
+    return `<tr data-id="${r.id}">
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td><div class="ttl">${esc(r.nama)}</div>
+        <div class="sub"><span class="doc">${esc(r.kode)}</span>${r.deskripsi ? ' · ' + esc(r.deskripsi) : ''}</div></td>
+      <td><span class="tag">${esc(LAYANAN_NAMA[r.jenis_layanan] || r.jenis_layanan)}</span></td>
+      <td>${harga}</td>
+      <td>${r.butuh_penawaran ? '—' : esc(SATUAN_NAMA[r.satuan] || r.satuan)}</td>
+      <td>${r.durasi_menit ? esc(r.durasi_menit + ' ' + t('prospect.menit')) : '—'}</td>
+      <td><span class="doc">${berlaku}</span></td>
+      <td><span class="pill ${r.aktif ? 'p-aman' : 'p-tidak_dipantau'}">${
+        esc(r.aktif ? t('rates.aktif') : t('rates.nonaktif'))}</span></td>
+    </tr>`;
+  }).join('');
+
+  if (RT.bolehUbah) {
+    document.querySelectorAll('#ratesBody tr[data-id]').forEach((tr) => {
+      tr.onclick = () => bukaTarifDrawer(RT.rows.find((r) => r.id === tr.dataset.id));
+    });
+  } else {
+    document.querySelectorAll('#ratesBody tr[data-id]').forEach((tr) => {
+      tr.style.cursor = 'default';
+    });
+  }
+}
+
+function tarifFormHTML(err) {
+  const d = RT.draft;
+  const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
+  const opsiDari = (arr, proxy, val) => arr.map((v) =>
+    `<option value="${v}" ${val === v ? 'selected' : ''}>${esc(proxy[v])}</option>`).join('');
+
+  return `
+  <div class="grid2">
+    <div class="f"><label>${t('rates.f.kode')} <span class="req">*</span></label>
+      <input id="rt_kode" value="${esc(d.kode || '')}" ${RT.editing ? 'disabled' : ''}>
+      ${RT.editing ? `<div class="hint">${esc(t('rates.f.kodeLocked'))}</div>` : ''}${e('kode')}</div>
+    <div class="f"><label>${t('rates.f.jenis')} <span class="req">*</span></label>
+      <select id="rt_jenis" ${RT.editing ? 'disabled' : ''}>
+        ${opsiDari(['konsultasi_online','konsultasi_offline','konsultasi_luar_kota'], LAYANAN_NAMA, d.jenisLayanan)}
+      </select></div>
+  </div>
+  <div class="f" style="margin-top:12px"><label>${t('rates.f.nama')} <span class="req">*</span></label>
+    <input id="rt_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
+  <div class="f" style="margin-top:12px"><label>${t('rates.f.deskripsi')}</label>
+    <input id="rt_deskripsi" value="${esc(d.deskripsi || '')}"></div>
+
+  <label class="chk" style="margin-top:10px"><input type="checkbox" id="rt_penawaran" ${d.butuhPenawaran ? 'checked' : ''}>
+    <span><b>${t('rates.f.penawaran')}</b>${t('rates.f.penawaranDesc')}</span></label>
+
+  <div class="grid2" style="margin-top:6px">
+    <div class="f"><label>${t('rates.f.harga')}</label>
+      <input id="rt_harga" inputmode="numeric" value="${d.harga != null ? d.harga : ''}" ${d.butuhPenawaran ? 'disabled' : ''}>
+      <div class="hint">${esc(t('rates.f.hargaHint'))}</div>${e('harga')}</div>
+    <div class="f"><label>${t('rates.f.satuan')}</label>
+      <select id="rt_satuan" ${d.butuhPenawaran ? 'disabled' : ''}>
+        ${opsiDari(['per_jam','per_sesi','per_hari'], SATUAN_NAMA, d.satuan)}
+      </select></div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="f"><label>${t('rates.f.durasi')}</label>
+      <input id="rt_durasi" inputmode="numeric" value="${d.durasiMenit != null ? d.durasiMenit : ''}">
+      <div class="hint">${esc(t('rates.f.durasiHint'))}</div></div>
+    <div class="f"><label>${t('rates.f.urutan')}</label>
+      <input id="rt_urutan" inputmode="numeric" value="${d.urutan != null ? d.urutan : 0}"></div>
+  </div>
+
+  <label class="chk"><input type="checkbox" id="rt_ppn" ${d.hargaTermasukPpn ? 'checked' : ''}>
+    <span><b>${t('rates.f.ppn')}</b>${t('rates.f.ppnDesc')}</span></label>
+  <div class="f" style="margin-top:6px"><label>${t('rates.f.berlakuSampai')}</label>
+    <input type="date" id="rt_sampai" value="${esc(d.berlakuSampai || '')}">
+    <div class="hint">${esc(t('rates.f.berlakuHint'))}</div></div>
+  <label class="chk"><input type="checkbox" id="rt_aktif" ${d.aktif !== false ? 'checked' : ''}>
+    <span><b>${t('rates.f.aktif')}</b>${t('rates.f.aktifDesc')}</span></label>
+
+  <div class="warnbox wb-warn" style="margin:14px 0 0">
+    <span class="ic">◆</span>
+    <div><b>${esc(t('rates.frozenTitle'))}</b>${esc(t('rates.frozenDesc'))}</div>
+  </div>`;
+}
+
+function bacaTarifForm() {
+  const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
+  const d = RT.draft;
+  if (!RT.editing) { d.kode = g('rt_kode'); d.jenisLayanan = g('rt_jenis'); }
+  d.nama = g('rt_nama');
+  d.deskripsi = g('rt_deskripsi') || null;
+  d.butuhPenawaran = $('#rt_penawaran').checked;
+  const h = g('rt_harga').replace(/[^\d]/g, '');
+  d.harga = d.butuhPenawaran || h === '' ? null : Number(h);
+  d.satuan = g('rt_satuan');
+  const du = g('rt_durasi').replace(/[^\d]/g, '');
+  d.durasiMenit = du === '' ? null : Number(du);
+  d.urutan = Number(g('rt_urutan').replace(/[^\d]/g, '')) || 0;
+  d.hargaTermasukPpn = $('#rt_ppn').checked;
+  d.berlakuSampai = g('rt_sampai') || null;
+  d.aktif = $('#rt_aktif').checked;
+}
+
+function bukaTarifDrawer(row) {
+  RT.editing = row ? row.id : null;
+  RT.draft = row ? {
+    kode: row.kode, nama: row.nama, deskripsi: row.deskripsi,
+    jenisLayanan: row.jenis_layanan, satuan: row.satuan,
+    durasiMenit: row.durasi_menit, harga: row.harga != null ? Number(row.harga) : null,
+    hargaTermasukPpn: row.harga_termasuk_ppn, butuhPenawaran: row.butuh_penawaran,
+    berlakuSampai: row.berlaku_sampai ? String(row.berlaku_sampai).slice(0, 10) : null,
+    aktif: row.aktif, urutan: row.urutan,
+  } : {
+    kode: '', nama: '', deskripsi: null, jenisLayanan: 'konsultasi_online',
+    satuan: 'per_jam', durasiMenit: 60, harga: null, hargaTermasukPpn: false,
+    butuhPenawaran: false, berlakuSampai: null, aktif: true, urutan: 0,
+  };
+  gambarTarifDrawer();
+  bukaAuxDrawer('rate', RT.editing ? t('rates.drawerTitle') : t('rates.drawerTitleNew'),
+    tarifFormHTML(), simpanTarif);
+  pasangTarifEvent();
+}
+
+function gambarTarifDrawer(err) {
+  const body = $('#auxDBody');
+  if (body && body.innerHTML) { body.innerHTML = tarifFormHTML(err); pasangTarifEvent(); }
+}
+
+function pasangTarifEvent() {
+  const p = $('#rt_penawaran');
+  if (p) p.addEventListener('change', () => { bacaTarifForm(); gambarTarifDrawer(); });
+}
+
+async function simpanTarif() {
+  bacaTarifForm();
+  const d = RT.draft, err = {};
+  if (!RT.editing && !d.kode) err.kode = t('rates.err.kode');
+  if (!d.nama) err.nama = t('rates.err.nama');
+  if (!d.butuhPenawaran && d.harga == null) err.harga = t('rates.err.harga');
+  if (Object.keys(err).length) return gambarTarifDrawer(err);
+
+  const btn = $('#auxDSave'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    if (RT.editing) await Api.updateRate(RT.editing, d);
+    else await Api.createRate(d);
+    tutupAuxDrawer();
+    RT.loaded = false;
+    await muatTarifSemua();
+    toast(t('common.saved'));
+  } catch (e) {
+    toast(e.message || t('common.saveFailed'));
+  } finally { btn.disabled = false; btn.textContent = t('common.save'); }
+}
+
+$('#addRateBtn').onclick = () => bukaTarifDrawer(null);

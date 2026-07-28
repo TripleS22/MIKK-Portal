@@ -198,6 +198,10 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
         <span data-i18n="nav.docs">Dokumen &amp; Legalitas</span>
       </button>
+      <button id="modRatesBtn" style="display:none">
+        <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>
+        <span data-i18n="nav.rates">Tarif Layanan</span>
+      </button>
     </nav>
 
     <div class="sb-help">
@@ -460,6 +464,37 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================ TARIF LAYANAN ============================ -->
+      <div id="secRates" style="display:none">
+        <div class="warnbox wb-warn" id="ratesNote" style="display:none">
+          <span class="ic">◆</span>
+          <div><b data-i18n="rates.readonlyTitle">Hanya bisa dilihat</b><span data-i18n="rates.readonlyDesc">Penetapan tarif adalah wewenang Managing Partner.</span></div>
+        </div>
+        <div class="bar">
+          <div style="flex:1"></div>
+          <button class="btn gold" id="addRateBtn" data-i18n="rates.add">+ Tambah Tarif</button>
+        </div>
+        <div class="panel">
+          <div class="tscroll"><table style="min-width:900px">
+            <thead><tr>
+              <th style="width:34px">#</th>
+              <th data-i18n="rates.th.nama">Nama tarif</th>
+              <th data-i18n="rates.th.jenis">Jenis layanan</th>
+              <th data-i18n="rates.th.harga">Harga</th>
+              <th data-i18n="rates.th.satuan">Satuan</th>
+              <th data-i18n="rates.th.durasi">Durasi</th>
+              <th data-i18n="rates.th.berlaku">Berlaku</th>
+              <th data-i18n="rates.th.status">Status</th>
+            </tr></thead>
+            <tbody id="ratesBody"></tbody>
+          </table></div>
+          <div class="empty" id="ratesEmpty" style="display:none">
+            <h3 data-i18n="rates.empty.title">Belum ada tarif tercatat</h3>
+            <p data-i18n="rates.empty.desc">Tambahkan tarif pertama lewat tombol di atas.</p>
           </div>
         </div>
       </div>

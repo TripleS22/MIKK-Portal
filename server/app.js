@@ -15,6 +15,7 @@ const legalProjectsRoutes = require('./routes/legal-projects.routes');
 const pendampinganRoutes = require('./routes/pendampingan.routes');
 const documentsRoutes = require('./routes/documents.routes');
 const prospectsRoutes = require('./routes/prospects.routes');
+const serviceRatesRoutes = require('./routes/service-rates.routes');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/legal-projects', legalProjectsRoutes);
 app.use('/api/pendampingan', pendampinganRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/prospects', prospectsRoutes);
+app.use('/api/service-rates', serviceRatesRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res, next) => {
