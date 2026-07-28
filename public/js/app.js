@@ -164,8 +164,17 @@ function wsCardHTML(w, i) {
 
 function goLogin() {
   $('#screenLogin').style.display = 'flex';
+  $('#screenRegister').style.display = 'none';
   $('#screenWorkspace').style.display = 'none';
   $('#screenApp').style.display = 'none';
+  const p = $('#screenProspect'); if (p) p.style.display = 'none';
+}
+
+/* Calon klien punya portal sendiri — tidak lewat pemilih workspace,
+   karena mereka memang belum punya workspace klien mana pun. */
+async function arahkanSetelahMasuk(user) {
+  if (user && user.tipe === 'prospect') return masukPortalCalon();
+  return goWorkspacePicker();
 }
 async function goWorkspacePicker() {
   const { workspaces } = await Api.workspaces();
@@ -621,8 +630,8 @@ $('#loginForm').addEventListener('submit', async (e) => {
   errEl.classList.remove('on');
   btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
   try {
-    await Api.login($('#email').value.trim(), $('#password').value);
-    await goWorkspacePicker();
+    const d = await Api.login($('#email').value.trim(), $('#password').value);
+    await arahkanSetelahMasuk(d.user);
   } catch (err) {
     errEl.textContent = err.message || t('login.genericError'); errEl.classList.add('on');
   } finally { btn.disabled = false; btn.textContent = t('login.submit'); }
@@ -1454,7 +1463,10 @@ onLangChange(() => {
   applyStaticI18n();
   tandaiBahasaAktif();
   if (Api.isLoggedIn()) {
-    try { await goWorkspacePicker(); } catch (e) { goLogin(); }
+    try {
+      const { user } = await Api.me();
+      await arahkanSetelahMasuk(user);
+    } catch (e) { goLogin(); }
   } else {
     goLogin();
   }

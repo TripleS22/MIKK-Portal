@@ -540,3 +540,97 @@ tbody tr:last-child td{border-bottom:none}
   .wrap{padding:18px 16px 60px}
   .pagehead h2{font-size:25px}
 }
+
+/* =====================================================================
+   FASE 3 — PORTAL CALON KLIEN
+   ===================================================================== */
+
+/* Penanda langkah. Nomor di sini BUKAN hiasan: urutannya memang wajib —
+   kasus harus diklasifikasi sebelum harga bisa dihitung, dan benturan
+   kepentingan harus lolos sebelum pembayaran dibuka. */
+.steps{display:flex;align-items:flex-start;gap:0;margin-bottom:22px}
+.step{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;position:relative;text-align:center}
+.step::before,.step::after{
+  content:"";position:absolute;top:17px;height:2px;background:var(--line);
+}
+.step::before{left:0;width:50%}
+.step::after{right:0;width:50%}
+.step:first-child::before,.step:last-child::after{display:none}
+.step.done::before,.step.done::after,.step.on::before{background:var(--gold)}
+.step .num{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;position:relative;z-index:1;
+  background:var(--surface);border:2px solid var(--line);color:var(--muted);
+  font-weight:700;font-size:13px;font-family:var(--mono);
+}
+.step.on .num{background:var(--navy);border-color:var(--navy);color:#fff}
+.step.done .num{background:var(--gold);border-color:var(--gold);color:#241703}
+.step .lb{font-size:12px;font-weight:600;color:var(--ink);line-height:1.3;max-width:16ch}
+.step .sb2{font-size:10.5px;color:var(--muted);line-height:1.3;max-width:20ch}
+.step:not(.on):not(.done) .lb{color:var(--muted)}
+
+/* Kartu pilihan — tipe klien, kategori layanan, jenis pertemuan */
+.pickgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px}
+.pick{
+  border:1.5px solid var(--line);border-radius:12px;padding:15px 13px;background:var(--surface);
+  text-align:center;transition:.13s;position:relative;display:flex;flex-direction:column;
+  align-items:center;gap:7px;
+}
+.pick:hover{border-color:var(--line-2);background:var(--paper)}
+.pick.on{border-color:var(--navy);background:var(--surface);box-shadow:0 0 0 3px rgba(13,27,47,.07)}
+.pick .pico{width:34px;height:34px;color:var(--ink-2)}
+.pick .pico svg{width:100%;height:100%;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.pick.on .pico{color:var(--navy)}
+.pick .nm{font-size:13px;font-weight:600;line-height:1.3}
+.pick .ds{font-size:11px;color:var(--muted);line-height:1.4}
+.pick .hg{font-family:var(--serif);font-size:19px;font-weight:600;margin-top:2px;letter-spacing:-.01em}
+.pick .sat{font-size:10.5px;color:var(--muted)}
+.pick .tick{
+  position:absolute;top:9px;right:9px;width:19px;height:19px;border-radius:50%;
+  background:var(--navy);color:#fff;display:none;place-items:center;font-size:11px;
+}
+.pick.on .tick{display:grid}
+
+/* Slot waktu */
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.slot{
+  border:1px solid var(--line);border-radius:8px;padding:9px 6px;background:var(--surface);
+  font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink-2);
+}
+.slot:hover:not(:disabled){border-color:var(--navy);color:var(--navy)}
+.slot.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.slot:disabled{opacity:.35;cursor:not-allowed}
+
+/* Ringkasan pembayaran */
+.sumrow{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:7px 0}
+.sumrow+.sumrow{border-top:1px solid var(--line)}
+.sumrow .lbl{color:var(--muted)}
+.sumrow .val{font-family:var(--mono);font-weight:600}
+.sumrow.total{border-top:2px solid var(--line);margin-top:4px;padding-top:11px}
+.sumrow.total .lbl{color:var(--ink);font-weight:700;font-family:var(--sans)}
+.sumrow.total .val{font-family:var(--serif);font-size:20px;font-weight:600}
+.sumrow .val.disc{color:var(--ok)}
+
+/* Baris kode kupon */
+.couponrow{display:flex;gap:8px}
+.couponrow input{flex:1}
+
+/* Kartu kode akses — ditampilkan sekali setelah pendaftaran */
+.acccode{
+  background:var(--navy);color:#fff;border-radius:12px;padding:16px 18px;margin-bottom:16px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.acccode .kode{
+  font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:.06em;color:var(--gold);
+}
+.acccode .tx{flex:1;min-width:190px;font-size:11.5px;color:rgba(255,255,255,.72);line-height:1.55}
+.acccode .tx b{color:#fff;display:block;font-size:12.5px;margin-bottom:2px}
+
+/* Tautan kecil di bawah formulir login */
+.authalt{text-align:center;font-size:12.5px;color:var(--muted);margin-top:18px}
+.authalt button{color:var(--gold-dk);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.authalt button:hover{color:var(--gold)}
+
+/* Kolom wizard + ringkasan menempel */
+.wizgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+@media (max-width:1100px){.wizgrid{grid-template-columns:1fr}}
+.wizgrid .side{position:sticky;top:82px}

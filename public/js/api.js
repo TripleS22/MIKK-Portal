@@ -52,6 +52,18 @@ const Api = (() => {
 
     checkConflict: (nama, clientOrgId) => call('/counterparties/check-conflict', { method: 'POST', body: { nama, clientOrgId } }),
 
+    /* ---- Fase 3: corong calon klien ----
+       registerProspect menyimpan token sendiri, sama seperti login: begitu
+       pendaftaran berhasil orangnya memang sudah masuk. */
+    registerProspect: (body) => call('/prospects/register', { method: 'POST', body })
+      .then((d) => { setToken(d.token); return d; }),
+    prospectMe: () => call('/prospects/me'),
+    consultRates: () => call('/prospects/rates'),
+    consultations: () => call('/prospects/consultations'),
+    createConsultation: (body) => call('/prospects/consultations', { method: 'POST', body }),
+    createBooking: (id, body) => call(`/prospects/consultations/${id}/booking`, { method: 'POST', body }),
+    previewCoupon: (body) => call('/prospects/coupons/preview', { method: 'POST', body }),
+
     permits: (clientOrgId) => call('/permits', { qs: { clientOrgId } }),
     permitsDashboard: (clientOrgId) => call('/permits/dashboard', { qs: { clientOrgId } }),
     permitGap: (clientOrgId) => call('/permits/gap', { qs: { clientOrgId } }),
