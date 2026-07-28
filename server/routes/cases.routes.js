@@ -40,8 +40,9 @@ router.get('/reference', async (req, res, next) => {
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
     const { rows } = await queryAsUser(
       req.user.id,
-      `select distinct u.id, u.nama from users u
+      `select distinct u.id, u.nama, ms.jabatan from users u
          join client_assignments ca on ca.user_id = u.id
+         left join mikk_staff ms on ms.user_id = u.id
         where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
         order by u.nama`,
       [clientOrgId]

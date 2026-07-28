@@ -82,8 +82,9 @@ router.get('/reference', async (req, res, next) => {
         `select id, kode, nama, instansi, wajib from permit_types
           where masih_berlaku order by wajib desc, nama`),
       queryAsUser(req.user.id,
-        `select distinct u.id, u.nama
+        `select distinct u.id, u.nama, ms.jabatan
            from users u join client_assignments ca on ca.user_id = u.id
+           left join mikk_staff ms on ms.user_id = u.id
           where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
           order by u.nama`,
         [clientOrgId]),

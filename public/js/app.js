@@ -10,7 +10,116 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 
+/* ---------------------------------------------------------------- ikon
+   Satu set garis-tunggal dipakai kartu statistik, feed, dan kolom aksi.
+   Disimpan sebagai isi <svg> saja supaya pemanggilnya bisa mengatur ukuran. */
+const ICONS = {
+  file:   '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 13h6M9 17h4"/>',
+  check:  '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  clock:  '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  alert:  '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
+  repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  money:  '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  gap:    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 9v4M12 16h.01"/>',
+  scale:  '<path d="M12 3v18M8 21h8"/><path d="m4 7 4-2 4 2M4 7l-2 5h8L8 7"/><path d="m12 7 4-2 4 2m0 0-2 5h8l-2-5"/>',
+  cal:    '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/>',
+  gavel:  '<path d="m14 4 6 6M17 7l-6 6M4 20l6-6M9 11l4 4"/><path d="M3 21h8"/>',
+  bank:   '<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M8 13h3M8 16h6"/>',
+  play:   '<circle cx="12" cy="12" r="9"/><path d="m10 8.5 6 3.5-6 3.5z"/>',
+  flag:   '<path d="M4 21V4M4 5h13l-2 4 2 4H4"/>',
+  pause:  '<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+  users:  '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
+  inbox:  '<path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14l2 7v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/>',
+  archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
+  disk:   '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 12h20"/><path d="M6 16h.01M10 16h.01"/>',
+  eye:    '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  dl:     '<path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/>',
+};
+const ico = (n) => `<svg viewBox="0 0 24 24">${ICONS[n] || ICONS.file}</svg>`;
+
+/* Kartu statistik: judul, angka, ikon bernuansa, catatan bawah.
+   Nilai panjang (mis. "Rp 8.500.000.000") diperkecil supaya tetap satu baris
+   dan tidak mendorong kartunya turun ke baris grid berikutnya. */
+function statCard(k, v, cls, note, icon) {
+  const panjang = String(v).length > 9 ? ' sm' : '';
+  return `<div class="card ${cls}">
+    <div class="body">
+      <div class="k">${esc(k)}</div>
+      <div class="v${panjang}">${v}</div>
+      <div class="n">${esc(note)}</div>
+    </div>
+    <div class="ico">${ico(icon)}</div>
+  </div>`;
+}
+
+/* Donut SVG + legenda. segs: [{label, value, color}] */
+function donutHTML(segs, midValue, midLabel) {
+  const total = segs.reduce((s, x) => s + Number(x.value || 0), 0);
+  const R = 54, C = 2 * Math.PI * R;
+  let offset = 0;
+  const rings = total === 0
+    ? `<circle cx="64" cy="64" r="${R}" fill="none" stroke="#e3e8f0" stroke-width="18"/>`
+    : segs.filter((s) => s.value > 0).map((s) => {
+        const len = (s.value / total) * C;
+        const el = `<circle cx="64" cy="64" r="${R}" fill="none" stroke="${s.color}" stroke-width="18"
+          stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}"/>`;
+        offset += len;
+        return el;
+      }).join('');
+  const legend = segs.map((s) => {
+    const pct = total ? Math.round((s.value / total) * 100) : 0;
+    return `<div class="row"><span class="sw" style="background:${s.color}"></span>
+      <span class="lb">${esc(s.label)}</span><span class="vl">${s.value} (${pct}%)</span></div>`;
+  }).join('');
+  return `<div class="donutwrap">
+    <div class="donut" style="width:128px;height:128px">
+      <svg width="128" height="128" viewBox="0 0 128 128">${rings}</svg>
+      <div class="mid"><div><b>${midValue}</b><span>${esc(midLabel)}</span></div></div>
+    </div>
+    <div class="legend">${legend}</div>
+  </div>`;
+}
+
+/* Bar horizontal berkategori. items: [{label, value, color}] */
+function hbarsHTML(items) {
+  const max = Math.max(1, ...items.map((i) => Number(i.value || 0)));
+  const total = items.reduce((s, i) => s + Number(i.value || 0), 0);
+  return `<div class="hbars">` + items.map((i) => {
+    const pct = total ? Math.round((i.value / total) * 100) : 0;
+    return `<div class="hbar">
+      <div class="top"><span>${esc(i.label)}</span><span class="vl">${i.value} (${pct}%)</span></div>
+      <div class="track"><div class="fill" style="width:${(i.value / max) * 100}%;background:${i.color}"></div></div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+/* Progress bar untuk kolom tabel. */
+function progHTML(pct, state) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  return `<div class="prog"><div class="track"><div class="fill ${state || ''}" style="width:${p}%"></div></div>
+    <span class="pc">${p}%</span></div>`;
+}
+
+/* Inisial nama untuk avatar. */
+const initials = (nama) => String(nama || '—').trim().split(/\s+/).map((x) => x[0] || '')
+  .slice(0, 2).join('').toUpperCase() || '—';
+
+/* PIC dengan avatar + jabatan, seperti rancangan referensi. */
+function whoMini(nama, jabatan) {
+  if (!nama) return '<span style="color:var(--muted-2)">—</span>';
+  return `<div class="who-mini"><div class="av">${esc(initials(nama))}</div>
+    <div><div class="nm">${esc(nama)}</div>${jabatan ? `<div class="rl">${esc(jabatan)}</div>` : ''}</div></div>`;
+}
+
+const CHART_COLORS = {
+  ok: '#15803d', warn: '#c2700a', crit: '#c8213f', info: '#2563eb',
+  repl: '#6d28d9', idle: '#98a4b6', gold: '#c9963f', teal: '#0d9488',
+};
+
 const PERAN_LABEL = nameProxy('peran');
+const JABATAN_NAMA = nameProxy('jabatan');
 const STATUS_NAMA = nameProxy('status');
 const SIKLUS_NAMA = nameProxy('siklus');
 const RELASI_NAMA = nameProxy('relasi');
@@ -41,6 +150,18 @@ function showApiErr(msg) {
 /* ---------------------------------------------------------------- alur masuk */
 Api.setUnauthorizedHandler(() => { S.user = null; S.ws = null; goLogin(); });
 
+/* Kartu pemilih workspace — ikonnya mengikuti tipe workspace, seperti
+   rancangan referensi (klien retainer vs ruang kerja advokat). */
+function wsCardHTML(w, i) {
+  const staf = w.tipe === 'staf_firma';
+  return `<button class="wscard" data-i="${i}">
+    <div class="wsico">${ico(staf ? 'scale' : 'bank')}</div>
+    <div class="role">${esc(PERAN_LABEL[w.peran] || w.peran)}</div>
+    <h3>${esc(w.nama_singkat || t('workspace.firmName'))}</h3>
+    <p>${esc(w.nama_legal || t('workspace.firmDesc'))}</p>
+  </button>`;
+}
+
 function goLogin() {
   $('#screenLogin').style.display = 'flex';
   $('#screenWorkspace').style.display = 'none';
@@ -69,12 +190,7 @@ async function goWorkspacePicker() {
 
   $('#screenLogin').style.display = 'none';
   $('#screenWorkspace').style.display = 'flex';
-  $('#wsGrid').innerHTML = list.map((w, i) => `
-    <button class="wscard" data-i="${i}">
-      <div class="role">${esc(PERAN_LABEL[w.peran] || w.peran)}</div>
-      <h3>${esc(w.nama_singkat)}</h3>
-      <p>${esc(w.nama_legal)}</p>
-    </button>`).join('');
+  $('#wsGrid').innerHTML = list.map((w, i) => wsCardHTML(w, i)).join('');
   document.querySelectorAll('.wscard').forEach((b) => {
     b.onclick = () => enterWorkspace(list[Number(b.dataset.i)]);
   });
@@ -84,16 +200,31 @@ async function enterWorkspace(ws) {
   S.ws = ws;
   $('#screenLogin').style.display = 'none';
   $('#screenWorkspace').style.display = 'none';
-  $('#screenApp').style.display = 'block';
+  $('#screenApp').style.display = 'grid';
   $('#switchWsBtn').style.display = S.wsList.length > 1 ? 'inline-flex' : 'none';
 
   const me = await Api.me();
   S.user = me.user;
   $('#whoName').textContent = S.user.nama;
-  $('#whoRole').textContent = `${PERAN_LABEL[ws.peran] || ws.peran} · ${ws.nama_singkat}`;
-  $('#avInit').textContent = S.user.nama.split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+  $('#whoRole').textContent = PERAN_LABEL[ws.peran] || ws.peran;
+  $('#avInit').textContent = initials(S.user.nama);
+  $('#sbLabel').textContent = t(ws.tipe === 'staf_firma' ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
+  S.masukPada = new Date();
+  gambarKepalaHalaman();
 
   await muatSemua();
+  switchModuleAll('dashboard');
+}
+
+/* Cap waktu masuk: momennya disimpan sekali di S.masukPada, tapi
+   formatnya dihitung ulang tiap render supaya ikut berganti bahasa. */
+function stempelWaktu() {
+  const d = S.masukPada || new Date();
+  const tgl = d.toLocaleDateString(LANG === 'en' ? 'en-GB' : 'id-ID',
+    { day: '2-digit', month: 'short', year: 'numeric' });
+  const jam = d.toLocaleTimeString(LANG === 'en' ? 'en-GB' : 'id-ID',
+    { hour: '2-digit', minute: '2-digit' });
+  return `${tgl}, ${jam} WIB`;
 }
 
 /* ---------------------------------------------------------------- muat data */
@@ -163,15 +294,13 @@ function ledCap(idOrNull, row) {
 }
 function renderCards() {
   const d = S.dashboard || {};
-  const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
-    <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#cards').innerHTML = [
-    item(t('kontrak.card.total'), d.total_kontrak ?? 0, '', t('kontrak.card.total.note')),
-    item(t('kontrak.card.aktif'), d.kontrak_aktif ?? 0, 'acc-ok', t('kontrak.card.aktif.note')),
-    item(t('kontrak.card.akanBerakhir'), d.akan_berakhir_90h ?? 0, 'acc-warn', t('kontrak.card.akanBerakhir.note')),
-    item(t('kontrak.card.kedaluwarsa'), d.kedaluwarsa ?? 0, 'acc-crit', t('kontrak.card.kedaluwarsa.note')),
-    item(t('kontrak.card.diperpanjang'), d.sudah_diperpanjang ?? 0, 'acc-repl', t('kontrak.card.diperpanjang.note')),
-    item(t('kontrak.card.nilai'), rupiah(d.total_nilai), '', t('kontrak.card.nilai.note', { n: d.jumlah_bernilai ?? 0 })),
+    statCard(t('kontrak.card.total'), d.total_kontrak ?? 0, 'acc-info', t('kontrak.card.total.note'), 'file'),
+    statCard(t('kontrak.card.aktif'), d.kontrak_aktif ?? 0, 'acc-ok', t('kontrak.card.aktif.note'), 'check'),
+    statCard(t('kontrak.card.akanBerakhir'), d.akan_berakhir_90h ?? 0, 'acc-warn', t('kontrak.card.akanBerakhir.note'), 'clock'),
+    statCard(t('kontrak.card.kedaluwarsa'), d.kedaluwarsa ?? 0, 'acc-crit', t('kontrak.card.kedaluwarsa.note'), 'alert'),
+    statCard(t('kontrak.card.diperpanjang'), d.sudah_diperpanjang ?? 0, 'acc-repl', t('kontrak.card.diperpanjang.note'), 'repeat'),
+    statCard(t('kontrak.card.nilai'), rupiah(d.total_nilai), '', t('kontrak.card.nilai.note', { n: d.jumlah_bernilai ?? 0 }), 'money'),
   ].join('');
 }
 
@@ -195,6 +324,8 @@ function renderTable() {
         ${c.catatan_migrasi ? `<div class="flag"><span>⚑</span><span>${esc(c.catatan_migrasi)}</span></div>` : ''}</td>
       <td>${c.lawan_pihak ? esc(c.lawan_pihak) : `<span style="color:var(--muted-2)">${esc(t('kontrak.belumDiisi'))}</span>`}</td>
       <td>${c.kategori_nama ? `<span class="tag">${esc(c.kategori_nama)}</span>` : '—'}</td>
+      <td>${c.tanggal_mulai ? `<span class="doc">${esc(tglTampil(c.tanggal_mulai))}</span>`
+             : `<span style="color:var(--muted-2)">—</span>`}</td>
       <td>${c.tanggal_berakhir ? `<span class="doc">${esc(tglTampil(c.tanggal_berakhir))}</span>`
              : `<span style="color:var(--muted-2)">${c.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—'}</span>`}</td>
       <td>${sisa}</td>
@@ -501,11 +632,7 @@ $('#logoutBtn').onclick = () => { Api.logout(); S.user = null; S.ws = null; goLo
 $('#switchWsBtn').onclick = () => {
   $('#screenApp').style.display = 'none';
   $('#screenWorkspace').style.display = 'flex';
-  $('#wsGrid').innerHTML = S.wsList.map((w, i) => `
-    <button class="wscard" data-i="${i}">
-      <div class="role">${esc(PERAN_LABEL[w.peran] || w.peran)}</div>
-      <h3>${esc(w.nama_singkat)}</h3><p>${esc(w.nama_legal)}</p>
-    </button>`).join('');
+  $('#wsGrid').innerHTML = S.wsList.map((w, i) => wsCardHTML(w, i)).join('');
   document.querySelectorAll('.wscard').forEach((b) => {
     b.onclick = () => enterWorkspace(S.wsList[Number(b.dataset.i)]);
   });
@@ -594,16 +721,24 @@ async function muatPermitsSemua() {
 
 function renderPermitCards() {
   const d = P.dashboard || {};
-  const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
-    <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#permitCards').innerHTML = [
-    item(t('permits.card.total'), d.total_izin ?? 0, '', t('permits.card.total.note')),
-    item(t('permits.card.aktif'), d.izin_aktif ?? 0, 'acc-ok', t('permits.card.aktif.note')),
-    item(t('permits.card.akanBerakhir'), d.akan_berakhir ?? 0, 'acc-warn', t('permits.card.akanBerakhir.note')),
-    item(t('permits.card.kedaluwarsa'), d.kedaluwarsa ?? 0, 'acc-crit', t('permits.card.kedaluwarsa.note')),
-    item(t('permits.card.pengurusan'), d.dalam_pengurusan ?? 0, '', t('permits.card.pengurusan.note')),
-    item(t('permits.card.gap'), d.gap_wajib ?? 0, d.gap_wajib > 0 ? 'acc-crit' : 'acc-ok', t('permits.card.gap.note')),
+    statCard(t('permits.card.total'), d.total_izin ?? 0, 'acc-info', t('permits.card.total.note'), 'shield'),
+    statCard(t('permits.card.aktif'), d.izin_aktif ?? 0, 'acc-ok', t('permits.card.aktif.note'), 'check'),
+    statCard(t('permits.card.akanBerakhir'), d.akan_berakhir ?? 0, 'acc-warn', t('permits.card.akanBerakhir.note'), 'clock'),
+    statCard(t('permits.card.kedaluwarsa'), d.kedaluwarsa ?? 0, 'acc-crit', t('permits.card.kedaluwarsa.note'), 'alert'),
+    statCard(t('permits.card.pengurusan'), d.dalam_pengurusan ?? 0, '', t('permits.card.pengurusan.note'), 'repeat'),
+    statCard(t('permits.card.gap'), d.gap_wajib ?? 0, d.gap_wajib > 0 ? 'acc-crit' : 'acc-ok', t('permits.card.gap.note'), 'gap'),
   ].join('');
+
+  const donut = $('#permitDonut');
+  if (donut) {
+    donut.innerHTML = donutHTML([
+      { label: t('status.aman'),         value: d.izin_aktif ?? 0,       color: CHART_COLORS.ok },
+      { label: t('permits.legendSoon'),  value: d.akan_berakhir ?? 0,    color: CHART_COLORS.warn },
+      { label: t('status.kedaluwarsa'),  value: d.kedaluwarsa ?? 0,      color: CHART_COLORS.crit },
+      { label: t('permits.legendGap'),   value: (P.gap || []).length,    color: CHART_COLORS.idle },
+    ], d.total_izin ?? 0, t('permits.card.total'));
+  }
 }
 function renderPermitTable() {
   $('#permitEmpty').style.display = P.rows.length ? 'none' : 'block';
@@ -621,7 +756,7 @@ function renderPermitTable() {
       <td>${p.tanggal_kedaluwarsa ? esc(tglTampil(p.tanggal_kedaluwarsa)) : (p.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—')}</td>
       <td>${sisa}</td>
       <td><span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span></td>
-      <td>${pic ? esc(pic.nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
+      <td>${whoMini(pic?.nama, pic?.jabatan ? JABATAN_NAMA[pic.jabatan] : null)}</td>
     </tr>`;
   }).join('');
   document.querySelectorAll('#permitBody tr[data-id]').forEach((tr) => {
@@ -741,28 +876,57 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#perm
 /* ================================================================
    PEMILIH MODUL — enam modul berbagi satu baris tombol
    ================================================================ */
-const MODULES = ['kontrak', 'permits', 'cases', 'projects', 'pendampingan', 'docs'];
+/* Satu tempat yang memetakan modul → section, tombol sidebar, judul, dan
+   pemuat datanya. Menambah modul cukup menambah satu baris di sini. */
+const MODULES = [
+  { id: 'dashboard',    sec: 'secDashboard',    btn: 'modDashboardBtn',    crumb: 'nav.dashboard',    desc: 'dashboard.desc' },
+  { id: 'kontrak',      sec: 'secKontrak',      btn: 'modKontrakBtn',      crumb: 'nav.kontrak',      desc: 'kontrak.pageDesc' },
+  { id: 'permits',      sec: 'secPermits',      btn: 'modPermitsBtn',      crumb: 'nav.permits',      desc: 'permits.desc' },
+  { id: 'cases',        sec: 'secCases',        btn: 'modCasesBtn',        crumb: 'nav.cases',        desc: 'cases.desc' },
+  { id: 'projects',     sec: 'secProjects',     btn: 'modProjectsBtn',     crumb: 'nav.projects',     desc: 'projects.desc' },
+  { id: 'pendampingan', sec: 'secPendampingan', btn: 'modPendampinganBtn', crumb: 'nav.pendampingan', desc: 'pendampingan.desc' },
+  { id: 'docs',         sec: 'secDocs',         btn: 'modDocsBtn',         crumb: 'nav.docs',         desc: 'docs.desc' },
+];
+let modAktif = 'dashboard';
+
 function switchModuleAll(mod) {
   tutupDrawer(); tutupPermitDrawer(); tutupAuxDrawer();
+  modAktif = mod;
   MODULES.forEach((m) => {
-    const el = $('#sec' + { kontrak: 'Kontrak', permits: 'Permits', cases: 'Cases',
-      projects: 'Projects', pendampingan: 'Pendampingan', docs: 'Docs' }[m]);
-    if (el) el.style.display = m === mod ? 'block' : 'none';
+    const el = $('#' + m.sec); if (el) el.style.display = m.id === mod ? 'block' : 'none';
+    const b = $('#' + m.btn);  if (b) b.classList.toggle('on', m.id === mod);
   });
-  ['modKontrakBtn', 'modPermitsBtn', 'modCasesBtn', 'modProjectsBtn', 'modPendampinganBtn', 'modDocsBtn']
-    .forEach((id, i) => $('#' + id).classList.toggle('on', MODULES[i] === mod));
+  gambarKepalaHalaman();
+  if (mod === 'dashboard') muatDashboardRingkas();
   if (mod === 'permits' && !P.loaded) muatPermitsSemua();
   if (mod === 'cases' && !CS.loaded) muatCasesSemua();
   if (mod === 'projects' && !PJ.loaded) muatProjectsSemua();
   if (mod === 'pendampingan' && !PD.loaded) muatPendampinganSemua();
   if (mod === 'docs' && !DC.loaded) muatDocsSemua();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-$('#modKontrakBtn').onclick = () => switchModuleAll('kontrak');
-$('#modPermitsBtn').onclick = () => switchModuleAll('permits');
-$('#modCasesBtn').onclick = () => switchModuleAll('cases');
-$('#modProjectsBtn').onclick = () => switchModuleAll('projects');
-$('#modPendampinganBtn').onclick = () => switchModuleAll('pendampingan');
-$('#modDocsBtn').onclick = () => switchModuleAll('docs');
+
+/* Breadcrumb + judul halaman: nama organisasi tetap, keterangan ikut modul. */
+function gambarKepalaHalaman() {
+  const m = MODULES.find((x) => x.id === modAktif) || MODULES[0];
+  // Di Dashboard, breadcrumb-nya berhenti di situ — tidak "Dashboard › Dashboard".
+  const diAkar = m.id === 'dashboard';
+  $('#crumbSep').style.display = diAkar ? 'none' : '';
+  $('#crumbCur').style.display = diAkar ? 'none' : '';
+  $('#crumbCur').textContent = t(m.crumb);
+  $('#phDesc').textContent = t(m.desc);
+  $('#phStamp').textContent = t('pagehead.lastLogin', { when: stempelWaktu() });
+  if (S.ws) {
+    $('#phOrg').textContent = S.ws.nama_legal || S.ws.nama_singkat || '—';
+    $('#phBadge').textContent = PERAN_LABEL[S.ws.peran] || S.ws.peran || '';
+    $('#orgName').textContent = S.ws.nama_singkat || S.ws.nama_legal || '—';
+  }
+}
+
+MODULES.forEach((m) => {
+  const b = $('#' + m.btn);
+  if (b) b.onclick = () => switchModuleAll(m.id);
+});
 
 /* ---------------------------------------------------------------- drawer generik */
 let auxKind = null; // 'case' | 'project' | 'pendampingan'
@@ -800,14 +964,25 @@ async function muatCasesSemua() {
 }
 function renderCaseCards() {
   const d = CS.dashboard || {};
-  const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
-    <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#caseCards').innerHTML = [
-    item(t('cases.card.aktif'), d.perkara_aktif ?? 0, '', t('cases.card.aktif.note')),
-    item(t('cases.card.sidangHariIni'), d.sidang_hari_ini ?? 0, 'acc-warn', t('cases.card.sidangHariIni.note')),
-    item(t('cases.card.sidang7hari'), d.sidang_7_hari ?? 0, 'acc-warn', t('cases.card.sidang7hari.note')),
-    item(t('cases.card.tahapTinggi'), d.tahap_tertinggi ?? 0, '', t('cases.card.tahapTinggi.note')),
+    statCard(t('cases.card.aktif'), d.perkara_aktif ?? 0, 'acc-info', t('cases.card.aktif.note'), 'scale'),
+    statCard(t('cases.card.sidangHariIni'), d.sidang_hari_ini ?? 0, 'acc-warn', t('cases.card.sidangHariIni.note'), 'cal'),
+    statCard(t('cases.card.sidang7hari'), d.sidang_7_hari ?? 0, 'acc-warn', t('cases.card.sidang7hari.note'), 'clock'),
+    statCard(t('cases.card.tahapTinggi'), d.tahap_tertinggi ?? 0, 'acc-repl', t('cases.card.tahapTinggi.note'), 'gavel'),
   ].join('');
+
+  const donut = $('#caseDonut');
+  if (donut) {
+    // Sebaran tahap dihitung dari baris yang sedang dimuat — bukan kolom tersimpan.
+    const palette = [CHART_COLORS.info, CHART_COLORS.repl, CHART_COLORS.warn, CHART_COLORS.ok,
+                     CHART_COLORS.teal, CHART_COLORS.gold, CHART_COLORS.crit, CHART_COLORS.idle];
+    const hitung = {};
+    CS.rows.forEach((c) => { hitung[c.tahap] = (hitung[c.tahap] || 0) + 1; });
+    const segs = Object.keys(hitung).map((k, i) => ({
+      label: TAHAP_NAMA[k] || k, value: hitung[k], color: palette[i % palette.length],
+    }));
+    donut.innerHTML = donutHTML(segs, CS.rows.length, t('cases.card.aktif'));
+  }
 }
 function renderCaseTable() {
   $('#caseEmpty').style.display = CS.rows.length ? 'none' : 'block';
@@ -824,7 +999,7 @@ function renderCaseTable() {
       <td><span class="tag">${esc(TAHAP_NAMA[c.tahap] || c.tahap)}</span></td>
       <td>${sidang}</td>
       <td><span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span></td>
-      <td>${pic ? esc(pic.nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
+      <td>${whoMini(pic?.nama, pic?.jabatan ? JABATAN_NAMA[pic.jabatan] : null)}</td>
     </tr>`;
   }).join('');
   document.querySelectorAll('#caseBody tr[data-id]').forEach((tr) => {
@@ -940,15 +1115,34 @@ async function muatProjectsSemua() {
 }
 function renderProjectCards() {
   const d = PJ.dashboard || {};
-  const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
-    <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#projectCards').innerHTML = [
-    item(t('projects.card.total'), d.total_proyek ?? 0, '', t('projects.card.total.note')),
-    item(t('projects.card.berjalan'), d.berjalan ?? 0, 'acc-ok', t('projects.card.berjalan.note')),
-    item(t('projects.card.segeraSelesai'), d.segera_selesai ?? 0, 'acc-warn', t('projects.card.segeraSelesai.note')),
-    item(t('projects.card.terlambat'), d.terlambat ?? 0, 'acc-crit', t('projects.card.terlambat.note')),
-    item(t('projects.card.selesai'), d.selesai ?? 0, '', t('projects.card.selesai.note')),
+    statCard(t('projects.card.total'), d.total_proyek ?? 0, 'acc-info', t('projects.card.total.note'), 'folder'),
+    statCard(t('projects.card.berjalan'), d.berjalan ?? 0, 'acc-ok', t('projects.card.berjalan.note'), 'play'),
+    statCard(t('projects.card.segeraSelesai'), d.segera_selesai ?? 0, 'acc-warn', t('projects.card.segeraSelesai.note'), 'flag'),
+    statCard(t('projects.card.terlambat'), d.terlambat ?? 0, 'acc-crit', t('projects.card.terlambat.note'), 'alert'),
+    statCard(t('projects.card.selesai'), d.selesai ?? 0, '', t('projects.card.selesai.note'), 'check'),
   ].join('');
+
+  const donut = $('#projectDonut');
+  if (donut) {
+    donut.innerHTML = donutHTML([
+      { label: t('projStatus.selesai'),      value: d.selesai ?? 0,        color: CHART_COLORS.ok },
+      { label: t('projStatus.berjalan'),     value: d.berjalan ?? 0,       color: CHART_COLORS.info },
+      { label: t('projStatus.tertunda'),     value: d.tertunda ?? 0,       color: CHART_COLORS.warn },
+      { label: t('projSW.segera_selesai'),   value: d.segera_selesai ?? 0, color: CHART_COLORS.gold },
+    ], d.total_proyek ?? 0, t('projects.card.total'));
+  }
+
+  const bars = $('#projectBars');
+  if (bars) {
+    const palette = [CHART_COLORS.ok, CHART_COLORS.repl, CHART_COLORS.warn, CHART_COLORS.info,
+                     CHART_COLORS.gold, CHART_COLORS.teal, CHART_COLORS.idle];
+    const hitung = {};
+    PJ.rows.forEach((p) => { const k = p.kategori || t('common.noneParent'); hitung[k] = (hitung[k] || 0) + 1; });
+    bars.innerHTML = hbarsHTML(Object.keys(hitung).map((k, i) => ({
+      label: k, value: hitung[k], color: palette[i % palette.length],
+    })));
+  }
 }
 function renderProjectTable() {
   $('#projectEmpty').style.display = PJ.rows.length ? 'none' : 'block';
@@ -961,11 +1155,11 @@ function renderProjectTable() {
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
       <td><div class="ttl">${esc(p.nama_proyek)}</div></td>
       <td>${p.kategori ? `<span class="tag">${esc(p.kategori)}</span>` : '—'}</td>
-      <td><div class="meter" title="${p.progress_persen}%">${[0,20,40,60,80].map((n) => `<i class="${p.progress_persen > n ? 'f' : ''}"></i>`).join('')}<span style="font-size:11px;margin-left:5px;color:var(--muted)">${p.progress_persen}%</span></div></td>
+      <td>${progHTML(p.progress_persen, p.status === 'selesai' ? 'done' : p.status_waktu === 'terlambat' ? 'late' : '')}</td>
       <td>${p.target_selesai ? esc(tglTampil(p.target_selesai)) : '—'}</td>
       <td>${sisa}</td>
       <td><span class="pill p-${p.status_waktu === 'terlambat' ? 'kritis' : p.status_waktu === 'segera_selesai' ? 'peringatan' : p.status === 'selesai' ? 'aman' : 'pantau'}">${esc(PROJECT_SW_NAMA[p.status_waktu] || PROJECT_STATUS_NAMA[p.status])}</span></td>
-      <td>${pic ? esc(pic.nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
+      <td>${whoMini(pic?.nama, pic?.jabatan ? JABATAN_NAMA[pic.jabatan] : null)}</td>
     </tr>`;
   }).join('');
   document.querySelectorAll('#projectBody tr[data-id]').forEach((tr) => {
@@ -1028,13 +1222,11 @@ async function muatPendampinganSemua() {
 }
 function renderPendampinganCards() {
   const n = (s) => PD.rows.filter((r) => r.status === s).length;
-  const item = (k, v, cls, note) => `<div class="card ${cls}"><div class="k">${esc(k)}</div>
-    <div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#pendampinganCards').innerHTML = [
-    item(t('pendampingan.card.total'), PD.rows.length, '', t('pendampingan.card.total.note')),
-    item(t('pendampingan.card.menunggu'), n('menunggu'), 'acc-warn', t('pendampingan.card.menunggu.note')),
-    item(t('pendampingan.card.diproses'), n('diproses'), '', t('pendampingan.card.diproses.note')),
-    item(t('pendampingan.card.selesai'), n('selesai'), 'acc-ok', t('pendampingan.card.selesai.note')),
+    statCard(t('pendampingan.card.total'), PD.rows.length, 'acc-info', t('pendampingan.card.total.note'), 'inbox'),
+    statCard(t('pendampingan.card.menunggu'), n('menunggu'), 'acc-warn', t('pendampingan.card.menunggu.note'), 'clock'),
+    statCard(t('pendampingan.card.diproses'), n('diproses'), '', t('pendampingan.card.diproses.note'), 'play'),
+    statCard(t('pendampingan.card.selesai'), n('selesai'), 'acc-ok', t('pendampingan.card.selesai.note'), 'check'),
   ].join('');
 }
 function renderPendampinganTable() {
@@ -1046,7 +1238,7 @@ function renderPendampinganTable() {
       <td>${esc(r.lokasi || '—')}</td>
       <td>${esc(r.pihak_terlibat || '—')}</td>
       <td><span class="pill ${r.status === 'selesai' ? 'p-aman' : r.status === 'menunggu' ? 'p-peringatan' : r.status === 'dibatalkan' ? 'p-tidak_dipantau' : 'p-pantau'}">${esc(STATUS_PD_NAMA[r.status])}</span></td>
-      <td>${r.pic_nama ? esc(r.pic_nama) : '<span style="color:var(--muted-2)">—</span>'}</td>
+      <td>${whoMini(r.pic_nama, r.pic_jabatan ? JABATAN_NAMA[r.pic_jabatan] : null)}</td>
     </tr>`).join('');
   document.querySelectorAll('#pendampinganBody tr[data-id]').forEach((tr) => {
     tr.onclick = () => bukaPendampinganDrawer(PD.rows.find((r) => r.id === tr.dataset.id));
@@ -1108,10 +1300,9 @@ async function muatDocsSemua() {
 }
 function renderDocCards() {
   const totalBytes = DC.rows.reduce((s, d) => s + Number(d.ukuran_byte || 0), 0);
-  const item = (k, v, note) => `<div class="card"><div class="k">${esc(k)}</div><div class="v">${v}</div><div class="n">${esc(note)}</div></div>`;
   $('#docCards').innerHTML = [
-    item(t('docs.card.total'), DC.rows.length, t('docs.card.total.note')),
-    item(t('docs.card.ukuran'), fmtUkuran(totalBytes), t('docs.card.ukuran.note')),
+    statCard(t('docs.card.total'), DC.rows.length, 'acc-info', t('docs.card.total.note'), 'archive'),
+    statCard(t('docs.card.ukuran'), fmtUkuran(totalBytes), '', t('docs.card.ukuran.note'), 'disk'),
   ].join('');
 }
 function renderDocTable() {
@@ -1147,15 +1338,102 @@ $('#docUploadBtn').onclick = async () => {
   } catch (e) { hint.textContent = e.message || t('docs.uploadHint.fail'); }
 };
 
+/* ================================================================
+   DASHBOARD RINGKAS — menyatukan angka utama keenam modul
+   Memakai endpoint dashboard yang sudah ada, tidak menambah query baru.
+   ================================================================ */
+const DS = { loaded: false, data: null };
+
+async function muatDashboardRingkas() {
+  if (DS.loaded) { gambarDashboard(); return; }
+  showApiErr('');
+  try {
+    const org = S.ws.client_org_id;
+    // Ditoleransi sebagian gagal: satu modul bermasalah tidak mengosongkan
+    // seluruh dashboard — kartunya saja yang tampil "—".
+    const hasil = await Promise.allSettled([
+      Api.dashboard(org), Api.permitsDashboard(org),
+      Api.casesDashboard(org), Api.projectsDashboard(org),
+    ]);
+    const ambil = (i, k) => hasil[i].status === 'fulfilled' ? hasil[i].value[k] : null;
+    DS.data = {
+      kontrak: ambil(0, 'dashboard'), izin: ambil(1, 'dashboard'),
+      perkara: ambil(2, 'dashboard'), proyek: ambil(3, 'dashboard'),
+    };
+    DS.loaded = true;
+    gambarDashboard();
+  } catch (err) { showApiErr(err.message || t('kontrak.loadError')); }
+}
+
+function gambarDashboard() {
+  const d = DS.data || {};
+  const n = (o, k) => (o && o[k] != null ? o[k] : '—');
+  $('#dashCards').innerHTML = [
+    statCard(t('dashboard.card.kontrak'), n(d.kontrak, 'kontrak_aktif'), 'acc-info',
+      t('dashboard.card.kontrak.note'), 'file'),
+    statCard(t('dashboard.card.izin'), n(d.izin, 'izin_aktif'), 'acc-ok',
+      t('dashboard.card.izin.note'), 'shield'),
+    statCard(t('dashboard.card.perkara'), n(d.perkara, 'perkara_aktif'), 'acc-repl',
+      t('dashboard.card.perkara.note'), 'scale'),
+    statCard(t('dashboard.card.proyek'), n(d.proyek, 'berjalan'), 'acc-warn',
+      t('dashboard.card.proyek.note'), 'folder'),
+  ].join('');
+
+  // Tiga panel pintasan: yang butuh perhatian lebih dulu.
+  const perluPerhatian = [
+    { k: t('dashboard.attn.kontrakExp'), v: n(d.kontrak, 'akan_berakhir_90h'), mod: 'kontrak',  ic: 'clock',  cls: 'warn' },
+    { k: t('dashboard.attn.kontrakLate'), v: n(d.kontrak, 'kedaluwarsa'),      mod: 'kontrak',  ic: 'alert',  cls: 'crit' },
+    { k: t('dashboard.attn.izinExp'),    v: n(d.izin, 'akan_berakhir'),        mod: 'permits',  ic: 'clock',  cls: 'warn' },
+    { k: t('dashboard.attn.izinGap'),    v: n(d.izin, 'gap_wajib'),            mod: 'permits',  ic: 'gap',    cls: 'crit' },
+    { k: t('dashboard.attn.sidang'),     v: n(d.perkara, 'sidang_7_hari'),     mod: 'cases',    ic: 'cal',    cls: 'info' },
+    { k: t('dashboard.attn.proyekLate'), v: n(d.proyek, 'terlambat'),          mod: 'projects', ic: 'alert',  cls: 'crit' },
+  ];
+  const feed = perluPerhatian.map((r) => `<button class="it" data-go="${r.mod}" style="width:100%;text-align:left">
+      <span class="ic ${r.cls}">${ico(r.ic)}</span>
+      <span class="tx"><b>${esc(r.k)}</b></span>
+      <span class="when" style="font-size:15px;font-weight:600;color:var(--ink)">${r.v}</span>
+    </button>`).join('');
+
+  $('#dashPanels').innerHTML = `
+    <div class="panel" style="grid-column:span 2">
+      <div class="panelhead"><div class="ttl2">
+        <h3>${esc(t('dashboard.attnTitle'))}</h3>
+        <p>${esc(t('dashboard.attnDesc'))}</p>
+      </div></div>
+      <div class="feed">${feed}</div>
+    </div>
+    <div class="panel">
+      <div class="panelhead"><div class="ttl2"><h3>${esc(t('dashboard.quickTitle'))}</h3></div></div>
+      <div class="feed">
+        ${MODULES.filter((m) => m.id !== 'dashboard').map((m) => `
+          <button class="it" data-go="${m.id}" style="width:100%;text-align:left">
+            <span class="ic info">${ico({ kontrak:'file', permits:'shield', cases:'scale',
+              projects:'folder', pendampingan:'users', docs:'archive' }[m.id])}</span>
+            <span class="tx"><b>${esc(t(m.crumb))}</b><span>${esc(t(m.desc))}</span></span>
+          </button>`).join('')}
+      </div>
+    </div>`;
+
+  document.querySelectorAll('#dashPanels [data-go]').forEach((b) => {
+    b.onclick = () => switchModuleAll(b.dataset.go);
+  });
+}
+
 /* ---------------------------------------------------------------- bahasa */
-$('#langBtn').onclick = () => {
-  const next = LANG === 'en' ? 'id' : 'en';
-  setLang(next);
-};
-onLangChange((lang) => {
-  $('#langBtnLabel').textContent = lang.toUpperCase();
+$('#langId').onclick = () => setLang('id');
+$('#langEn').onclick = () => setLang('en');
+function tandaiBahasaAktif() {
+  $('#langId').classList.toggle('on', LANG === 'id');
+  $('#langEn').classList.toggle('on', LANG === 'en');
+}
+
+onLangChange(() => {
+  tandaiBahasaAktif();
   applyStaticI18n();
   if (!S.ws) return;
+  $('#sbLabel').textContent = t(S.ws.tipe === 'staf_firma' ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
+  $('#whoRole').textContent = PERAN_LABEL[S.ws.peran] || S.ws.peran;
+  gambarKepalaHalaman();
   isiSelectReferensi();
   $('#fKat').value = S.kat; $('#fStat').value = S.stat;
   $('#fLengkap').innerHTML = `<option value="">${esc(t('kontrak.filter.allLengkap'))}</option>
@@ -1163,6 +1441,7 @@ onLangChange((lang) => {
   $('#fLengkap').value = S.lengkap;
   $('#q').value = S.q;
   render();
+  if (DS.loaded) gambarDashboard();
   if (P.loaded) { renderPermitCards(); renderPermitTable(); renderGap(); }
   if (CS.loaded) { renderCaseCards(); renderCaseTable(); }
   if (PJ.loaded) { renderProjectCards(); renderProjectTable(); }
@@ -1173,7 +1452,7 @@ onLangChange((lang) => {
 /* ---------------------------------------------------------------- mulai */
 (async () => {
   applyStaticI18n();
-  $('#langBtnLabel').textContent = LANG.toUpperCase();
+  tandaiBahasaAktif();
   if (Api.isLoggedIn()) {
     try { await goWorkspacePicker(); } catch (e) { goLogin(); }
   } else {

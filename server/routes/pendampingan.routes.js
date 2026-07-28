@@ -12,8 +12,9 @@ router.get('/', async (req, res, next) => {
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
     const { rows } = await queryAsUser(
       req.user.id,
-      `select r.*, u.nama as pic_nama from pendampingan_requests r
+      `select r.*, u.nama as pic_nama, ms.jabatan as pic_jabatan from pendampingan_requests r
          left join users u on u.id = r.pic_id
+         left join mikk_staff ms on ms.user_id = u.id
         where r.client_org_id = $1
         order by (r.status = 'menunggu') desc, r.tanggal_kegiatan nulls last`,
       [clientOrgId]
@@ -28,8 +29,9 @@ router.get('/reference', async (req, res, next) => {
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
     const { rows } = await queryAsUser(
       req.user.id,
-      `select distinct u.id, u.nama from users u
+      `select distinct u.id, u.nama, ms.jabatan from users u
          join client_assignments ca on ca.user_id = u.id
+         left join mikk_staff ms on ms.user_id = u.id
         where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
         order by u.nama`,
       [clientOrgId]

@@ -15,6 +15,7 @@ const router = express.Router();
 router.use(authenticate);
 
 const SORT_MAP = {
+  mulai: 'v.tanggal_mulai',
   akhir: 'v.tanggal_berakhir',
   sisa: 'v.sisa_hari',
   skor: 'v.skor_kelengkapan',
@@ -149,9 +150,10 @@ router.get('/reference', async (req, res, next) => {
         `select id, nama from contract_categories where client_org_id=$1 and aktif order by urutan`,
         [clientOrgId]),
       queryAsUser(req.user.id,
-        `select distinct u.id, u.nama
+        `select distinct u.id, u.nama, ms.jabatan
            from users u
            join client_assignments ca on ca.user_id = u.id
+           left join mikk_staff ms on ms.user_id = u.id
           where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
           order by u.nama`,
         [clientOrgId]),
