@@ -27,6 +27,9 @@ const ORDER = [
   '05_app_role.sql',
   '06_fase2_schema.sql',
   '07_fase2_rls_views.sql',
+  '08_fase3_schema.sql',
+  '09_fase3_rls.sql',
+  '10_fase3_seed_kupon.sql',
 ];
 
 async function main() {
