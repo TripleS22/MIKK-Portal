@@ -174,6 +174,10 @@
         <svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-8h6v8"/></svg>
         <span data-i18n="nav.dashboard">Dashboard</span>
       </button>
+      <button id="modMyCasesBtn" style="display:none">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>
+        <span data-i18n="nav.mycases">Perkara Saya</span>
+      </button>
       <button id="modKontrakBtn">
         <svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 13h6M9 17h4"/></svg>
         <span data-i18n="nav.kontrak">CRM Kontrak (CLM)</span>
@@ -198,9 +202,17 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>
         <span data-i18n="nav.docs">Dokumen &amp; Legalitas</span>
       </button>
+      <button id="modTeamBtn">
+        <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span data-i18n="nav.team">Team &amp; Users</span>
+      </button>
       <button id="modRatesBtn" style="display:none">
         <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>
         <span data-i18n="nav.rates">Tarif Layanan</span>
+      </button>
+      <button id="modProfileBtn">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
+        <span data-i18n="nav.profile">Profil Saya</span>
       </button>
     </nav>
 
@@ -264,6 +276,54 @@
       <div id="secDashboard">
         <div class="cards" id="dashCards"></div>
         <div class="grid-3" id="dashPanels"></div>
+      </div>
+
+      <!-- ============================ PERKARA SAYA ============================ -->
+      <div id="secMyCases" style="display:none">
+        <div class="cards" id="myCasesCards"></div>
+        <div class="bar">
+          <div style="flex:1"></div>
+          <button class="btn gold" id="addMyCaseBtn" data-i18n="mycases.add">+ Tambah Perkara Baru</button>
+        </div>
+        <div class="panel" style="margin-bottom:18px">
+          <div class="tscroll"><table>
+            <thead><tr>
+              <th style="width:34px">#</th><th data-i18n="mycases.th.klien">Klien</th><th data-i18n="cases.th.nomor">Nomor perkara</th>
+              <th data-i18n="cases.th.tahap">Tahap</th><th data-i18n="cases.th.sidang">Sidang terdekat</th><th data-i18n="cases.th.status">Status</th>
+            </tr></thead>
+            <tbody id="myCasesBody"></tbody>
+          </table></div>
+          <div class="empty" id="myCasesEmpty" style="display:none">
+            <h3 data-i18n="mycases.empty.title">Belum ada perkara yang ditugaskan ke Anda</h3>
+            <p data-i18n="mycases.empty.desc">Perkara yang PIC-nya Anda, di klien mana pun (retainer, perorangan, atau kelompok), akan muncul di sini.</p>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:18px">
+          <div class="panelhead">
+            <div class="ttl2"><h3 data-i18n="mycases.indivTitle">Klien Perorangan</h3></div>
+            <button class="btn ghost" id="addKlienIndivBtn" data-i18n="mycases.indivAdd">+ Tambah Klien Perorangan</button>
+          </div>
+          <div class="tscroll"><table>
+            <thead><tr>
+              <th style="width:34px">#</th><th data-i18n="mycases.f.nama">Nama</th>
+              <th data-i18n="mycases.f.nik">NIK</th><th data-i18n="mycases.f.noHp">No. HP</th>
+            </tr></thead>
+            <tbody id="klienIndivBody"></tbody>
+          </table></div>
+        </div>
+        <div class="panel">
+          <div class="panelhead">
+            <div class="ttl2"><h3 data-i18n="mycases.grupTitle">Klien Kelompok (Bareng-bareng)</h3></div>
+            <button class="btn ghost" id="addKlienGrupBtn" data-i18n="mycases.grupAdd">+ Tambah Klien Kelompok</button>
+          </div>
+          <div class="tscroll"><table>
+            <thead><tr>
+              <th style="width:34px">#</th><th data-i18n="mycases.f.namaKelompok">Nama kelompok</th><th data-i18n="mycases.f.anggota">Anggota</th>
+            </tr></thead>
+            <tbody id="klienGrupBody"></tbody>
+          </table></div>
+        </div>
       </div>
 
       <!-- ============================ CRM KONTRAK ============================ -->
@@ -468,6 +528,38 @@
         </div>
       </div>
 
+      <!-- ============================ TEAM & USERS ============================ -->
+      <div id="secTeam" style="display:none">
+        <div class="warnbox wb-warn" id="teamNote" style="display:none">
+          <span class="ic">◆</span>
+          <div><b data-i18n="team.readonlyTitle">Hanya bisa dilihat</b><span data-i18n="team.readonlyDesc">Pengelolaan akun klien dilakukan Managing Partner atau Admin Staf.</span></div>
+        </div>
+        <div id="teamNewCred"></div>
+        <div class="cards" id="teamCards"></div>
+        <div class="bar">
+          <div style="flex:1"></div>
+          <button class="btn gold" id="addTeamBtn" data-i18n="team.add">+ Tambah Pengguna</button>
+        </div>
+        <div class="panel">
+          <div class="tscroll"><table style="min-width:820px">
+            <thead><tr>
+              <th style="width:34px">#</th>
+              <th data-i18n="team.th.nama">Nama</th>
+              <th data-i18n="team.th.email">Email</th>
+              <th data-i18n="team.th.peran">Peran</th>
+              <th data-i18n="team.th.sandi">Kata sandi</th>
+              <th data-i18n="team.th.status">Status</th>
+              <th style="width:120px" data-i18n="team.th.aksi">Aksi</th>
+            </tr></thead>
+            <tbody id="teamBody"></tbody>
+          </table></div>
+          <div class="empty" id="teamEmpty" style="display:none">
+            <h3 data-i18n="team.empty.title">Belum ada pengguna</h3>
+            <p data-i18n="team.empty.desc">Tambahkan pengguna pertama lewat tombol di atas.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- ============================ TARIF LAYANAN ============================ -->
       <div id="secRates" style="display:none">
         <div class="warnbox wb-warn" id="ratesNote" style="display:none">
@@ -522,12 +614,41 @@
           <div class="tscroll"><table style="min-width:760px">
             <thead><tr>
               <th style="width:34px">#</th><th data-i18n="docs.th.nama">Nama berkas</th><th data-i18n="docs.th.kategori">Kategori</th>
-              <th data-i18n="docs.th.ukuran">Ukuran</th><th data-i18n="docs.th.diunggah">Diunggah</th><th data-i18n="docs.th.oleh">Oleh</th><th style="width:80px" data-i18n="docs.th.aksi">Aksi</th>
+              <th data-i18n="docs.th.ukuran">Ukuran</th><th data-i18n="docs.th.diunggah">Diunggah</th><th data-i18n="docs.th.oleh">Oleh</th><th style="width:150px" data-i18n="docs.th.aksi">Aksi</th>
             </tr></thead>
             <tbody id="docBody"></tbody>
           </table></div>
           <div class="empty" id="docEmpty" style="display:none">
             <h3 data-i18n="docs.empty.title">Belum ada dokumen diunggah</h3><p data-i18n="docs.empty.desc">Unggah berkas pertama lewat formulir di atas.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================ PROFIL SAYA ============================ -->
+      <div id="secProfile" style="display:none">
+        <div class="cards" id="profileCards"></div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panelhead"><div class="ttl2"><h3 data-i18n="profile.identitasTitle">Data Legalitas</h3></div></div>
+            <div id="profileIdentitas" style="padding:16px 18px"></div>
+          </div>
+          <div class="panel">
+            <div class="panelhead"><div class="ttl2"><h3 data-i18n="profile.docsTitle">Dokumen Proyek Terpilih</h3></div></div>
+            <div id="profileDocsPanel" style="padding:16px 18px"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:18px">
+          <div class="panelhead"><div class="ttl2"><h3 data-i18n="profile.projectsTitle">Proyek &amp; Perkara Saya</h3></div></div>
+          <div class="tscroll"><table>
+            <thead><tr>
+              <th style="width:34px">#</th><th data-i18n="profile.th.jenis">Jenis</th><th data-i18n="profile.th.judul">Judul</th>
+              <th data-i18n="profile.th.klien">Klien</th><th data-i18n="profile.th.klienJenis">Jenis Klien</th><th data-i18n="profile.th.status">Status</th>
+            </tr></thead>
+            <tbody id="profileProjectBody"></tbody>
+          </table></div>
+          <div class="empty" id="profileProjectEmpty" style="display:none">
+            <h3 data-i18n="profile.empty.title">Belum ada proyek/perkara</h3>
+            <p data-i18n="profile.empty.desc">Yang ditugaskan ke Anda akan muncul di sini.</p>
           </div>
         </div>
       </div>
@@ -666,6 +787,18 @@
   <div class="dbody" id="dBody"></div>
   <div class="dfoot"><button class="btn ghost" id="dCancel" data-i18n="common.cancel">Batal</button><button class="btn gold" id="dSave" data-i18n="common.save">Simpan</button></div>
 </aside>
+
+<!-- PRATINJAU DOKUMEN — dipakai Arsip Dokumen & Profil Saya. Bukan drawer
+     samping seperti yang lain (butuh ruang lebih untuk gambar/PDF). -->
+<div id="previewModal" style="display:none;position:fixed;inset:0;z-index:60;align-items:center;justify-content:center;background:rgba(15,27,47,.55)">
+  <div style="background:var(--surface);border-radius:var(--r);max-width:900px;width:92vw;max-height:88vh;overflow:auto;padding:18px;box-shadow:var(--shadow)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
+      <h3 id="previewTitle" style="font-family:var(--serif);font-size:15px;margin:0">—</h3>
+      <button class="x" id="previewClose" aria-label="Tutup" data-i18n-aria="common.close">✕</button>
+    </div>
+    <div id="previewBody"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

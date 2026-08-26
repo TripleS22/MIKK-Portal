@@ -8,6 +8,11 @@
 // boleh dibaca pengguna yang sedang login — baru setelah itu berkasnya
 // di-stream. Kalau baris tidak ditemukan (karena RLS memblokir), unduhan
 // gagal sebelum satu byte pun terkirim.
+//
+// Dokumen bisa melekat ke salah satu dari TIGA jenis pemilik — persis
+// satu (lihat constraint documents_satu_pemilik di
+// 11_klien_perorangan_kelompok.sql): clientOrgId, individualClientId,
+// atau clientGroupId.
 
 const express = require('express');
 const multer = require('multer');
@@ -28,17 +33,27 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB — sesuaikan sebelum produksi
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /api/documents?clientOrgId=&entityType=&entityId=
+// atau  ?individualClientId=...   atau  ?clientGroupId=...
 router.get('/', async (req, res, next) => {
   try {
-    const { clientOrgId, entityType, entityId } = req.query;
-    if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
+    const { clientOrgId, individualClientId, clientGroupId, entityType, entityId } = req.query;
+    const terisi = [clientOrgId, individualClientId, clientGroupId].filter(Boolean);
+    if (terisi.length !== 1) {
+      return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+    }
 
-    const where = ['d.client_org_id = $1'];
-    const params = [clientOrgId];
+    const where = [
+      'd.client_org_id is not distinct from $1',
+      'd.individual_client_id is not distinct from $2',
+      'd.client_group_id is not distinct from $3',
+    ];
+    const params = [clientOrgId || null, individualClientId || null, clientGroupId || null];
     if (entityType && entityId) {
       where.push(`exists (select 1 from document_links l
-                            where l.document_id = d.id and l.entity_type = $2 and l.entity_id = $3)`);
+                            where l.document_id = d.id and l.entity_type = $4 and l.entity_id = $5)`);
       params.push(entityType, entityId);
     }
     const { rows } = await queryAsUser(
@@ -54,35 +69,43 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/documents  (multipart/form-data: file, clientOrgId, kategoriArsip, entityType?, entityId?)
+// POST /api/documents  (multipart/form-data: file, clientOrgId|individualClientId|clientGroupId,
+//                        kategoriArsip, entityType?, entityId?)
 router.post('/', upload.single('file'), async (req, res, next) => {
   const b = req.body || {};
   if (!req.file) return res.status(400).json({ error: 'Berkas wajib diunggah.' });
-  if (!b.clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
 
-  // WAJIB divalidasi SEBELUM menyentuh filesystem sama sekali — clientOrgId
+  const pemilik = { clientOrgId: b.clientOrgId || null, individualClientId: b.individualClientId || null, clientGroupId: b.clientGroupId || null };
+  const terisi = Object.values(pemilik).filter(Boolean);
+  if (terisi.length !== 1) {
+    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+  }
+  const pemilikId = terisi[0];
+
+  // WAJIB divalidasi SEBELUM menyentuh filesystem sama sekali — id pemilik
   // berasal dari input pengguna dan dipakai sebagai nama folder di bawah.
   // Tanpa validasi ini, nilai seperti "../../etc" bisa membuat mkdirSync
   // membuat direktori di luar folder uploads/ sebelum RLS sempat menolak
   // insert-nya di database.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!UUID_RE.test(b.clientOrgId)) {
-    return res.status(400).json({ error: 'clientOrgId tidak valid.' });
+  if (!UUID_RE.test(pemilikId)) {
+    return res.status(400).json({ error: 'ID pemilik dokumen tidak valid.' });
   }
 
   try {
     const sha256 = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
     const storedName = `${crypto.randomUUID()}${path.extname(req.file.originalname) || ''}`;
-    const storagePath = path.join(b.clientOrgId, storedName); // relatif — disimpan di DB
+    const storagePath = path.join(pemilikId, storedName); // relatif — disimpan di DB
 
     const result = await withUser(req.user.id, async (client) => {
       const { rows } = await client.query(
         `insert into documents
-           (client_org_id, storage_path, nama_file, mime_type, ukuran_byte, sha256,
+           (client_org_id, individual_client_id, client_group_id,
+            storage_path, nama_file, mime_type, ukuran_byte, sha256,
             kategori_arsip, tahun_arsip, rahasia, uploaded_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,true,$9)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11)
          returning id`,
-        [b.clientOrgId, storagePath, req.file.originalname, req.file.mimetype, req.file.size,
+        [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId,
+         storagePath, req.file.originalname, req.file.mimetype, req.file.size,
          sha256, b.kategoriArsip || null, new Date().getFullYear(), req.user.id]
       );
       const doc = rows[0];
@@ -99,7 +122,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
     // Filesystem disentuh HANYA setelah baris database berhasil (RLS lolos).
     // Kalau insert gagal (mis. RLS menolak org yang bukan miliknya), tidak
     // ada folder atau berkas yang sempat dibuat sama sekali.
-    const clientDir = path.join(UPLOAD_DIR, b.clientOrgId);
+    const clientDir = path.join(UPLOAD_DIR, pemilikId);
     fs.mkdirSync(clientDir, { recursive: true });
     fs.writeFileSync(path.join(clientDir, storedName), req.file.buffer);
 

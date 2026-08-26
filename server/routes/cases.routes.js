@@ -1,4 +1,12 @@
 // server/routes/cases.routes.js
+//
+// Perkara bisa dimiliki salah satu dari TIGA jenis pihak — persis satu,
+// ditegakkan lewat constraint cases_satu_pemilik (lihat
+// 11_klien_perorangan_kelompok.sql): client_orgs (retainer korporat),
+// individual_clients (perorangan), atau client_groups (kelompok/
+// bareng-bareng). Endpoint di sini menerima clientOrgId ATAU
+// individualClientId ATAU clientGroupId secara bergantian.
+
 const express = require('express');
 const { queryAsUser, withUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
@@ -6,16 +14,30 @@ const { authenticate } = require('../middleware/authenticate');
 const router = express.Router();
 router.use(authenticate);
 
-// GET /api/cases?clientOrgId=
+// Membaca ketiga kemungkinan query param pemilik dan memastikan persis
+// satu yang terisi. Dipakai oleh GET / dan GET /reference.
+function pemilikDariQuery(q) {
+  const { clientOrgId, individualClientId, clientGroupId } = q;
+  const terisi = [clientOrgId, individualClientId, clientGroupId].filter(Boolean);
+  if (terisi.length !== 1) return null;
+  return { clientOrgId: clientOrgId || null, individualClientId: individualClientId || null, clientGroupId: clientGroupId || null };
+}
+
+// GET /api/cases?clientOrgId=  atau  ?individualClientId=  atau  ?clientGroupId=
 router.get('/', async (req, res, next) => {
+  const pemilik = pemilikDariQuery(req.query);
+  if (!pemilik) {
+    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+  }
   try {
-    const { clientOrgId } = req.query;
-    if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
     const { rows } = await queryAsUser(
       req.user.id,
-      `select * from v_cases_display where client_org_id = $1
+      `select * from v_cases_display
+        where client_org_id is not distinct from $1
+          and individual_client_id is not distinct from $2
+          and client_group_id is not distinct from $3
         order by (status_siklus = 'aktif') desc, hari_ke_sidang nulls last, tanggal_daftar desc nulls last`,
-      [clientOrgId]
+      [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId]
     );
     res.json({ rows });
   } catch (err) { next(err); }
@@ -34,18 +56,28 @@ router.get('/dashboard', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/cases/reference?clientOrgId=|individualClientId=|clientGroupId=
+// PIC diresolusi dari client_assignments untuk pemilik yang bersangkutan.
+// Daftar tahap/peranKlien/statusSiklus di bawah adalah PRESET saja — sejak
+// 13_opsi_bebas_isi_sendiri.sql, database tidak lagi menegakkan daftar
+// tertutup ini; UI menawarkan opsi "Lainnya… (isi sendiri)" di sampingnya.
 router.get('/reference', async (req, res, next) => {
+  const pemilik = pemilikDariQuery(req.query);
+  if (!pemilik) {
+    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+  }
   try {
-    const { clientOrgId } = req.query;
-    if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
     const { rows } = await queryAsUser(
       req.user.id,
       `select distinct u.id, u.nama, ms.jabatan from users u
          join client_assignments ca on ca.user_id = u.id
          left join mikk_staff ms on ms.user_id = u.id
-        where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
+        where ca.client_org_id is not distinct from $1
+          and ca.individual_client_id is not distinct from $2
+          and ca.client_group_id is not distinct from $3
+          and (ca.selesai is null or ca.selesai >= current_date)
         order by u.nama`,
-      [clientOrgId]
+      [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId]
     );
     res.json({
       pic: rows,
@@ -75,16 +107,21 @@ router.get('/one/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   const b = req.body || {};
-  if (!b.clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
+  const pemilik = [b.clientOrgId, b.individualClientId, b.clientGroupId].filter(Boolean);
+  if (pemilik.length !== 1) {
+    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+  }
   if (!b.nomorPerkara || !b.nomorPerkara.trim()) return res.status(400).json({ error: 'Nomor perkara wajib diisi.' });
   try {
     const { rows } = await queryAsUser(
       req.user.id,
-      `insert into cases (client_org_id, nomor_perkara, jenis_perkara, peran_klien, lawan_pihak_teks,
+      `insert into cases (client_org_id, individual_client_id, client_group_id,
+                           nomor_perkara, jenis_perkara, peran_klien, lawan_pihak_teks,
                            pengadilan, tahap, status_siklus, tanggal_daftar, pic_legal_id, keterangan, created_by)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        returning id`,
-      [b.clientOrgId, b.nomorPerkara.trim(), b.jenisPerkara || null, b.peranKlien || null,
+      [b.clientOrgId || null, b.individualClientId || null, b.clientGroupId || null,
+       b.nomorPerkara.trim(), b.jenisPerkara || null, b.peranKlien || null,
        b.lawanPihakTeks || null, b.pengadilan || null, b.tahap || 'pendaftaran',
        b.statusSiklus || 'aktif', b.tanggalDaftar || null, b.picLegalId || null, b.keterangan || null, req.user.id]
     );
@@ -159,7 +196,7 @@ router.post('/:id/minutes', async (req, res, next) => {
 });
 
 function mapPgError(err) {
-  if (err.code === '23505' && err.constraint === 'cases_nomor_unik') {
+  if (err.code === '23505' && String(err.constraint || '').startsWith('cases_nomor_unik')) {
     return httpError(409, 'Nomor perkara ini sudah tercatat untuk klien yang sama.');
   }
   if (err.code === '42501') return httpError(403, 'Anda tidak memiliki akses untuk mengubah data ini.');

@@ -126,6 +126,8 @@ const RELASI_NAMA = nameProxy('relasi');
 const ROWS_LEDGER = () => [t('kontrak.row.nomor'), t('kontrak.row.lawan'), t('kontrak.row.mulai'), t('kontrak.row.akhir'), t('kontrak.row.nilai')];
 const STATUS_KEYS = ['aman', 'pantau', 'peringatan', 'kritis', 'kedaluwarsa', 'digantikan', 'tanpa_batas', 'tidak_dipantau'];
 const PERMIT_STATUS_NAMA = nameProxy('permitStatus');
+const JENIS_KLIEN_NAMA = nameProxy('jenisKlien');
+const PROJEK_JENIS_NAMA = nameProxy('projekJenis');
 
 const S = {
   user: null, ws: null, wsList: [],
@@ -223,6 +225,9 @@ async function enterWorkspace(ws) {
   // menawarkan pintu yang memang terkunci.
   const bolehTarif = ws.tipe === 'staf_firma' && ws.peran === 'managing_partner';
   $('#modRatesBtn').style.display = bolehTarif ? 'flex' : 'none';
+  // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
+  // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
+  $('#modMyCasesBtn').style.display = ws.tipe === 'staf_firma' ? 'flex' : 'none';
   S.masukPada = new Date();
   gambarKepalaHalaman();
 
@@ -357,6 +362,42 @@ function renderTable() {
   $('#pg').innerHTML = html;
 }
 
+/* ---------------------------------------------------------------------
+   "Isi sendiri" — dipakai di semua dropdown status/tahap/jenis operasional
+   (lihat db/13_opsi_bebas_isi_sendiri.sql: database tidak lagi menegakkan
+   daftar tertutup untuk kolom-kolom ini). opsiKustom() sama seperti opsi()
+   tapi menambah satu opsi terakhir "Lainnya… (isi sendiri)" yang membuka
+   kotak teks bebas. Nilai yang sudah tersimpan tapi TIDAK ada di daftar
+   preset otomatis dianggap "custom" dan kotak teksnya langsung terbuka
+   berisi nilai itu — supaya nilai lama yang diketik bebas tetap terlihat.
+   -------------------------------------------------------------------- */
+const OPSI_KUSTOM_NILAI = '__kustom__';
+function opsiKustom(id, arr, val, ph) {
+  const dikenal = val != null && val !== '' && arr.some((o) => o.v === val);
+  const isCustom = val != null && val !== '' && !dikenal;
+  const opts = opsi(arr, isCustom ? '' : val, ph)
+    + `<option value="${OPSI_KUSTOM_NILAI}" ${isCustom ? 'selected' : ''}>${esc(t('common.customOption'))}</option>`;
+  return `<select id="${id}_sel">${opts}</select>
+    <input id="${id}_txt" class="fld" style="margin-top:6px;display:${isCustom ? 'block' : 'none'}"
+      placeholder="${esc(t('common.customOptionPh'))}" value="${isCustom ? esc(val) : ''}">`;
+}
+/* Wire perubahan select ⇄ tampil/sembunyi kotak teks. Dipanggil sekali
+   setiap kali HTML yang mengandung opsiKustom(id, ...) baru saja disisipkan
+   ke DOM (innerHTML tidak mempertahankan event listener lama). */
+function pasangOpsiKustom(id) {
+  const sel = $('#' + id + '_sel'), txt = $('#' + id + '_txt');
+  if (!sel || !txt) return;
+  sel.addEventListener('change', () => { txt.style.display = sel.value === OPSI_KUSTOM_NILAI ? 'block' : 'none'; });
+}
+/* Baca nilai akhir: isi kotak teks kalau opsi "isi sendiri" dipilih, kalau
+   tidak nilai select apa adanya. */
+function bacaOpsiKustom(id) {
+  const sel = $('#' + id + '_sel');
+  if (!sel) return '';
+  if (sel.value === OPSI_KUSTOM_NILAI) return ($('#' + id + '_txt')?.value || '').trim();
+  return sel.value;
+}
+
 /* ---------------------------------------------------------------- formulir kontrak */
 function opsi(arr, val, ph) {
   return `<option value="">${esc(ph)}</option>` + arr.map((o) =>
@@ -409,7 +450,7 @@ function formHTML(c, err) {
     <span><b>${t('kontrak.f.nirnilai')}</b>${t('kontrak.f.nirnilaiDesc')}</span></label>
   <div class="grid2" style="margin-top:6px">
     <div class="f"><label>${t('kontrak.f.status')}</label>
-      <select id="i_status">${opsi(r.statusSiklus.map((v) => ({ v, l: SIKLUS_NAMA[v] || v })), d.status, t('common.none'))}</select></div>
+      ${opsiKustom('i_status', r.statusSiklus.map((v) => ({ v, l: SIKLUS_NAMA[v] || v })), d.status, t('common.none'))}</div>
     <div class="f"><label>${t('kontrak.f.notice')}</label>
       <input id="i_notice" inputmode="numeric" value="${d.notice != null ? d.notice : ''}"></div>
   </div>
@@ -439,7 +480,7 @@ function bacaForm() {
   const nv = g('i_nilai').replace(/[^\d]/g, '');
   d.nilaiTidakRelevan = $('#i_nirnilai').checked;
   d.nilai = d.nilaiTidakRelevan || nv === '' ? null : Number(nv);
-  d.status = g('i_status') || 'draf';
+  d.status = bacaOpsiKustom('i_status') || 'draf';
   const nt = g('i_notice').replace(/[^\d]/g, '');
   d.notice = nt === '' ? null : Number(nt);
   d.autoRenew = $('#i_renew').checked;
@@ -455,6 +496,7 @@ function validasi(id) {
   return Object.keys(err).length ? err : null;
 }
 function pasangFormEvent(rerender) {
+  pasangOpsiKustom('i_status');
   ['i_batas', 'i_nirnilai'].forEach((id) => {
     const el = $('#' + id); if (el) el.addEventListener('change', () => { bacaForm(); rerender(); });
   });
@@ -817,7 +859,7 @@ function permitFormHTML(err) {
   <label class="chk"><input type="checkbox" id="p_batas" ${d.tanpaBatas ? 'checked' : ''}>
     <span><b>${t('permits.f.tanpaBatas')}</b>${t('permits.f.tanpaBatasDesc')}</span></label>
   <div class="f" style="margin-top:6px"><label>${t('permits.f.status')}</label>
-    <select id="p_status">${permitOpsi(r.statusSiklus.map((v) => ({ v, l: PERMIT_STATUS_NAMA[v] || v })), d.status, t('common.none'))}</select></div>
+    ${opsiKustom('p_status', r.statusSiklus.map((v) => ({ v, l: PERMIT_STATUS_NAMA[v] || v })), d.status, t('common.none'))}</div>
   <div class="f" style="margin-top:12px"><label>${t('permits.f.keterangan')}</label><textarea id="p_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>`;
 }
 function bacaPermitForm() {
@@ -831,7 +873,7 @@ function bacaPermitForm() {
   d.tanggalTerbit = g('p_terbit') || null;
   d.tanpaBatas = $('#p_batas').checked;
   d.tanggalKedaluwarsa = d.tanpaBatas ? null : (g('p_kadaluarsa') || null);
-  d.status = g('p_status') || 'aktif';
+  d.status = bacaOpsiKustom('p_status') || 'aktif';
   d.keterangan = g('p_ket') || null;
 }
 function validasiPermit() {
@@ -857,6 +899,7 @@ function bukaPermitDrawer(row) {
 function gambarPermitDrawer(err) {
   $('#permitDTitle').textContent = P.editing ? t('permits.drawerTitle') : t('permits.drawerTitleNew');
   $('#permitDBody').innerHTML = permitFormHTML(err);
+  pasangOpsiKustom('p_status');
   const batas = $('#p_batas');
   if (batas) batas.addEventListener('change', () => { bacaPermitForm(); gambarPermitDrawer(); });
 }
@@ -894,13 +937,16 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#perm
    pemuat datanya. Menambah modul cukup menambah satu baris di sini. */
 const MODULES = [
   { id: 'dashboard',    sec: 'secDashboard',    btn: 'modDashboardBtn',    crumb: 'nav.dashboard',    desc: 'dashboard.desc' },
+  { id: 'mycases',      sec: 'secMyCases',      btn: 'modMyCasesBtn',      crumb: 'nav.mycases',      desc: 'mycases.desc' },
   { id: 'kontrak',      sec: 'secKontrak',      btn: 'modKontrakBtn',      crumb: 'nav.kontrak',      desc: 'kontrak.pageDesc' },
   { id: 'permits',      sec: 'secPermits',      btn: 'modPermitsBtn',      crumb: 'nav.permits',      desc: 'permits.desc' },
   { id: 'cases',        sec: 'secCases',        btn: 'modCasesBtn',        crumb: 'nav.cases',        desc: 'cases.desc' },
   { id: 'projects',     sec: 'secProjects',     btn: 'modProjectsBtn',     crumb: 'nav.projects',     desc: 'projects.desc' },
   { id: 'pendampingan', sec: 'secPendampingan', btn: 'modPendampinganBtn', crumb: 'nav.pendampingan', desc: 'pendampingan.desc' },
   { id: 'docs',         sec: 'secDocs',         btn: 'modDocsBtn',         crumb: 'nav.docs',         desc: 'docs.desc' },
+  { id: 'team',         sec: 'secTeam',         btn: 'modTeamBtn',         crumb: 'nav.team',         desc: 'team.desc' },
   { id: 'rates',        sec: 'secRates',        btn: 'modRatesBtn',        crumb: 'nav.rates',        desc: 'rates.desc' },
+  { id: 'profile',      sec: 'secProfile',      btn: 'modProfileBtn',      crumb: 'nav.profile',      desc: 'profile.desc' },
 ];
 let modAktif = 'dashboard';
 
@@ -913,12 +959,15 @@ function switchModuleAll(mod) {
   });
   gambarKepalaHalaman();
   if (mod === 'dashboard') muatDashboardRingkas();
+  if (mod === 'mycases' && !MC.loaded) muatMyCasesSemua();
   if (mod === 'permits' && !P.loaded) muatPermitsSemua();
   if (mod === 'cases' && !CS.loaded) muatCasesSemua();
   if (mod === 'projects' && !PJ.loaded) muatProjectsSemua();
   if (mod === 'pendampingan' && !PD.loaded) muatPendampinganSemua();
   if (mod === 'docs' && !DC.loaded) muatDocsSemua();
+  if (mod === 'team' && !TM.loaded) muatTimSemua();
   if (mod === 'rates' && !RT.loaded) muatTarifSemua();
+  if (mod === 'profile' && !PR.loaded) muatProfilSemua();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1034,9 +1083,9 @@ function caseFormHTML(row, hearings, minutes) {
     <input id="cs_jenis" placeholder="${esc(t('cases.f.jenisPh'))}" value="${esc(row?.jenis_perkara || '')}"></div>
   <div class="grid2" style="margin-top:12px">
     <div class="f"><label>${t('cases.f.peran')}</label>
-      <select id="cs_peran">${opsi(r.peranKlien.map((v) => ({ v, l: PERAN_KLIEN_NAMA[v] })), row?.peran_klien, t('common.none'))}</select></div>
+      ${opsiKustom('cs_peran', r.peranKlien.map((v) => ({ v, l: PERAN_KLIEN_NAMA[v] })), row?.peran_klien, t('common.none'))}</div>
     <div class="f"><label>${t('cases.f.tahap')}</label>
-      <select id="cs_tahap">${opsi(r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row?.tahap || 'pendaftaran', t('common.none'))}</select></div>
+      ${opsiKustom('cs_tahap', r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row?.tahap || 'pendaftaran', t('common.none'))}</div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.lawan')}</label>
     <input id="cs_lawan" value="${esc(row?.lawan_pihak_teks || '')}"></div>
@@ -1045,7 +1094,7 @@ function caseFormHTML(row, hearings, minutes) {
     <div class="f"><label>${t('cases.f.pic')}</label><select id="cs_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, t('common.none'))}</select></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.status')}</label>
-    <select id="cs_status">${opsi(r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row?.status_siklus || 'aktif', t('common.none'))}</select></div>
+    ${opsiKustom('cs_status', r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row?.status_siklus || 'aktif', t('common.none'))}</div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.keterangan')}</label><textarea id="cs_ket" rows="2">${esc(row?.keterangan || '')}</textarea></div>
   ${row ? `
   <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
@@ -1078,6 +1127,7 @@ async function bukaCaseDrawer(id) {
   let row = null, hearings = [], minutes = [];
   if (id) { const r = await Api.getCase(id); row = r.row; hearings = r.hearings; minutes = r.minutes; }
   bukaAuxDrawer('case', id ? t('cases.drawerTitle') : t('cases.drawerTitleNew'), caseFormHTML(row, hearings, minutes), simpanCase);
+  ['cs_peran', 'cs_tahap', 'cs_status'].forEach(pasangOpsiKustom);
   if (id) {
     $('#cs_h_add').onclick = async () => {
       const tgl = $('#cs_h_tgl').value, jam = $('#cs_h_jam').value, agenda = $('#cs_h_agenda').value;
@@ -1098,10 +1148,10 @@ async function bukaCaseDrawer(id) {
 async function simpanCase() {
   const body = {
     nomorPerkara: $('#cs_nomor').value.trim(), pengadilan: $('#cs_pengadilan').value.trim() || null,
-    jenisPerkara: $('#cs_jenis').value.trim() || null, peranKlien: $('#cs_peran').value || null,
-    tahap: $('#cs_tahap').value, lawanPihakTeks: $('#cs_lawan').value.trim() || null,
+    jenisPerkara: $('#cs_jenis').value.trim() || null, peranKlien: bacaOpsiKustom('cs_peran') || null,
+    tahap: bacaOpsiKustom('cs_tahap'), lawanPihakTeks: $('#cs_lawan').value.trim() || null,
     tanggalDaftar: $('#cs_tgldaftar').value || null, picLegalId: $('#cs_pic').value || null,
-    statusSiklus: $('#cs_status').value, keterangan: $('#cs_ket').value.trim() || null,
+    statusSiklus: bacaOpsiKustom('cs_status'), keterangan: $('#cs_ket').value.trim() || null,
   };
   if (!body.nomorPerkara) return toast(t('cases.err.nomor'));
   try {
@@ -1194,13 +1244,14 @@ function projectFormHTML(row) {
     <input type="range" id="pj_progress" min="0" max="100" step="5" value="${row?.progress_persen ?? 0}"></div>
   <div class="grid2" style="margin-top:12px">
     <div class="f"><label>${t('projects.f.target')}</label><input type="date" id="pj_target" value="${esc(row?.target_selesai ? row.target_selesai.slice(0,10) : '')}"></div>
-    <div class="f"><label>${t('projects.f.status')}</label><select id="pj_status">${opsi(r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', t('common.none'))}</select></div>
+    <div class="f"><label>${t('projects.f.status')}</label>${opsiKustom('pj_status', r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', t('common.none'))}</div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('projects.f.keterangan')}</label><textarea id="pj_ket" rows="3">${esc(row?.keterangan || '')}</textarea></div>`;
 }
 async function bukaProjectDrawer(row) {
   PJ.editing = row ? row.id : null;
   bukaAuxDrawer('project', row ? t('projects.drawerTitle') : t('projects.drawerTitleNew'), projectFormHTML(row), simpanProject);
+  pasangOpsiKustom('pj_status');
   const range = $('#pj_progress');
   if (range) range.addEventListener('input', () => { $('#pj_progress_val').textContent = range.value; });
 }
@@ -1208,7 +1259,7 @@ async function simpanProject() {
   const body = {
     namaProyek: $('#pj_nama').value.trim(), kategori: $('#pj_kategori').value.trim() || null,
     picLegalId: $('#pj_pic').value || null, progressPersen: Number($('#pj_progress').value),
-    targetSelesai: $('#pj_target').value || null, status: $('#pj_status').value,
+    targetSelesai: $('#pj_target').value || null, status: bacaOpsiKustom('pj_status'),
     keterangan: $('#pj_ket').value.trim() || null,
   };
   if (!body.namaProyek) return toast(t('projects.err.nama'));
@@ -1265,26 +1316,27 @@ function pendampinganFormHTML(row) {
   return `
   <div class="grid2">
     <div class="f"><label>${t('pendampingan.f.jenis')} <span class="req">*</span></label>
-      <select id="pd_jenis">${opsi(r.jenis.map((v) => ({ v, l: JENIS_PD_NAMA[v] })), row?.jenis, t('common.none'))}</select></div>
+      ${opsiKustom('pd_jenis', r.jenis.map((v) => ({ v, l: JENIS_PD_NAMA[v] })), row?.jenis, t('common.none'))}</div>
     <div class="f"><label>${t('pendampingan.f.tanggal')}</label><input type="date" id="pd_tanggal" value="${esc(row?.tanggal_kegiatan ? row.tanggal_kegiatan.slice(0,10) : '')}"></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.lokasi')}</label><input id="pd_lokasi" value="${esc(row?.lokasi || '')}"></div>
   <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.pihak')}</label><input id="pd_pihak" value="${esc(row?.pihak_terlibat || '')}"></div>
   <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.deskripsi')}</label><textarea id="pd_deskripsi" rows="3">${esc(row?.deskripsi || '')}</textarea></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>${t('pendampingan.f.status')}</label><select id="pd_status">${opsi(r.status.map((v) => ({ v, l: STATUS_PD_NAMA[v] })), row?.status || 'menunggu', t('common.none'))}</select></div>
+    <div class="f"><label>${t('pendampingan.f.status')}</label>${opsiKustom('pd_status', r.status.map((v) => ({ v, l: STATUS_PD_NAMA[v] })), row?.status || 'menunggu', t('common.none'))}</div>
     <div class="f"><label>${t('pendampingan.f.pic')}</label><select id="pd_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_id, t('common.none'))}</select></div>
   </div>`;
 }
 async function bukaPendampinganDrawer(row) {
   PD.editing = row ? row.id : null;
   bukaAuxDrawer('pendampingan', row ? t('pendampingan.drawerTitle') : t('pendampingan.drawerTitleNew'), pendampinganFormHTML(row), simpanPendampingan);
+  ['pd_jenis', 'pd_status'].forEach(pasangOpsiKustom);
 }
 async function simpanPendampingan() {
   const body = {
-    jenis: $('#pd_jenis').value, tanggalKegiatan: $('#pd_tanggal').value || null,
+    jenis: bacaOpsiKustom('pd_jenis'), tanggalKegiatan: $('#pd_tanggal').value || null,
     lokasi: $('#pd_lokasi').value.trim() || null, pihakTerlibat: $('#pd_pihak').value.trim() || null,
-    deskripsi: $('#pd_deskripsi').value.trim() || null, status: $('#pd_status').value,
+    deskripsi: $('#pd_deskripsi').value.trim() || null, status: bacaOpsiKustom('pd_status'),
     picId: $('#pd_pic').value || null,
   };
   if (!body.jenis) return toast(t('pendampingan.err.jenis'));
@@ -1330,13 +1382,19 @@ function renderDocTable() {
       <td>${fmtUkuran(d.ukuran_byte)}</td>
       <td>${esc(tglTampil(d.uploaded_at.slice(0,10)))}</td>
       <td>${esc(d.uploaded_by_nama || '—')}</td>
-      <td><button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 10px;font-size:11px">${t('docs.download')}</button></td>
+      <td>
+        <button class="btn ghost" data-preview="${d.id}" data-mime="${esc(d.mime_type || '')}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${t('docs.preview')}</button>
+        <button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${t('docs.download')}</button>
+      </td>
     </tr>`).join('');
   document.querySelectorAll('#docBody button[data-dl]').forEach((btn) => {
     btn.onclick = async () => {
       try { await Api.downloadDocument(btn.dataset.dl, btn.dataset.fn); }
       catch (e) { toast(e.message || t('docs.downloadFail')); }
     };
+  });
+  document.querySelectorAll('#docBody button[data-preview]').forEach((btn) => {
+    btn.onclick = () => bukaPreviewDokumen(btn.dataset.preview, btn.dataset.mime, btn.dataset.fn);
   });
 }
 $('#docUploadBtn').onclick = async () => {
@@ -1463,7 +1521,10 @@ onLangChange(() => {
   if (PJ.loaded) { renderProjectCards(); renderProjectTable(); }
   if (PD.loaded) { renderPendampinganCards(); renderPendampinganTable(); }
   if (DC.loaded) { renderDocCards(); renderDocTable(); }
+  if (TM.loaded) renderTimTable();
   if (RT.loaded) renderTarifTable();
+  if (MC.loaded) { renderMyCasesCards(); renderMyCasesTable(); renderKlienKhususPanel(); }
+  if (PR.loaded) { renderProfilIdentitas(); renderProfilProjects(); renderProfilDocs(); }
 });
 
 /* ---------------------------------------------------------------- mulai */
@@ -1666,3 +1727,560 @@ async function simpanTarif() {
 }
 
 $('#addRateBtn').onclick = () => bukaTarifDrawer(null);
+
+/* ================================================================
+   MODUL TEAM & USERS — akun pengguna sisi klien
+
+   Batas wewenangnya sudah ditetapkan RLS sejak Fase 1: hanya
+   app.is_mikk_admin() (Managing Partner / Admin Staf) yang boleh menulis
+   client_memberships. Admin sisi klien pun tidak bisa menambah anggota
+   organisasinya sendiri. Antarmuka ini mengikuti batas itu, tidak
+   melonggarkannya.
+
+   Kata sandi awal dibuat server dan hanya dikembalikan SEKALI. Tidak ada
+   tempat di antarmuka ini yang bisa menampilkannya lagi — kalau hilang,
+   jalannya adalah menerbitkan yang baru.
+   ================================================================ */
+const TM = { rows: [], loaded: false, bolehKelola: false, draft: null };
+
+async function muatTimSemua() {
+  showApiErr('');
+  try {
+    const { rows, bolehKelola } = await Api.clientUsers(S.ws.client_org_id);
+    TM.rows = rows; TM.bolehKelola = bolehKelola; TM.loaded = true;
+    renderTimTable();
+  } catch (err) { showApiErr(err.message || t('team.loadError')); }
+}
+
+function renderTimTable() {
+  $('#addTeamBtn').style.display = TM.bolehKelola ? 'inline-flex' : 'none';
+  $('#teamNote').style.display = TM.bolehKelola ? 'none' : 'flex';
+  $('#teamEmpty').style.display = TM.rows.length ? 'none' : 'block';
+
+  const n = (p) => TM.rows.filter((r) => r.peran === p).length;
+  $('#teamCards').innerHTML = [
+    statCard(t('team.card.total'), TM.rows.length, 'acc-info', t('team.card.total.note'), 'users'),
+    statCard(t('team.card.admin'), n('admin_klien'), 'acc-repl', t('team.card.admin.note'), 'shield'),
+    statCard(t('team.card.aktif'), TM.rows.filter((r) => r.membership_aktif && r.user_aktif).length,
+      'acc-ok', t('team.card.aktif.note'), 'check'),
+  ].join('');
+
+  $('#teamBody').innerHTML = TM.rows.map((r, i) => {
+    const nonaktif = !r.membership_aktif || !r.user_aktif;
+    const aksi = TM.bolehKelola ? `<div class="rowact">
+      <button class="iconbtn" data-edit="${r.membership_id}" title="${esc(t('team.editRole'))}">
+        <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+      <button class="iconbtn" data-reset="${r.user_id}" data-nama="${esc(r.nama)}" title="${esc(t('team.resetPass'))}">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+    </div>` : '<span style="color:var(--muted-2)">—</span>';
+    return `<tr>
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td>${whoMini(r.nama, null)}</td>
+      <td><span class="doc">${esc(r.email)}</span></td>
+      <td><span class="tag">${esc(PERAN_LABEL[r.peran] || r.peran)}</span></td>
+      <td>${r.punya_sandi
+        ? `<span class="pill p-aman">${esc(t('team.sandiAda'))}</span>`
+        : `<span class="pill p-peringatan">${esc(t('team.sandiBelum'))}</span>`}</td>
+      <td><span class="pill ${nonaktif ? 'p-tidak_dipantau' : 'p-aman'}">${
+        esc(nonaktif ? t('team.nonaktif') : t('team.aktif'))}</span></td>
+      <td>${aksi}</td>
+    </tr>`;
+  }).join('');
+
+  document.querySelectorAll('#teamBody [data-edit]').forEach((b) => {
+    b.onclick = () => bukaTimDrawer(TM.rows.find((r) => r.membership_id === b.dataset.edit));
+  });
+  document.querySelectorAll('#teamBody [data-reset]').forEach((b) => {
+    b.onclick = () => resetSandi(b.dataset.reset, b.dataset.nama);
+  });
+}
+
+/* Menampilkan kredensial sekali, dengan peringatan bahwa ini satu-satunya
+   kesempatan membacanya. */
+function tampilkanKredensial(nama, email, sandi) {
+  $('#teamNewCred').innerHTML = `<div class="acccode">
+    <div class="kode">${esc(sandi)}</div>
+    <div class="tx">
+      <b>${esc(t('team.credTitle', { nama }))}</b>
+      ${esc(t('team.credDesc'))}
+      ${email ? `<div style="margin-top:4px;font-family:var(--mono);color:rgba(255,255,255,.9)">${esc(email)}</div>` : ''}
+    </div>
+    <button class="btn ghost" id="tutupCred">${esc(t('team.credClose'))}</button>
+  </div>`;
+  $('#tutupCred').onclick = () => { $('#teamNewCred').innerHTML = ''; };
+}
+
+function timFormHTML(err) {
+  const d = TM.draft;
+  const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
+  const opsiPeran = ['admin_klien', 'legal_manager', 'viewer'].map((v) =>
+    `<option value="${v}" ${d.peran === v ? 'selected' : ''}>${esc(PERAN_LABEL[v])}</option>`).join('');
+
+  return `
+  ${d.membershipId ? '' : `
+  <div class="f"><label>${t('team.f.nama')} <span class="req">*</span></label>
+    <input id="tm_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
+  <div class="f" style="margin-top:12px"><label>${t('team.f.email')} <span class="req">*</span></label>
+    <input id="tm_email" type="email" value="${esc(d.email || '')}">
+    <div class="hint">${esc(t('team.f.emailHint'))}</div>${e('email')}</div>
+  <div class="f" style="margin-top:12px"><label>${t('team.f.noHp')}</label>
+    <input id="tm_hp" inputmode="tel" value="${esc(d.noHp || '')}"></div>`}
+
+  <div class="f" style="margin-top:12px"><label>${t('team.f.peran')} <span class="req">*</span></label>
+    <select id="tm_peran">${opsiPeran}</select>
+    <div class="hint">${esc(t('team.f.peranHint'))}</div></div>
+
+  ${d.membershipId ? `
+  <label class="chk" style="margin-top:6px"><input type="checkbox" id="tm_aktif" ${d.aktif !== false ? 'checked' : ''}>
+    <span><b>${t('team.f.aktif')}</b>${t('team.f.aktifDesc')}</span></label>` : `
+  <div class="warnbox wb-warn" style="margin:14px 0 0">
+    <span class="ic">🔑</span>
+    <div><b>${esc(t('team.f.sandiTitle'))}</b>${esc(t('team.f.sandiDesc'))}</div>
+  </div>`}`;
+}
+
+function bukaTimDrawer(row) {
+  TM.draft = row ? {
+    membershipId: row.membership_id, nama: row.nama, email: row.email,
+    peran: row.peran, aktif: row.membership_aktif,
+  } : { membershipId: null, nama: '', email: '', noHp: '', peran: 'legal_manager' };
+  bukaAuxDrawer('team', row ? t('team.drawerTitle') : t('team.drawerTitleNew'),
+    timFormHTML(), simpanTim);
+}
+
+function gambarTimDrawer(err) {
+  const body = $('#auxDBody');
+  if (body) body.innerHTML = timFormHTML(err);
+}
+
+async function simpanTim() {
+  const d = TM.draft;
+  const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
+  const err = {};
+
+  if (!d.membershipId) {
+    d.nama = g('tm_nama'); d.email = g('tm_email'); d.noHp = g('tm_hp');
+    if (!d.nama) err.nama = t('team.err.nama');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) err.email = t('team.err.email');
+  }
+  d.peran = g('tm_peran');
+  if ($('#tm_aktif')) d.aktif = $('#tm_aktif').checked;
+  if (Object.keys(err).length) return gambarTimDrawer(err);
+
+  const btn = $('#auxDSave'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    if (d.membershipId) {
+      await Api.updateClientUser(d.membershipId, { peran: d.peran, aktif: d.aktif });
+      tutupAuxDrawer();
+      toast(t('common.saved'));
+    } else {
+      const res = await Api.createClientUser({
+        clientOrgId: S.ws.client_org_id, nama: d.nama, email: d.email,
+        noHp: d.noHp || null, peran: d.peran,
+      });
+      tutupAuxDrawer();
+      if (res.kataSandiAwal) tampilkanKredensial(d.nama, d.email, res.kataSandiAwal);
+      toast(res.pesan || t('team.created'));
+    }
+    TM.loaded = false;
+    await muatTimSemua();
+  } catch (e) {
+    toast(e.message || t('common.saveFailed'));
+  } finally { btn.disabled = false; btn.textContent = t('common.save'); }
+}
+
+async function resetSandi(userId, nama) {
+  // Menerbitkan kata sandi baru membatalkan yang lama — pastikan disengaja.
+  if (!window.confirm(t('team.resetConfirm', { nama }))) return;
+  try {
+    const { kataSandiAwal } = await Api.resetClientPassword(userId);
+    const baris = TM.rows.find((r) => r.user_id === userId);
+    tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal);
+    TM.loaded = false;
+    await muatTimSemua();
+    toast(t('team.resetDone'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
+}
+
+$('#addTeamBtn').onclick = () => bukaTimDrawer(null);
+
+/* ================================================================
+   MODUL PERKARA SAYA — dashboard pribadi lintas klien
+   Beda dari modul Litigasi & Sidang (secCases): itu selalu terikat pada
+   satu client_org_id (workspace terpilih). Di sini SEMUA perkara yang
+   ditugaskan ke pengguna yang sedang login (PIC atau lewat
+   client_assignments) ditampilkan bersama, lintas klien retainer,
+   perorangan, maupun kelompok (GET /api/my/cases, /api/my/summary).
+   Sekalian menampung layar kelola Klien Perorangan & Kelompok, karena
+   keduanya erat: perkara jenis baru butuh pemiliknya didaftarkan dulu.
+   ================================================================ */
+const MC = { rows: [], summary: null, loaded: false, ref: null, orgRows: [] };
+const KP = { individuals: [], groups: [], loaded: false };
+
+async function muatMyCasesSemua() {
+  showApiErr('');
+  try {
+    const [list, sum] = await Promise.all([Api.myCases(), Api.mySummary()]);
+    MC.rows = list.rows; MC.summary = sum.summary; MC.loaded = true;
+    await muatKlienKhususSemua();
+    renderMyCasesCards(); renderMyCasesTable(); renderKlienKhususPanel();
+  } catch (err) { showApiErr(err.message || t('mycases.loadError')); }
+}
+async function muatKlienKhususSemua() {
+  try {
+    const [individuals, groups] = await Promise.all([Api.individualClients(), Api.clientGroups()]);
+    KP.individuals = individuals.rows; KP.groups = groups.rows; KP.loaded = true;
+  } catch (e) { /* non-fatal: panel klien tetap kosong, sisa layar tetap tampil */ }
+}
+function renderMyCasesCards() {
+  const s = MC.summary || {};
+  $('#myCasesCards').innerHTML = [
+    statCard(t('mycases.card.aktif'), s.perkara_aktif ?? 0, 'acc-info', t('mycases.card.aktif.note'), 'scale'),
+    statCard(t('mycases.card.sidang7'), s.sidang_7_hari ?? 0, 'acc-warn', t('mycases.card.sidang7.note'), 'clock'),
+    statCard(t('mycases.card.retainer'), s.klien_retainer ?? 0, '', t('mycases.card.retainer.note'), 'bank'),
+    statCard(t('mycases.card.perorangan'), s.klien_perorangan ?? 0, '', t('mycases.card.perorangan.note'), 'users'),
+    statCard(t('mycases.card.kelompok'), s.klien_kelompok ?? 0, '', t('mycases.card.kelompok.note'), 'shield'),
+  ].join('');
+}
+function renderMyCasesTable() {
+  $('#myCasesEmpty').style.display = MC.rows.length ? 'none' : 'block';
+  $('#myCasesBody').innerHTML = MC.rows.map((c, i) => {
+    const sidang = c.sidang_terdekat_tanggal
+      ? `${esc(tglTampil(c.sidang_terdekat_tanggal))}${c.hari_ke_sidang != null ? ` <span class="days ${c.hari_ke_sidang <= 7 ? 'soon' : ''}">(${t('common.daysLeft', { n: c.hari_ke_sidang })})</span>` : ''}`
+      : `<span style="color:var(--muted-2)">${esc(t('cases.belumDijadwalkan'))}</span>`;
+    return `<tr data-id="${c.id}">
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td><div class="ttl">${esc(c.klien_nama || '—')}</div><span class="tag">${esc(JENIS_KLIEN_NAMA[c.jenis_klien] || c.jenis_klien)}</span></td>
+      <td><div class="ttl">${esc(c.nomor_perkara)}</div>${c.lawan_pihak_teks ? `<div class="sub">vs ${esc(c.lawan_pihak_teks)}</div>` : ''}</td>
+      <td><span class="tag">${esc(TAHAP_NAMA[c.tahap] || c.tahap)}</span></td>
+      <td>${sidang}</td>
+      <td><span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span></td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('#myCasesBody tr[data-id]').forEach((tr) => {
+    tr.onclick = () => bukaMyCaseDrawer(MC.rows.find((c) => c.id === tr.dataset.id));
+  });
+}
+function pemilikDariBarisPerkara(row) {
+  if (row.client_org_id) return { clientOrgId: row.client_org_id };
+  if (row.individual_client_id) return { individualClientId: row.individual_client_id };
+  return { clientGroupId: row.client_group_id };
+}
+/* Sengaja lebih sederhana dari drawer di modul Litigasi & Sidang (tanpa
+   jadwal sidang/catatan sidang) — mengedit itu tetap lewat modul Litigasi
+   & Sidang milik klien terkait. Di sini fokus ke apa yang paling sering
+   diubah dari sudut pandang "perkara saya": tahap, status, PIC, catatan. */
+let mcEditing = null;
+async function bukaMyCaseDrawer(row) {
+  mcEditing = row;
+  try { MC.ref = await Api.casesReference(pemilikDariBarisPerkara(row)); }
+  catch (e) { MC.ref = { pic: [], tahap: [], peranKlien: [], statusSiklus: [] }; }
+  bukaAuxDrawer('mycase', t('mycases.drawerTitle', { nomor: row.nomor_perkara }), myCaseFormHTML(row), simpanMyCase);
+  ['mc_tahap', 'mc_status'].forEach(pasangOpsiKustom);
+}
+function myCaseFormHTML(row) {
+  const r = MC.ref;
+  return `
+  <div class="f"><label>${t('mycases.f.klien')}</label>
+    <div class="ttl">${esc(row.klien_nama)} <span class="tag">${esc(JENIS_KLIEN_NAMA[row.jenis_klien] || row.jenis_klien)}</span></div></div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="f"><label>${t('cases.f.tahap')}</label>${opsiKustom('mc_tahap', r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row.tahap, t('common.none'))}</div>
+    <div class="f"><label>${t('cases.f.status')}</label>${opsiKustom('mc_status', r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row.status_siklus, t('common.none'))}</div>
+  </div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.pic')}</label>
+    <select id="mc_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row.pic_legal_id, t('common.none'))}</select></div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.keterangan')}</label><textarea id="mc_ket" rows="3">${esc(row.keterangan || '')}</textarea></div>
+  <p class="hint" style="margin-top:10px">${esc(t('mycases.editHint'))}</p>`;
+}
+async function simpanMyCase() {
+  const body = {
+    tahap: bacaOpsiKustom('mc_tahap'), statusSiklus: bacaOpsiKustom('mc_status'),
+    picLegalId: $('#mc_pic').value || null, keterangan: $('#mc_ket').value.trim() || null,
+  };
+  try {
+    await Api.updateCase(mcEditing.id, body);
+    tutupAuxDrawer(); await muatMyCasesSemua(); toast(t('common.saved'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
+}
+
+/* ---- + Tambah Perkara Baru: pilih dulu jenis klien pemiliknya ---- */
+async function bukaMyCaseBaruDrawer() {
+  let orgRows = [];
+  try { orgRows = (await Api.clientOrgs()).rows; } catch (e) { /* tetap lanjut, list org kosong */ }
+  MC.orgRows = orgRows;
+  await muatKlienKhususSemua();
+  bukaAuxDrawer('mycasebaru', t('mycases.newTitle'), myCaseBaruFormHTML(), simpanMyCaseBaru);
+  $('#mcb_tipe').addEventListener('change', gambarMyCaseBaruPemilik);
+  gambarMyCaseBaruPemilik();
+  pasangOpsiKustom('mcb_tahap');
+}
+function myCaseBaruFormHTML() {
+  return `
+  <div class="f"><label>${t('mycases.f.tipeKlien')}</label>
+    <select id="mcb_tipe">
+      <option value="org">${esc(t('mycases.tipe.retainer'))}</option>
+      <option value="indiv">${esc(t('mycases.tipe.perorangan'))}</option>
+      <option value="grup">${esc(t('mycases.tipe.kelompok'))}</option>
+    </select></div>
+  <div class="f" id="mcb_pemilikWrap" style="margin-top:12px"></div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.nomor')} <span class="req">*</span></label><input id="mcb_nomor"></div>
+  <div class="f" style="margin-top:12px"><label>${t('cases.f.tahap')}</label>
+    ${opsiKustom('mcb_tahap', ['pendaftaran','mediasi','persidangan','pembuktian','putusan','banding','kasasi','pk','selesai']
+      .map((v) => ({ v, l: TAHAP_NAMA[v] })), 'pendaftaran', t('common.none'))}</div>
+  <p class="hint" style="margin-top:10px">${esc(t('mycases.newHint'))}</p>`;
+}
+function gambarMyCaseBaruPemilik() {
+  const tipe = $('#mcb_tipe').value, wrap = $('#mcb_pemilikWrap');
+  if (tipe === 'indiv') {
+    wrap.innerHTML = `<label>${t('mycases.f.klien')}</label>
+      <select id="mcb_pemilik">${opsi(KP.individuals.map((c) => ({ v: c.id, l: c.nama })), null, t('common.none'))}</select>
+      <div class="hint">${esc(t('mycases.belumAda'))} <button type="button" class="btn ghost" id="mcb_barIndiv" style="padding:2px 8px;font-size:11px">${esc(t('mycases.tambahCepat'))}</button></div>`;
+    $('#mcb_barIndiv').onclick = async () => {
+      const nama = window.prompt(t('mycases.promptNamaIndiv'));
+      if (!nama || !nama.trim()) return;
+      try {
+        await Api.createIndividualClient({ nama: nama.trim() });
+        await muatKlienKhususSemua();
+        gambarMyCaseBaruPemilik();
+      } catch (e) { toast(e.message || t('common.saveFailed')); }
+    };
+  } else if (tipe === 'grup') {
+    wrap.innerHTML = `<label>${t('mycases.f.klien')}</label>
+      <select id="mcb_pemilik">${opsi(KP.groups.map((g) => ({ v: g.id, l: g.nama_kelompok })), null, t('common.none'))}</select>`;
+  } else {
+    wrap.innerHTML = `<label>${t('mycases.f.klien')}</label>
+      <select id="mcb_pemilik">${opsi(MC.orgRows.map((o) => ({ v: o.client_org_id, l: o.nama_singkat })), null, t('common.none'))}</select>`;
+  }
+}
+async function simpanMyCaseBaru() {
+  const tipe = $('#mcb_tipe').value;
+  const pemilikId = $('#mcb_pemilik')?.value;
+  const nomor = $('#mcb_nomor').value.trim();
+  if (!pemilikId) return toast(t('mycases.err.klien'));
+  if (!nomor) return toast(t('cases.err.nomor'));
+  const body = {
+    nomorPerkara: nomor, tahap: bacaOpsiKustom('mcb_tahap'),
+    // PIC diisi otomatis ke diri sendiri — supaya perkara baru langsung
+    // muncul di "Perkara Saya" tanpa langkah penugasan terpisah. Bisa
+    // diubah lagi lewat drawer edit (bukaMyCaseDrawer) kalau perlu.
+    picLegalId: S.user?.id || null,
+    clientOrgId: tipe === 'org' ? pemilikId : null,
+    individualClientId: tipe === 'indiv' ? pemilikId : null,
+    clientGroupId: tipe === 'grup' ? pemilikId : null,
+  };
+  try {
+    await Api.createCase(body);
+    tutupAuxDrawer(); await muatMyCasesSemua(); toast(t('common.saved'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
+}
+$('#addMyCaseBtn').onclick = () => bukaMyCaseBaruDrawer();
+
+/* ---- Klien Perorangan & Kelompok — panel kelola sederhana ---- */
+function renderKlienKhususPanel() {
+  $('#klienIndivBody').innerHTML = KP.individuals.map((c, i) => `<tr>
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td>${esc(c.nama)}</td><td>${esc(c.nik || '—')}</td><td>${esc(c.no_hp || '—')}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted-2);padding:16px">${esc(t('mycases.klien.kosong'))}</td></tr>`;
+  $('#klienGrupBody').innerHTML = KP.groups.map((g, i) => `<tr>
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td>${esc(g.nama_kelompok)}</td>
+      <td>${(g.anggota || []).map((a) => esc(a.nama)).join(', ') || '—'}</td>
+    </tr>`).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--muted-2);padding:16px">${esc(t('mycases.klien.kosong'))}</td></tr>`;
+}
+function bukaKlienIndivDrawer() {
+  bukaAuxDrawer('klienindiv', t('mycases.indivDrawerTitle'), `
+    <div class="f"><label>${t('mycases.f.nama')} <span class="req">*</span></label><input id="ki_nama"></div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="f"><label>${t('mycases.f.nik')}</label><input id="ki_nik"></div>
+      <div class="f"><label>${t('mycases.f.noHp')}</label><input id="ki_hp"></div>
+    </div>
+    <div class="f" style="margin-top:12px"><label>${t('mycases.f.alamat')}</label><textarea id="ki_alamat" rows="2"></textarea></div>`,
+    async () => {
+      const nama = $('#ki_nama').value.trim();
+      if (!nama) return toast(t('mycases.err.nama'));
+      try {
+        await Api.createIndividualClient({
+          nama, nik: $('#ki_nik').value.trim() || null,
+          noHp: $('#ki_hp').value.trim() || null, alamat: $('#ki_alamat').value.trim() || null,
+        });
+        tutupAuxDrawer(); await muatKlienKhususSemua(); renderKlienKhususPanel(); toast(t('common.saved'));
+      } catch (e) { toast(e.message || t('common.saveFailed')); }
+    });
+}
+function bukaKlienGrupDrawer() {
+  bukaAuxDrawer('kliengrup', t('mycases.grupDrawerTitle'), `
+    <div class="f"><label>${t('mycases.f.namaKelompok')} <span class="req">*</span></label><input id="kg_nama"></div>
+    <div class="f" style="margin-top:12px"><label>${t('mycases.f.anggota')}</label>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow:auto">
+        ${KP.individuals.map((c) => `<label class="chk"><input type="checkbox" value="${c.id}" class="kg_anggota"><span>${esc(c.nama)}</span></label>`).join('')
+          || `<p class="hint">${esc(t('mycases.klien.kosong'))}</p>`}
+      </div></div>`,
+    async () => {
+      const nama = $('#kg_nama').value.trim();
+      if (!nama) return toast(t('mycases.err.namaKelompok'));
+      const anggotaIds = Array.from(document.querySelectorAll('.kg_anggota:checked')).map((el) => el.value);
+      try {
+        await Api.createClientGroup({ namaKelompok: nama, anggotaIds });
+        tutupAuxDrawer(); await muatKlienKhususSemua(); renderKlienKhususPanel(); toast(t('common.saved'));
+      } catch (e) { toast(e.message || t('common.saveFailed')); }
+    });
+}
+$('#addKlienIndivBtn').onclick = () => bukaKlienIndivDrawer();
+$('#addKlienGrupBtn').onclick = () => bukaKlienGrupDrawer();
+
+/* ================================================================
+   PRATINJAU DOKUMEN — dipakai Arsip Dokumen (secDocs) & Profil Saya.
+   Tidak ada endpoint baru: blob yang sama dengan unduhan, ditampilkan di
+   modal alih-alih dipaksa men-download (lihat Api.previewDocumentBlob).
+   ================================================================ */
+async function bukaPreviewDokumen(id, mime, nama) {
+  const modal = $('#previewModal'), body = $('#previewBody');
+  $('#previewTitle').textContent = nama || '';
+  body.innerHTML = `<p class="hint">${esc(t('docs.previewLoading'))}</p>`;
+  modal.style.display = 'flex';
+  try {
+    const blob = await Api.previewDocumentBlob(id);
+    const url = URL.createObjectURL(blob);
+    if ((mime || '').startsWith('image/')) {
+      body.innerHTML = `<img src="${url}" alt="${esc(nama || '')}" style="max-width:100%;max-height:75vh;display:block;margin:0 auto">`;
+    } else if (mime === 'application/pdf') {
+      body.innerHTML = `<iframe src="${url}" title="${esc(nama || '')}" style="width:100%;height:75vh;border:0"></iframe>`;
+    } else {
+      body.innerHTML = `<p class="hint">${esc(t('docs.previewUnsupported'))}</p>`;
+    }
+  } catch (e) {
+    body.innerHTML = `<p class="hint">${esc(e.message || t('docs.downloadFail'))}</p>`;
+  }
+}
+function tutupPreviewDokumen() {
+  $('#previewModal').style.display = 'none';
+  $('#previewBody').innerHTML = '';
+}
+$('#previewClose').onclick = tutupPreviewDokumen;
+$('#previewModal').addEventListener('click', (e) => { if (e.target.id === 'previewModal') tutupPreviewDokumen(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#previewModal').style.display === 'flex') tutupPreviewDokumen(); });
+
+/* ================================================================
+   MODUL PROFIL SAYA — satu layar per peran (staf & klien)
+   Data legalitas milik peran yang sedang login + daftar proyek/perkara
+   yang ditangani + dokumen milik proyek terpilih (lewat endpoint
+   dokumen yang sudah ada — lihat renderProfilDocs). Staf boleh
+   mengedit data legalitasnya sendiri; klien hanya membaca data
+   organisasinya (dikelola staf MIKK seperti sekarang).
+   ================================================================ */
+const PR = { me: null, projects: [], loaded: false, selected: null };
+
+async function muatProfilSemua() {
+  showApiErr('');
+  try {
+    const [me, projects] = await Promise.all([Api.profileMe(), Api.profileProjects()]);
+    PR.me = me; PR.projects = projects.rows; PR.loaded = true;
+    renderProfilIdentitas(); renderProfilProjects(); renderProfilDocs();
+  } catch (err) { showApiErr(err.message || t('profile.loadError')); }
+}
+function renderProfilIdentitas() {
+  const u = PR.me.user, l = PR.me.legalitas || {};
+  const isStaff = l.tipe === 'staf';
+  $('#profileCards').innerHTML = [
+    statCard(t('profile.card.proyek'), PR.projects.length, 'acc-info', t('profile.card.proyek.note'), 'folder'),
+  ].join('');
+  $('#profileIdentitas').innerHTML = `
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px">
+      <div class="av" style="width:48px;height:48px;font-size:16px">${esc(initials(u.nama))}</div>
+      <div><div style="font-family:var(--serif);font-size:16px">${esc(u.nama)}</div>
+        <div class="sub">${esc(u.email)}${isStaff && l.jabatan ? ' · ' + esc(JABATAN_NAMA[l.jabatan]) : ''}</div></div>
+    </div>
+    ${isStaff ? `
+    <div class="grid2">
+      <div class="f"><label>${t('profile.f.gelar')}</label><input id="pf_gelar" value="${esc(l.gelar || '')}"></div>
+      <div class="f"><label>${t('profile.f.nomorIzin')}</label><input id="pf_izin" value="${esc(l.nomor_izin_advokat || '')}"></div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="f"><label>${t('profile.f.nik')}</label><input id="pf_nik" value="${esc(l.nik || '')}"></div>
+      <div class="f"><label>${t('profile.f.alamat')}</label><input id="pf_alamat" value="${esc(l.alamat || '')}"></div>
+    </div>
+    <button class="btn gold" id="pfSaveBtn" style="margin-top:14px">${esc(t('common.save'))}</button>`
+    : (l.organisasi || []).map((o) => `
+      <div style="margin-bottom:10px">
+        <div class="ttl">${esc(o.nama_legal)} <span class="tag">${esc(PERAN_LABEL[o.peran] || o.peran)}</span></div>
+        <div class="sub">NPWP: ${esc(o.npwp || '—')} · NIB: ${esc(o.nib || '—')}</div>
+        <div class="sub">${esc(o.alamat || '—')}</div>
+      </div>`).join('')}`;
+  if (isStaff) {
+    $('#pfSaveBtn').onclick = async () => {
+      try {
+        await Api.updateProfileMe({
+          gelar: $('#pf_gelar').value.trim() || null, nomorIzinAdvokat: $('#pf_izin').value.trim() || null,
+          nik: $('#pf_nik').value.trim() || null, alamat: $('#pf_alamat').value.trim() || null,
+        });
+        toast(t('common.saved'));
+        PR.me = await Api.profileMe(); renderProfilIdentitas();
+      } catch (e) { toast(e.message || t('common.saveFailed')); }
+    };
+  }
+}
+function renderProfilProjects() {
+  $('#profileProjectEmpty').style.display = PR.projects.length ? 'none' : 'block';
+  $('#profileProjectBody').innerHTML = PR.projects.map((p, i) => `<tr data-i="${i}" style="${PR.selected === i ? 'background:#f8fafc' : ''}">
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td><span class="tag">${esc(PROJEK_JENIS_NAMA[p.jenis] || p.jenis)}</span></td>
+      <td><div class="ttl">${esc(p.judul)}</div></td>
+      <td>${esc(p.klien_nama || '—')}</td>
+      <td>${esc(JENIS_KLIEN_NAMA[p.klien_jenis] || p.klien_jenis)}</td>
+      <td><span class="tag">${esc(p.status)}</span></td>
+    </tr>`).join('');
+  document.querySelectorAll('#profileProjectBody tr[data-i]').forEach((tr) => {
+    tr.onclick = () => { PR.selected = Number(tr.dataset.i); renderProfilProjects(); renderProfilDocs(); };
+  });
+}
+function pemilikDariProyekProfil(p) {
+  if (p.client_org_id) return { clientOrgId: p.client_org_id };
+  if (p.individual_client_id) return { individualClientId: p.individual_client_id };
+  if (p.client_group_id) return { clientGroupId: p.client_group_id };
+  return null;
+}
+function entityTypeDariJenisProfil(jenis) {
+  return jenis === 'perkara' ? 'case' : jenis === 'proyek' ? 'project' : 'contract';
+}
+async function renderProfilDocs() {
+  const wrap = $('#profileDocsPanel');
+  const p = PR.selected != null ? PR.projects[PR.selected] : null;
+  const owner = p ? pemilikDariProyekProfil(p) : null;
+  if (!p || !owner) { wrap.innerHTML = `<p class="hint">${esc(t('profile.docs.pilihDulu'))}</p>`; return; }
+
+  try {
+    const { rows } = await Api.documents({ ...owner, entityType: entityTypeDariJenisProfil(p.jenis), entityId: p.id });
+    wrap.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input type="file" id="pf_docFile" style="flex:1">
+        <button class="btn gold" id="pf_docUpload" style="padding:7px 14px;font-size:12px">${esc(t('docs.uploadBtn'))}</button>
+      </div>
+      <div class="tscroll"><table style="min-width:480px"><thead><tr>
+        <th style="width:34px">#</th><th>${esc(t('docs.th.nama'))}</th>
+        <th>${esc(t('docs.th.ukuran'))}</th><th style="width:160px">${esc(t('docs.th.aksi'))}</th>
+      </tr></thead><tbody>${rows.map((d, i) => `<tr>
+          <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+          <td>${esc(d.nama_file)}</td><td>${fmtUkuran(d.ukuran_byte)}</td>
+          <td><button class="btn ghost" data-preview="${d.id}" data-mime="${esc(d.mime_type || '')}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${esc(t('docs.preview'))}</button>
+            <button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${esc(t('docs.download'))}</button></td>
+        </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted-2);padding:16px">${esc(t('docs.empty.title'))}</td></tr>`}</tbody></table></div>`;
+    document.querySelectorAll('#profileDocsPanel [data-dl]').forEach((btn) => {
+      btn.onclick = () => Api.downloadDocument(btn.dataset.dl, btn.dataset.fn).catch((e) => toast(e.message || t('docs.downloadFail')));
+    });
+    document.querySelectorAll('#profileDocsPanel [data-preview]').forEach((btn) => {
+      btn.onclick = () => bukaPreviewDokumen(btn.dataset.preview, btn.dataset.mime, btn.dataset.fn);
+    });
+    $('#pf_docUpload').onclick = async () => {
+      const fileEl = $('#pf_docFile');
+      if (!fileEl.files.length) return toast(t('docs.uploadHint.pilih'));
+      const fd = new FormData();
+      fd.append('file', fileEl.files[0]);
+      Object.entries(owner).forEach(([k, v]) => fd.append(k, v));
+      fd.append('kategoriArsip', p.jenis === 'perkara' ? 'perkara' : p.jenis === 'kontrak' ? 'kontrak' : 'lainnya');
+      fd.append('entityType', entityTypeDariJenisProfil(p.jenis));
+      fd.append('entityId', p.id);
+      try { await Api.uploadDocument(fd); fileEl.value = ''; toast(t('docs.uploaded')); renderProfilDocs(); }
+      catch (e) { toast(e.message || t('docs.uploadHint.fail')); }
+    };
+  } catch (e) { wrap.innerHTML = `<p class="hint">${esc(e.message || t('docs.loadError'))}</p>`; }
+}

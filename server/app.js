@@ -16,6 +16,11 @@ const pendampinganRoutes = require('./routes/pendampingan.routes');
 const documentsRoutes = require('./routes/documents.routes');
 const prospectsRoutes = require('./routes/prospects.routes');
 const serviceRatesRoutes = require('./routes/service-rates.routes');
+const clientUsersRoutes = require('./routes/client-users.routes');
+const individualClientsRoutes = require('./routes/individual-clients.routes');
+const clientGroupsRoutes = require('./routes/client-groups.routes');
+const myRoutes = require('./routes/my.routes');
+const profileRoutes = require('./routes/profile.routes');
 
 const app = express();
 
@@ -36,6 +41,11 @@ app.use('/api/pendampingan', pendampinganRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/prospects', prospectsRoutes);
 app.use('/api/service-rates', serviceRatesRoutes);
+app.use('/api/client-users', clientUsersRoutes);
+app.use('/api/individual-clients', individualClientsRoutes);
+app.use('/api/client-groups', clientGroupsRoutes);
+app.use('/api/my', myRoutes);
+app.use('/api/profile', profileRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res, next) => {

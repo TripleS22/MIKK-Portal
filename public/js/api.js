@@ -11,6 +11,18 @@ const Api = (() => {
   function token() { return localStorage.getItem('mikk_token'); }
   function setToken(t) { t ? localStorage.setItem('mikk_token', t) : localStorage.removeItem('mikk_token'); }
 
+  /* Diambil terpisah dari downloadDocument supaya bisa dipakai ulang oleh
+     pratinjau (buka di modal, bukan dipaksa unduh) tanpa endpoint baru —
+     server/routes/documents.routes.js hanya punya satu jalur baca berkas,
+     yang sudah lebih dulu ditanya lewat RLS. */
+  async function fetchDocumentBlob(id) {
+    const headers = {};
+    if (token()) headers.Authorization = 'Bearer ' + token();
+    const res = await fetch(BASE + `/documents/${id}/download`, { headers });
+    if (!res.ok) { const d = await res.json().catch(() => null); throw new Error((d && d.error) || 'Gagal memuat dokumen.'); }
+    return res.blob();
+  }
+
   async function call(path, { method = 'GET', body, qs } = {}) {
     let url = BASE + path;
     if (qs) {
@@ -69,6 +81,12 @@ const Api = (() => {
     createRate: (body) => call('/service-rates', { method: 'POST', body }),
     updateRate: (id, body) => call(`/service-rates/${id}`, { method: 'PATCH', body }),
 
+    /* ---- Akun pengguna sisi klien ---- */
+    clientUsers: (clientOrgId) => call('/client-users', { qs: { clientOrgId } }),
+    createClientUser: (body) => call('/client-users', { method: 'POST', body }),
+    updateClientUser: (id, body) => call(`/client-users/${id}`, { method: 'PATCH', body }),
+    resetClientPassword: (userId) => call(`/client-users/${userId}/reset-password`, { method: 'POST' }),
+
     permits: (clientOrgId) => call('/permits', { qs: { clientOrgId } }),
     permitsDashboard: (clientOrgId) => call('/permits/dashboard', { qs: { clientOrgId } }),
     permitGap: (clientOrgId) => call('/permits/gap', { qs: { clientOrgId } }),
@@ -77,9 +95,12 @@ const Api = (() => {
     createPermit: (body) => call('/permits', { method: 'POST', body }),
     updatePermit: (id, body) => call(`/permits/${id}`, { method: 'PATCH', body }),
 
-    cases: (clientOrgId) => call('/cases', { qs: { clientOrgId } }),
+    // Sama seperti documents(): string = clientOrgId lama, objek = pilih salah
+    // satu dari clientOrgId/individualClientId/clientGroupId (lihat
+    // server/routes/cases.routes.js — perkara kini bisa dimiliki tiga jenis pihak).
+    cases: (owner) => call('/cases', { qs: typeof owner === 'string' ? { clientOrgId: owner } : owner }),
     casesDashboard: (clientOrgId) => call('/cases/dashboard', { qs: { clientOrgId } }),
-    casesReference: (clientOrgId) => call('/cases/reference', { qs: { clientOrgId } }),
+    casesReference: (owner) => call('/cases/reference', { qs: typeof owner === 'string' ? { clientOrgId: owner } : owner }),
     getCase: (id) => call(`/cases/one/${id}`),
     createCase: (body) => call('/cases', { method: 'POST', body }),
     updateCase: (id, body) => call(`/cases/${id}`, { method: 'PATCH', body }),
@@ -98,7 +119,11 @@ const Api = (() => {
     createPendampingan: (body) => call('/pendampingan', { method: 'POST', body }),
     updatePendampingan: (id, body) => call(`/pendampingan/${id}`, { method: 'PATCH', body }),
 
-    documents: (clientOrgId) => call('/documents', { qs: { clientOrgId } }),
+    // Menerima string (clientOrgId lama, dipertahankan demi kompatibilitas)
+    // ATAU sebuah objek { clientOrgId | individualClientId | clientGroupId,
+    // entityType?, entityId? } — dokumen sekarang bisa melekat ke salah satu
+    // dari tiga jenis pemilik (lihat server/routes/documents.routes.js).
+    documents: (owner) => call('/documents', { qs: typeof owner === 'string' ? { clientOrgId: owner } : owner }),
     uploadDocument: async (formData) => {
       const headers = {};
       if (token()) headers.Authorization = 'Bearer ' + token();
@@ -108,16 +133,30 @@ const Api = (() => {
       return data;
     },
     downloadDocument: async (id, filenameFallback) => {
-      const headers = {};
-      if (token()) headers.Authorization = 'Bearer ' + token();
-      const res = await fetch(BASE + `/documents/${id}/download`, { headers });
-      if (!res.ok) { const d = await res.json().catch(() => null); throw new Error((d && d.error) || 'Gagal mengunduh.'); }
-      const blob = await res.blob();
+      const blob = await fetchDocumentBlob(id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = filenameFallback || 'dokumen';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
     },
+    // Dipakai tombol "Pratinjau": kembalikan blob-nya saja, pemanggil yang
+    // memutuskan cara menampilkannya (<img>/<iframe>) lewat URL.createObjectURL.
+    previewDocumentBlob: (id) => fetchDocumentBlob(id),
+
+    /* ---- Klien perorangan & kelompok (bareng-bareng) ---- */
+    individualClients: () => call('/individual-clients'),
+    createIndividualClient: (body) => call('/individual-clients', { method: 'POST', body }),
+    clientGroups: () => call('/client-groups'),
+    createClientGroup: (body) => call('/client-groups', { method: 'POST', body }),
+
+    /* ---- Dashboard pribadi lintas klien ("Perkara Saya") ---- */
+    myCases: () => call('/my/cases'),
+    mySummary: () => call('/my/summary'),
+
+    /* ---- Profil per peran ---- */
+    profileMe: () => call('/profile/me'),
+    updateProfileMe: (body) => call('/profile/me', { method: 'PATCH', body }),
+    profileProjects: () => call('/profile/me/projects'),
   };
 })();

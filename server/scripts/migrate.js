@@ -30,6 +30,10 @@ const ORDER = [
   '08_fase3_schema.sql',
   '09_fase3_rls.sql',
   '10_fase3_seed_kupon.sql',
+  '11_klien_perorangan_kelompok.sql',
+  '12_klien_perorangan_kelompok_rls.sql',
+  '13_opsi_bebas_isi_sendiri.sql',
+  '14_profil_data_legalitas.sql',
 ];
 
 async function main() {
