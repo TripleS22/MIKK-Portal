@@ -10,15 +10,23 @@
 // tiap route jadi gaya Workers murni. server/app.js (Express) dipakai
 // APA ADANYA, tidak diubah untuk berkas ini.
 //
-// initDb() TIDAK dipanggil di scope modul (top-level) — sudah dicoba dan
-// gagal nyata: Workers menolak operasi async (pg.Pool melakukan I/O saat
-// dibuat) di luar sebuah handler ("Disallowed operation called within
-// global scope"). Karena itu diundur sampai permintaan pertama BENAR-
-// BENAR masuk, di dalam fetch() di bawah — env (berisi binding
-// Hyperdrive) juga cuma valid di situ, bukan saat modul di-load.
+// initDbPerRequest() TIDAK dipanggil di scope modul (top-level) — sudah
+// dicoba dan gagal nyata: Workers menolak operasi async di luar sebuah
+// handler ("Disallowed operation called within global scope"). Karena
+// itu diundur sampai permintaan pertama BENAR-BENAR masuk, di dalam
+// fetch() di bawah — env (berisi binding Hyperdrive) juga cuma valid di
+// situ, bukan saat modul di-load.
+//
+// initDbPerRequest() (bukan initDb()) SENGAJA dipakai di sini, bukan
+// cuma soal timing — lihat catatan panjang di server/lib/db.js: Pool
+// persisten yang dipakai ulang lintas request (initDb(), pola yang
+// benar untuk server/index.js) terbukti hang ~20-30% di bawah beban
+// paralel nyata kalau dipakai di Workers. initDbPerRequest() membuat
+// koneksi baru per request/transaksi (dibuang setelah dipakai) — pola
+// yang didokumentasikan resmi oleh Cloudflare untuk Hyperdrive.
 import { httpServerHandler } from 'cloudflare:node';
 
-const { initDb } = require('./lib/db');
+const { initDbPerRequest } = require('./lib/db');
 const { initSupabaseStorage } = require('./lib/storage');
 const app = require('./app');
 
@@ -40,7 +48,7 @@ export default {
       return env.ASSETS.fetch(request);
     }
     if (!ready) {
-      initDb(env.HYPERDRIVE.connectionString);
+      initDbPerRequest(env.HYPERDRIVE.connectionString);
       // R2 tidak jadi dipakai (aktivasinya di dashboard Cloudflare tidak
       // bisa diselesaikan) — dokumen disimpan di Supabase Storage lewat
       // REST API (bucket privat "mikk-documents", akses cuma pakai
