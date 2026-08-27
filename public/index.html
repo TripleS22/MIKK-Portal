@@ -174,10 +174,6 @@
         <svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-8h6v8"/></svg>
         <span data-i18n="nav.dashboard">Dashboard</span>
       </button>
-      <button id="modMyCasesBtn" style="display:none">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>
-        <span data-i18n="nav.mycases">Perkara Saya</span>
-      </button>
       <button id="modKontrakBtn">
         <svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 13h6M9 17h4"/></svg>
         <span data-i18n="nav.kontrak">CRM Kontrak (CLM)</span>
@@ -210,9 +206,9 @@
         <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>
         <span data-i18n="nav.rates">Tarif Layanan</span>
       </button>
-      <button id="modProfileBtn">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg>
-        <span data-i18n="nav.profile">Profil Saya</span>
+      <button id="modMasterDataBtn" style="display:none">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span data-i18n="nav.masterData">Master Data</span>
       </button>
     </nav>
 
@@ -243,14 +239,19 @@
         <span class="nm" id="orgName">—</span>
       </button>
       <button class="switchLink" id="switchWsBtn" style="display:none" data-i18n="common.switchWorkspace">Ganti workspace</button>
-      <div class="userbox">
+      <div class="userbox" id="userMenuBtn" style="cursor:pointer;position:relative">
         <div class="av" id="avInit">—</div>
         <div>
           <div class="nm" id="whoName">—</div>
           <div class="rl" id="whoRole">—</div>
         </div>
+        <div id="userMenu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:6px;z-index:50">
+          <button id="menuProfileBtn" style="display:flex;width:100%;text-align:left;padding:9px 10px;border:0;background:none;border-radius:6px;font:inherit;color:var(--ink);cursor:pointer" data-i18n="nav.profile">Profil Saya</button>
+          <button id="menuMyCasesBtn" style="display:none;width:100%;text-align:left;padding:9px 10px;border:0;background:none;border-radius:6px;font:inherit;color:var(--ink);cursor:pointer" data-i18n="nav.mycases">Perkara Saya</button>
+          <div style="height:1px;background:var(--line);margin:6px 4px"></div>
+          <button id="logoutBtn" style="display:flex;width:100%;text-align:left;padding:9px 10px;border:0;background:none;border-radius:6px;font:inherit;color:var(--crit);cursor:pointer" data-i18n="common.logout">Keluar</button>
+        </div>
       </div>
-      <button class="chip switchLink" id="logoutBtn" data-i18n="common.logout">Keluar</button>
     </header>
 
     <div class="wrap">
@@ -274,6 +275,7 @@
 
       <!-- ============================ DASHBOARD ============================ -->
       <div id="secDashboard">
+        <div class="panel" id="companyProfilePanel" style="display:none;margin-bottom:18px"></div>
         <div class="cards" id="dashCards"></div>
         <div class="grid-3" id="dashPanels"></div>
       </div>
@@ -588,6 +590,36 @@
             <h3 data-i18n="rates.empty.title">Belum ada tarif tercatat</h3>
             <p data-i18n="rates.empty.desc">Tambahkan tarif pertama lewat tombol di atas.</p>
           </div>
+        </div>
+      </div>
+
+      <!-- ============================ MASTER DATA ============================ -->
+      <div id="secMasterData" style="display:none">
+        <div class="panel" style="margin-bottom:18px;padding:16px 18px">
+          <p class="hint" style="margin:0 0 10px" data-i18n="masterData.hint">Pilih kategori, lalu kelola opsi yang ditawarkan di dropdown terkait. Nonaktifkan (jangan hapus) opsi yang sudah pernah dipakai — data lama tetap tampil apa adanya.</p>
+          <div id="masterDataTabs"></div>
+        </div>
+        <div class="panel" style="margin-bottom:18px">
+          <div class="tscroll"><table>
+            <thead><tr>
+              <th data-i18n="masterData.th.kode">Kode</th>
+              <th data-i18n="masterData.th.labelId">Label (Indonesia)</th>
+              <th data-i18n="masterData.th.labelEn">Label (Inggris)</th>
+              <th data-i18n="masterData.th.urutan">Urutan</th>
+              <th data-i18n="masterData.th.aktif">Aktif</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="masterDataBody"></tbody>
+          </table></div>
+        </div>
+        <div class="panel">
+          <div class="panelhead"><div class="ttl2"><h3 data-i18n="masterData.addTitle">Tambah Opsi Baru</h3></div></div>
+          <div style="padding:16px 18px" class="grid2">
+            <div class="f"><label data-i18n="masterData.f.kode">Kode (disimpan di database)</label><input id="md_new_kode" placeholder="mis. mediasi_online"></div>
+            <div class="f"><label data-i18n="masterData.f.labelId">Label (Indonesia)</label><input id="md_new_labelId"></div>
+            <div class="f"><label data-i18n="masterData.f.labelEn">Label (Inggris, opsional)</label><input id="md_new_labelEn"></div>
+          </div>
+          <div style="padding:0 18px 18px"><button class="btn gold" id="masterDataAddBtn" data-i18n="masterData.addBtn">+ Tambah Opsi</button></div>
         </div>
       </div>
 

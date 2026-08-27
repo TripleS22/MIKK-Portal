@@ -431,6 +431,7 @@ const I18N = {
     'docs.download': 'Unduh', 'docs.downloadFail': 'Gagal mengunduh.',
     'docs.preview': 'Pratinjau', 'docs.previewLoading': 'Memuat pratinjau…',
     'docs.previewUnsupported': 'Jenis berkas ini tidak bisa dipratinjau — unduh untuk membukanya.',
+    'docs.previewOfficeNote': 'Pratinjau ini memakai Google Docs Viewer — dokumen dikirim sementara ke server Google untuk ditampilkan. Hanya berfungsi kalau aplikasi ini bisa diakses lewat internet publik.',
     'docs.empty.title': 'Belum ada dokumen diunggah', 'docs.empty.desc': 'Unggah berkas pertama lewat formulir di atas.',
     'docs.loadError': 'Gagal memuat arsip dokumen.',
 
@@ -511,6 +512,41 @@ const I18N = {
     'profile.empty.title': 'Belum ada proyek/perkara',
     'profile.empty.desc': 'Yang ditugaskan ke Anda akan muncul di sini.',
     'profile.docs.pilihDulu': 'Pilih salah satu proyek/perkara di tabel bawah untuk melihat dokumennya.',
+
+    'nav.masterData': 'Master Data',
+    'masterData.desc': 'Kelola opsi dropdown (tahap, status, jenis) yang dipakai di seluruh modul.',
+    'masterData.loadError': 'Gagal memuat Master Data.',
+    'masterData.hint': 'Pilih kategori, lalu kelola opsi yang ditawarkan di dropdown terkait. Nonaktifkan (jangan hapus) opsi yang sudah pernah dipakai — data lama tetap tampil apa adanya.',
+    'masterData.kosong': 'Belum ada opsi di kategori ini.',
+    'masterData.th.kode': 'Kode', 'masterData.th.labelId': 'Label (Indonesia)',
+    'masterData.th.labelEn': 'Label (Inggris)', 'masterData.th.urutan': 'Urutan', 'masterData.th.aktif': 'Aktif',
+    'masterData.addTitle': 'Tambah Opsi Baru',
+    'masterData.f.kode': 'Kode (disimpan di database)', 'masterData.f.labelId': 'Label (Indonesia)',
+    'masterData.f.labelEn': 'Label (Inggris, opsional)',
+    'masterData.addBtn': '+ Tambah Opsi',
+    'masterData.err.wajib': 'Kode dan label Indonesia wajib diisi.',
+    'masterData.kategori.cases_tahap': 'Tahap Perkara',
+    'masterData.kategori.cases_peran_klien': 'Peran Klien (Perkara)',
+    'masterData.kategori.cases_status_siklus': 'Status Perkara',
+    'masterData.kategori.contracts_status_siklus': 'Status Kontrak',
+    'masterData.kategori.contracts_jenis_dokumen': 'Jenis Dokumen Kontrak',
+    'masterData.kategori.contracts_relasi_ke_induk': 'Relasi ke Kontrak Induk',
+    'masterData.kategori.permits_status_siklus': 'Status Perizinan',
+    'masterData.kategori.legal_projects_status': 'Status Proyek Legal',
+    'masterData.kategori.pendampingan_jenis': 'Jenis Pendampingan',
+    'masterData.kategori.pendampingan_status': 'Status Pendampingan',
+
+    'companyProfile.edit': 'Edit Profil',
+    'companyProfile.editTitle': 'Edit Profil Perusahaan',
+    'companyProfile.namaLegal': 'Nama Legal',
+    'companyProfile.npwp': 'NPWP', 'companyProfile.nib': 'NIB',
+    'companyProfile.sektorUsaha': 'Sektor Usaha', 'companyProfile.alamat': 'Alamat',
+    'companyProfile.kbli': 'KBLI', 'companyProfile.kbliHint': 'Pisahkan dengan koma, mis. 49421, 52101',
+
+    'lampiran.title': 'Dokumen Terlampir',
+    'lampiran.uploadBtn': 'Unggah', 'lampiran.uploadHint.pilih': 'Pilih berkas dulu.',
+    'lampiran.simpanDulu': 'Simpan data ini dulu sebelum melampirkan dokumen.',
+    'lampiran.kosong': 'Belum ada dokumen dilampirkan.',
   },
 
   en: {
@@ -939,6 +975,7 @@ const I18N = {
     'docs.download': 'Download', 'docs.downloadFail': 'Download failed.',
     'docs.preview': 'Preview', 'docs.previewLoading': 'Loading preview…',
     'docs.previewUnsupported': 'This file type can’t be previewed — download it to open it.',
+    'docs.previewOfficeNote': 'This preview uses Google Docs Viewer — the document is temporarily sent to Google’s servers to render it. Only works when this app is reachable from the public internet.',
     'docs.empty.title': 'No documents uploaded yet', 'docs.empty.desc': 'Upload the first file using the form above.',
     'docs.loadError': 'Failed to load the document archive.',
 
@@ -1019,6 +1056,41 @@ const I18N = {
     'profile.empty.title': 'No projects/cases yet',
     'profile.empty.desc': 'Anything assigned to you will appear here.',
     'profile.docs.pilihDulu': 'Select a project/case in the table below to see its documents.',
+
+    'nav.masterData': 'Master Data',
+    'masterData.desc': 'Manage the dropdown options (stages, statuses, types) used across every module.',
+    'masterData.loadError': 'Failed to load Master Data.',
+    'masterData.hint': 'Pick a category, then manage the options offered in its dropdown. Deactivate (don’t delete) options already in use — old records keep showing them as-is.',
+    'masterData.kosong': 'No options in this category yet.',
+    'masterData.th.kode': 'Code', 'masterData.th.labelId': 'Label (Indonesian)',
+    'masterData.th.labelEn': 'Label (English)', 'masterData.th.urutan': 'Order', 'masterData.th.aktif': 'Active',
+    'masterData.addTitle': 'Add New Option',
+    'masterData.f.kode': 'Code (stored in the database)', 'masterData.f.labelId': 'Label (Indonesian)',
+    'masterData.f.labelEn': 'Label (English, optional)',
+    'masterData.addBtn': '+ Add Option',
+    'masterData.err.wajib': 'Code and Indonesian label are required.',
+    'masterData.kategori.cases_tahap': 'Case Stage',
+    'masterData.kategori.cases_peran_klien': 'Client Role (Case)',
+    'masterData.kategori.cases_status_siklus': 'Case Status',
+    'masterData.kategori.contracts_status_siklus': 'Contract Status',
+    'masterData.kategori.contracts_jenis_dokumen': 'Contract Document Type',
+    'masterData.kategori.contracts_relasi_ke_induk': 'Relation to Parent Contract',
+    'masterData.kategori.permits_status_siklus': 'Permit Status',
+    'masterData.kategori.legal_projects_status': 'Legal Project Status',
+    'masterData.kategori.pendampingan_jenis': 'Assistance Type',
+    'masterData.kategori.pendampingan_status': 'Assistance Status',
+
+    'companyProfile.edit': 'Edit Profile',
+    'companyProfile.editTitle': 'Edit Company Profile',
+    'companyProfile.namaLegal': 'Legal Name',
+    'companyProfile.npwp': 'Tax ID (NPWP)', 'companyProfile.nib': 'Business ID (NIB)',
+    'companyProfile.sektorUsaha': 'Business Sector', 'companyProfile.alamat': 'Address',
+    'companyProfile.kbli': 'Business Classification (KBLI)', 'companyProfile.kbliHint': 'Comma-separated, e.g. 49421, 52101',
+
+    'lampiran.title': 'Attached Documents',
+    'lampiran.uploadBtn': 'Upload', 'lampiran.uploadHint.pilih': 'Choose a file first.',
+    'lampiran.simpanDulu': 'Save this record first before attaching documents.',
+    'lampiran.kosong': 'No documents attached yet.',
   },
 };
 
@@ -1033,15 +1105,36 @@ function t(key, vars) {
 
 function onLangChange(fn) { LANG_CHANGE_LISTENERS.push(fn); }
 
+// Label opsi Master Data (db/17_master_data_opsi.sql) — dimuat sekali
+// saat masuk workspace (lihat muatMasterDataLabels di app.js), dipakai
+// nameProxy sebagai lapisan kedua sebelum jatuh ke kode mentah. Kuncinya
+// "kategori:kode" supaya kolom yang namanya sama di tabel berbeda
+// (mis. status_siklus di kontrak vs izin) tidak tercampur.
+let MASTER_DATA_LABELS = {};
+function setMasterDataLabels(rows) {
+  MASTER_DATA_LABELS = {};
+  (rows || []).forEach((r) => {
+    MASTER_DATA_LABELS[r.kategori + ':' + r.kode] = { id: r.label_id, en: r.label_en };
+  });
+}
+
 // Proxy yang membuat objek peta label (mis. STATUS_NAMA[kode]) selalu
 // membaca bahasa AKTIF saat diakses, tanpa perlu di-reassign manual tiap
-// ganti bahasa.
-function nameProxy(prefix) {
+// ganti bahasa. `kategori` opsional: kalau kode tidak ada di kamus i18n
+// statis (mis. opsi baru yang ditambahkan admin lewat Master Data
+// setelah rilis ini), jatuh ke label yang tersimpan di Master Data
+// sebelum akhirnya jatuh ke kode mentah.
+function nameProxy(prefix, kategori) {
   return new Proxy({}, {
     get(_, prop) {
       const key = prefix + '.' + String(prop);
       const val = (I18N[LANG] && I18N[LANG][key]) ?? I18N.id[key];
-      return val !== undefined ? val : String(prop);
+      if (val !== undefined) return val;
+      if (kategori) {
+        const md = MASTER_DATA_LABELS[kategori + ':' + String(prop)];
+        if (md) return (LANG === 'en' && md.en) || md.id;
+      }
+      return String(prop);
     },
   });
 }

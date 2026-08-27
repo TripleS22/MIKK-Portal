@@ -34,6 +34,12 @@ const ORDER = [
   '12_klien_perorangan_kelompok_rls.sql',
   '13_opsi_bebas_isi_sendiri.sql',
   '14_profil_data_legalitas.sql',
+  '15_supabase_auth_user_id.sql',
+  '16_hapus_local_auth.sql',
+  '17_master_data_opsi.sql',
+  '18_client_orgs_edit_klien.sql',
+  '19_dokumen_publik_fungsi.sql',
+  '20_document_links_pendampingan.sql',
 ];
 
 async function main() {

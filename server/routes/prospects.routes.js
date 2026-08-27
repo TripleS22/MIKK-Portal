@@ -22,7 +22,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { queryAsUser, withUser, queryAnon } = require('../lib/db');
-const { hashPassword, signToken } = require('../lib/auth');
+const { createAuthUser, signInWithPassword } = require('../lib/supabase-auth');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
@@ -66,20 +66,20 @@ router.post('/register', async (req, res, next) => {
       return res.status(409).json({ error: 'Email ini sudah terdaftar. Silakan masuk.' });
     }
 
-    const hash = await hashPassword(String(b.password));
+    // Akun Supabase Auth dibuat SEBELUM baris users/prospects — kalau
+    // langkah ini gagal (mis. email sudah dipakai di sisi Supabase),
+    // tidak ada baris yatim yang sempat tersimpan di database aplikasi.
+    const akun = await createAuthUser(email, String(b.password));
 
-    // Semua-atau-tidak: user, kredensial, dan profil calon klien dibuat
+    // Semua-atau-tidak: user, tautan akun, dan profil calon klien dibuat
     // dalam satu transaksi. Tanpa ini, kegagalan di tengah meninggalkan
     // akun yang bisa login tapi tidak punya profil.
     const hasil = await withUser(null, async (client) => {
       const { rows: u } = await client.query(
-        `insert into users (email, nama, tipe, no_hp) values ($1,$2,'prospect',$3) returning id`,
-        [email, nama, b.noHp || null]
+        `insert into users (email, nama, tipe, no_hp, auth_user_id) values ($1,$2,'prospect',$3,$4) returning id`,
+        [email, nama, b.noHp || null, akun.id]
       );
       const userId = u[0].id;
-      await client.query(
-        'insert into local_auth (user_id, password_hash) values ($1,$2)', [userId, hash]
-      );
 
       // Masalah ayam-telur: kebijakan RLS pada `prospects` mensyaratkan
       // user_id = app.current_user_id(), padahal pendaftar belum punya
@@ -110,11 +110,13 @@ router.post('/register', async (req, res, next) => {
       return { userId, prospect: p[0] };
     });
 
-    const token = signToken({
-      sub: hasil.userId, email, nama, tipe: 'prospect',
-    });
+    // Login langsung setelah daftar — dulu lewat token kustom yang
+    // ditandatangani sendiri, sekarang lewat sesi Supabase sungguhan
+    // (pola yang sama dengan POST /api/auth/login).
+    const sesi = await signInWithPassword(email, String(b.password));
     res.status(201).json({
-      token,
+      token: sesi.accessToken,
+      refreshToken: sesi.refreshToken,
       user: { id: hasil.userId, email, nama, tipe: 'prospect' },
       prospect: hasil.prospect,
     });

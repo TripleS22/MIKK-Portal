@@ -21,6 +21,7 @@ const individualClientsRoutes = require('./routes/individual-clients.routes');
 const clientGroupsRoutes = require('./routes/client-groups.routes');
 const myRoutes = require('./routes/my.routes');
 const profileRoutes = require('./routes/profile.routes');
+const masterDataRoutes = require('./routes/master-data.routes');
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/api/individual-clients', individualClientsRoutes);
 app.use('/api/client-groups', clientGroupsRoutes);
 app.use('/api/my', myRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/master-data', masterDataRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res, next) => {

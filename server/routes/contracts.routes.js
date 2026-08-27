@@ -10,6 +10,7 @@
 const express = require('express');
 const { queryAsUser, withUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { opsiKategori } = require('../lib/opsi-master');
 
 const router = express.Router();
 router.use(authenticate);
@@ -145,7 +146,7 @@ router.get('/reference', async (req, res, next) => {
     const { clientOrgId } = req.query;
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
 
-    const [kategori, pic, induk, lawan] = await Promise.all([
+    const [kategori, pic, induk, lawan, jenisDokumen, statusSiklus, relasi] = await Promise.all([
       queryAsUser(req.user.id,
         `select id, nama from contract_categories where client_org_id=$1 and aktif order by urutan`,
         [clientOrgId]),
@@ -162,6 +163,9 @@ router.get('/reference', async (req, res, next) => {
         [clientOrgId]),
       queryAsUser(req.user.id,
         `select id, nama_legal, is_client from counterparties order by nama_legal`),
+      opsiKategori(queryAsUser, req.user.id, 'contracts_jenis_dokumen'),
+      opsiKategori(queryAsUser, req.user.id, 'contracts_status_siklus'),
+      opsiKategori(queryAsUser, req.user.id, 'contracts_relasi_ke_induk'),
     ]);
 
     res.json({
@@ -169,9 +173,7 @@ router.get('/reference', async (req, res, next) => {
       pic: pic.rows,
       induk: induk.rows,
       lawanPihak: lawan.rows,
-      jenisDokumen: ['PKS','SPK','MOU','NDA','Addendum','Amandemen','PKWT','SP','BAST','Lainnya'],
-      statusSiklus: ['draf','dalam_review','aktif','selesai','dibatalkan','diputus','digantikan'],
-      relasi: ['perpanjangan','addendum','amandemen','penggantian'],
+      jenisDokumen, statusSiklus, relasi,
     });
   } catch (err) { next(err); }
 });

@@ -2,6 +2,7 @@
 const express = require('express');
 const { queryAsUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { opsiKategori } = require('../lib/opsi-master');
 
 const router = express.Router();
 router.use(authenticate);
@@ -27,20 +28,20 @@ router.get('/reference', async (req, res, next) => {
   try {
     const { clientOrgId } = req.query;
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
-    const { rows } = await queryAsUser(
-      req.user.id,
-      `select distinct u.id, u.nama, ms.jabatan from users u
-         join client_assignments ca on ca.user_id = u.id
-         left join mikk_staff ms on ms.user_id = u.id
-        where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
-        order by u.nama`,
-      [clientOrgId]
-    );
-    res.json({
-      pic: rows,
-      jenis: ['mediasi', 'negosiasi', 'due_diligence', 'audit', 'lainnya'],
-      status: ['menunggu', 'diproses', 'selesai', 'dibatalkan'],
-    });
+    const [{ rows }, jenis, status] = await Promise.all([
+      queryAsUser(
+        req.user.id,
+        `select distinct u.id, u.nama, ms.jabatan from users u
+           join client_assignments ca on ca.user_id = u.id
+           left join mikk_staff ms on ms.user_id = u.id
+          where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
+          order by u.nama`,
+        [clientOrgId]
+      ),
+      opsiKategori(queryAsUser, req.user.id, 'pendampingan_jenis'),
+      opsiKategori(queryAsUser, req.user.id, 'pendampingan_status'),
+    ]);
+    res.json({ pic: rows, jenis, status });
   } catch (err) { next(err); }
 });
 

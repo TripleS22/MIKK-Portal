@@ -1,33 +1,50 @@
 // server/scripts/seed.js
 //
 // 03_seed_nhc.sql (SQL murni) membuat baris di `users` untuk staf MIKK,
-// tapi TIDAK membuat kata sandi — hashing bcrypt dilakukan di sini, di
-// Node, memakai library yang sama dengan yang dipakai saat login
-// (server/lib/auth.js), supaya hash yang dihasilkan pasti bisa
-// diverifikasi oleh endpoint login.
+// tapi TIDAK membuat kredensial login — itu dilakukan di sini lewat
+// Supabase Auth Admin API (server/lib/supabase-auth.js), bukan lagi
+// bcrypt+local_auth (ditiadakan, lihat db/16_hapus_local_auth.sql).
+// Setiap akun yang dibuat/diperbarui di sini langsung ditautkan lewat
+// users.auth_user_id supaya login pertamanya tidak perlu fallback email
+// (lihat server/middleware/authenticate.js).
+//
+// HANYA untuk pengembangan/demo — kata sandinya seragam dan diketahui
+// publik lewat repo ini. Untuk akun produksi sungguhan, buat lewat alur
+// undangan Supabase (admin.inviteUserByEmail) atau kata sandi acak yang
+// dikomunikasikan terpisah, bukan skrip ini.
 //
 // Skrip ini juga membuat SATU pengguna sisi klien (Andi Pratama, NHC)
 // agar isolasi antar klien bisa diuji end-to-end sejak awal.
 
 require('dotenv').config();
 const { Pool } = require('pg');
-const { hashPassword } = require('../lib/auth');
+const { createAuthUser } = require('../lib/supabase-auth');
 
 const DEMO_PASSWORD = 'MikkDemo!2026';
 
+async function buatAtauTautkanAkun(pool, email) {
+  try {
+    const akun = await createAuthUser(email, DEMO_PASSWORD);
+    await pool.query('update users set auth_user_id = $1 where lower(email) = lower($2)', [akun.id, email]);
+  } catch (err) {
+    // Skrip ini dirancang bisa dijalankan berulang (seperti sebelumnya
+    // dengan "on conflict do update"). Kalau akunnya sudah ada di
+    // Supabase Auth dari jalankan sebelumnya, itu bukan kegagalan —
+    // tautannya (auth_user_id) sudah terisi lewat login pertama
+    // (self-healing di server/middleware/authenticate.js) atau memang
+    // sudah pernah ditautkan skrip ini sebelumnya.
+    console.log(`  (${email} sudah punya akun Supabase Auth — dilewati: ${err.message})`);
+  }
+}
+
 async function main() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const hash = await hashPassword(DEMO_PASSWORD);
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
   const staff = ['irfan@mikklaws.com', 'ageng@mikklaws.com', 'putri@mikklaws.com'];
   for (const email of staff) {
     const { rows } = await pool.query('select id from users where email = $1', [email]);
     if (!rows.length) { console.log(`  lewati ${email} (belum ada — jalankan migrate dulu)`); continue; }
-    await pool.query(
-      `insert into local_auth (user_id, password_hash) values ($1, $2)
-       on conflict (user_id) do update set password_hash = excluded.password_hash, updated_at = now()`,
-      [rows[0].id, hash]
-    );
+    await buatAtauTautkanAkun(pool, email);
     console.log(`  kata sandi diset untuk ${email}`);
   }
 
@@ -44,11 +61,7 @@ async function main() {
       ['legal@nhc.co.id', 'Andi Pratama']
     );
     const andiId = userRows[0].id;
-    await pool.query(
-      `insert into local_auth (user_id, password_hash) values ($1, $2)
-       on conflict (user_id) do update set password_hash = excluded.password_hash, updated_at = now()`,
-      [andiId, hash]
-    );
+    await buatAtauTautkanAkun(pool, 'legal@nhc.co.id');
     await pool.query(
       `insert into client_memberships (user_id, client_org_id, peran) values ($1, $2, 'legal_manager')
        on conflict (user_id, client_org_id) do nothing`,

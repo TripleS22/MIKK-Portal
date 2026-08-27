@@ -158,5 +158,17 @@ const Api = (() => {
     profileMe: () => call('/profile/me'),
     updateProfileMe: (body) => call('/profile/me', { method: 'PATCH', body }),
     profileProjects: () => call('/profile/me/projects'),
+
+    /* ---- Master Data (opsi dropdown terkelola) ---- */
+    masterData: (kategori) => call('/master-data', { qs: kategori ? { kategori } : undefined }),
+    createMasterDataOption: (body) => call('/master-data', { method: 'POST', body }),
+    updateMasterDataOption: (id, body) => call(`/master-data/${id}`, { method: 'PATCH', body }),
+
+    /* ---- Profil perusahaan (client_orgs) ---- */
+    getClientOrg: (id) => call(`/client-orgs/${id}`),
+    updateClientOrg: (id, body) => call(`/client-orgs/${id}`, { method: 'PATCH', body }),
+
+    /* ---- Pratinjau Office (Google Docs Viewer / MS Office Online) ---- */
+    createPreviewLink: (id) => call(`/documents/${id}/preview-link`, { method: 'POST' }),
   };
 })();

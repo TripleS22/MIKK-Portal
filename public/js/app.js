@@ -43,11 +43,15 @@ const ico = (n) => `<svg viewBox="0 0 24 24">${ICONS[n] || ICONS.file}</svg>`;
    Nilai panjang (mis. "Rp 8.500.000.000") diperkecil supaya tetap satu baris
    dan tidak mendorong kartunya turun ke baris grid berikutnya. */
 function statCard(k, v, cls, note, icon) {
-  const panjang = String(v).length > 9 ? ' sm' : '';
+  // Angka mentah (kuantitas, bukan string yang sudah diformat seperti
+  // rupiah()/fmtUkuran()) otomatis lewat pemisah ribuan di sini — satu
+  // tempat, supaya tidak perlu membungkus tiap pemanggilan statCard() satu-satu.
+  const tampil = typeof v === 'number' ? angka(v) : v;
+  const panjang = String(tampil).length > 9 ? ' sm' : '';
   return `<div class="card ${cls}">
     <div class="body">
       <div class="k">${esc(k)}</div>
-      <div class="v${panjang}">${v}</div>
+      <div class="v${panjang}">${esc(tampil)}</div>
       <div class="n">${esc(note)}</div>
     </div>
     <div class="ico">${ico(icon)}</div>
@@ -121,11 +125,11 @@ const CHART_COLORS = {
 const PERAN_LABEL = nameProxy('peran');
 const JABATAN_NAMA = nameProxy('jabatan');
 const STATUS_NAMA = nameProxy('status');
-const SIKLUS_NAMA = nameProxy('siklus');
-const RELASI_NAMA = nameProxy('relasi');
+const SIKLUS_NAMA = nameProxy('siklus', 'contracts_status_siklus');
+const RELASI_NAMA = nameProxy('relasi', 'contracts_relasi_ke_induk');
 const ROWS_LEDGER = () => [t('kontrak.row.nomor'), t('kontrak.row.lawan'), t('kontrak.row.mulai'), t('kontrak.row.akhir'), t('kontrak.row.nilai')];
 const STATUS_KEYS = ['aman', 'pantau', 'peringatan', 'kritis', 'kedaluwarsa', 'digantikan', 'tanpa_batas', 'tidak_dipantau'];
-const PERMIT_STATUS_NAMA = nameProxy('permitStatus');
+const PERMIT_STATUS_NAMA = nameProxy('permitStatus', 'permits_status_siklus');
 const JENIS_KLIEN_NAMA = nameProxy('jenisKlien');
 const PROJEK_JENIS_NAMA = nameProxy('projekJenis');
 
@@ -225,11 +229,20 @@ async function enterWorkspace(ws) {
   // menawarkan pintu yang memang terkunci.
   const bolehTarif = ws.tipe === 'staf_firma' && ws.peran === 'managing_partner';
   $('#modRatesBtn').style.display = bolehTarif ? 'flex' : 'none';
+  $('#modMasterDataBtn').style.display = bolehTarif ? 'flex' : 'none';
   // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
-  $('#modMyCasesBtn').style.display = ws.tipe === 'staf_firma' ? 'flex' : 'none';
+  // Sekarang diakses lewat menu akun di topbar, bukan sidebar (lihat
+  // Bagian 2: navigasi pribadi vs workspace klien di rencana migrasi).
+  $('#menuMyCasesBtn').style.display = ws.tipe === 'staf_firma' ? 'flex' : 'none';
   S.masukPada = new Date();
   gambarKepalaHalaman();
+
+  // Label opsi Master Data dimuat sekali per sesi masuk — dipakai
+  // nameProxy sebagai fallback kedua (lihat public/js/i18n.js) untuk opsi
+  // yang ditambahkan admin setelah rilis ini, sebelum kamus i18n statis
+  // sempat diperbarui menyertakannya.
+  try { setMasterDataLabels((await Api.masterData()).rows); } catch (e) { /* non-fatal: label jatuh ke kode mentah */ }
 
   await muatSemua();
   switchModuleAll('dashboard');
@@ -284,6 +297,10 @@ function isiSelectReferensi() {
 
 /* ---------------------------------------------------------------- turunan tampilan */
 const rupiah = (n) => (n == null ? '—' : 'Rp ' + Number(n).toLocaleString(LANG === 'en' ? 'en-US' : 'id-ID'));
+// Pemisah ribuan untuk kuantitas non-uang (mis. jumlah dokumen/baris besar).
+// Pengenal seperti NIK/NPWP/NIB sengaja TIDAK lewat sini — itu bukan
+// kuantitas, memisahkannya dengan titik/koma justru menyesatkan.
+const angka = (n) => (n == null ? '—' : Number(n).toLocaleString(LANG === 'en' ? 'en-US' : 'id-ID'));
 const tglTampil = (iso) => !iso ? null : new Date(iso + 'T00:00:00')
   .toLocaleDateString(LANG === 'en' ? 'en-GB' : 'id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 const sisaTeks = (d) => d < 0 ? t('common.daysAgo', { n: Math.abs(d) }) : t('common.daysLeft', { n: d });
@@ -362,48 +379,12 @@ function renderTable() {
   $('#pg').innerHTML = html;
 }
 
-/* ---------------------------------------------------------------------
-   "Isi sendiri" — dipakai di semua dropdown status/tahap/jenis operasional
-   (lihat db/13_opsi_bebas_isi_sendiri.sql: database tidak lagi menegakkan
-   daftar tertutup untuk kolom-kolom ini). opsiKustom() sama seperti opsi()
-   tapi menambah satu opsi terakhir "Lainnya… (isi sendiri)" yang membuka
-   kotak teks bebas. Nilai yang sudah tersimpan tapi TIDAK ada di daftar
-   preset otomatis dianggap "custom" dan kotak teksnya langsung terbuka
-   berisi nilai itu — supaya nilai lama yang diketik bebas tetap terlihat.
-   -------------------------------------------------------------------- */
-const OPSI_KUSTOM_NILAI = '__kustom__';
-function opsiKustom(id, arr, val, ph) {
-  const dikenal = val != null && val !== '' && arr.some((o) => o.v === val);
-  const isCustom = val != null && val !== '' && !dikenal;
-  const opts = opsi(arr, isCustom ? '' : val, ph)
-    + `<option value="${OPSI_KUSTOM_NILAI}" ${isCustom ? 'selected' : ''}>${esc(t('common.customOption'))}</option>`;
-  return `<select id="${id}_sel">${opts}</select>
-    <input id="${id}_txt" class="fld" style="margin-top:6px;display:${isCustom ? 'block' : 'none'}"
-      placeholder="${esc(t('common.customOptionPh'))}" value="${isCustom ? esc(val) : ''}">`;
-}
-/* Wire perubahan select ⇄ tampil/sembunyi kotak teks. Dipanggil sekali
-   setiap kali HTML yang mengandung opsiKustom(id, ...) baru saja disisipkan
-   ke DOM (innerHTML tidak mempertahankan event listener lama). */
-function pasangOpsiKustom(id) {
-  const sel = $('#' + id + '_sel'), txt = $('#' + id + '_txt');
-  if (!sel || !txt) return;
-  sel.addEventListener('change', () => { txt.style.display = sel.value === OPSI_KUSTOM_NILAI ? 'block' : 'none'; });
-}
-/* Baca nilai akhir: isi kotak teks kalau opsi "isi sendiri" dipilih, kalau
-   tidak nilai select apa adanya. */
-function bacaOpsiKustom(id) {
-  const sel = $('#' + id + '_sel');
-  if (!sel) return '';
-  if (sel.value === OPSI_KUSTOM_NILAI) return ($('#' + id + '_txt')?.value || '').trim();
-  return sel.value;
-}
-
 /* ---------------------------------------------------------------- formulir kontrak */
 function opsi(arr, val, ph) {
   return `<option value="">${esc(ph)}</option>` + arr.map((o) =>
     `<option value="${esc(o.v)}" ${val === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('');
 }
-function formHTML(c, err) {
+function formHTML(c, err, lampiranId) {
   const d = S.draft, r = S.reference;
   const migrasi = c && c.catatan_migrasi
     ? `<div class="warnbox wb-warn"><span class="ic">⚑</span><div><b>${esc(t('kontrak.migrasi'))}</b> ${esc(c.catatan_migrasi)}</div></div>` : '';
@@ -450,7 +431,7 @@ function formHTML(c, err) {
     <span><b>${t('kontrak.f.nirnilai')}</b>${t('kontrak.f.nirnilaiDesc')}</span></label>
   <div class="grid2" style="margin-top:6px">
     <div class="f"><label>${t('kontrak.f.status')}</label>
-      ${opsiKustom('i_status', r.statusSiklus.map((v) => ({ v, l: SIKLUS_NAMA[v] || v })), d.status, t('common.none'))}</div>
+      <select id="i_status">${opsi(r.statusSiklus.map((v) => ({ v, l: SIKLUS_NAMA[v] || v })), d.status, t('common.none'))}</select></div>
     <div class="f"><label>${t('kontrak.f.notice')}</label>
       <input id="i_notice" inputmode="numeric" value="${d.notice != null ? d.notice : ''}"></div>
   </div>
@@ -463,7 +444,11 @@ function formHTML(c, err) {
       <select id="i_relasi">${opsi(r.relasi.map((v) => ({ v, l: RELASI_NAMA[v] || v })), d.relasi, t('common.noneParent'))}</select>${e('relasi')}</div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('kontrak.f.keterangan')}</label>
-    <textarea id="i_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>`;
+    <textarea id="i_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
+    <div id="${lampiranId || 'lampiran_kontrak'}"></div>
+  </div>`;
 }
 function bacaForm() {
   const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
@@ -480,7 +465,7 @@ function bacaForm() {
   const nv = g('i_nilai').replace(/[^\d]/g, '');
   d.nilaiTidakRelevan = $('#i_nirnilai').checked;
   d.nilai = d.nilaiTidakRelevan || nv === '' ? null : Number(nv);
-  d.status = bacaOpsiKustom('i_status') || 'draf';
+  d.status = g('i_status') || 'draf';
   const nt = g('i_notice').replace(/[^\d]/g, '');
   d.notice = nt === '' ? null : Number(nt);
   d.autoRenew = $('#i_renew').checked;
@@ -496,7 +481,6 @@ function validasi(id) {
   return Object.keys(err).length ? err : null;
 }
 function pasangFormEvent(rerender) {
-  pasangOpsiKustom('i_status');
   ['i_batas', 'i_nirnilai'].forEach((id) => {
     const el = $('#' + id); if (el) el.addEventListener('change', () => { bacaForm(); rerender(); });
   });
@@ -558,6 +542,7 @@ function gambarDrawer(err) {
   $('#dTitle').textContent = t('kontrak.drawerTitle');
   $('#dBody').innerHTML = formHTML(drawerRow, err);
   pasangFormEvent(() => gambarDrawer());
+  if (drawerRow) renderLampiranPanel('lampiran_kontrak', 'contract', drawerRow.id, { clientOrgId: S.ws.client_org_id });
 }
 function tutupDrawer() {
   S.editing = null; S.draft = null; drawerRow = null;
@@ -628,7 +613,7 @@ function gambarQuick(q, c, err) {
       </div>
       <h3>${esc(c.judul)}</h3>
     </div>
-    ${formHTML(c, err)}
+    ${formHTML(c, err, 'lampiran_kontrak_quick')}
     <div class="qnav">
       <button class="btn ghost" id="qPrev" ${S.quickIdx === 0 ? 'disabled' : ''}>${t('kontrak.quick.prev')}</button>
       <div style="display:flex;gap:8px">
@@ -637,6 +622,7 @@ function gambarQuick(q, c, err) {
       </div>
     </div>`;
   pasangFormEvent(() => gambarQuick(q, c));
+  renderLampiranPanel('lampiran_kontrak_quick', 'contract', c.id, { clientOrgId: S.ws.client_org_id });
   if (S.draft.lawanPihakNama) {
     Api.checkConflict(S.draft.lawanPihakNama, S.ws.client_org_id).then(renderConflictBox).catch(() => {});
   }
@@ -859,8 +845,12 @@ function permitFormHTML(err) {
   <label class="chk"><input type="checkbox" id="p_batas" ${d.tanpaBatas ? 'checked' : ''}>
     <span><b>${t('permits.f.tanpaBatas')}</b>${t('permits.f.tanpaBatasDesc')}</span></label>
   <div class="f" style="margin-top:6px"><label>${t('permits.f.status')}</label>
-    ${opsiKustom('p_status', r.statusSiklus.map((v) => ({ v, l: PERMIT_STATUS_NAMA[v] || v })), d.status, t('common.none'))}</div>
-  <div class="f" style="margin-top:12px"><label>${t('permits.f.keterangan')}</label><textarea id="p_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>`;
+    <select id="p_status">${opsi(r.statusSiklus.map((v) => ({ v, l: PERMIT_STATUS_NAMA[v] || v })), d.status, t('common.none'))}</select></div>
+  <div class="f" style="margin-top:12px"><label>${t('permits.f.keterangan')}</label><textarea id="p_ket" rows="3">${esc(d.keterangan || '')}</textarea></div>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
+    <div id="lampiran_izin"></div>
+  </div>`;
 }
 function bacaPermitForm() {
   const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
@@ -873,7 +863,7 @@ function bacaPermitForm() {
   d.tanggalTerbit = g('p_terbit') || null;
   d.tanpaBatas = $('#p_batas').checked;
   d.tanggalKedaluwarsa = d.tanpaBatas ? null : (g('p_kadaluarsa') || null);
-  d.status = bacaOpsiKustom('p_status') || 'aktif';
+  d.status = g('p_status') || 'aktif';
   d.keterangan = g('p_ket') || null;
 }
 function validasiPermit() {
@@ -899,7 +889,7 @@ function bukaPermitDrawer(row) {
 function gambarPermitDrawer(err) {
   $('#permitDTitle').textContent = P.editing ? t('permits.drawerTitle') : t('permits.drawerTitleNew');
   $('#permitDBody').innerHTML = permitFormHTML(err);
-  pasangOpsiKustom('p_status');
+  renderLampiranPanel('lampiran_izin', 'permit', P.editing, { clientOrgId: S.ws.client_org_id });
   const batas = $('#p_batas');
   if (batas) batas.addEventListener('change', () => { bacaPermitForm(); gambarPermitDrawer(); });
 }
@@ -937,7 +927,6 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#perm
    pemuat datanya. Menambah modul cukup menambah satu baris di sini. */
 const MODULES = [
   { id: 'dashboard',    sec: 'secDashboard',    btn: 'modDashboardBtn',    crumb: 'nav.dashboard',    desc: 'dashboard.desc' },
-  { id: 'mycases',      sec: 'secMyCases',      btn: 'modMyCasesBtn',      crumb: 'nav.mycases',      desc: 'mycases.desc' },
   { id: 'kontrak',      sec: 'secKontrak',      btn: 'modKontrakBtn',      crumb: 'nav.kontrak',      desc: 'kontrak.pageDesc' },
   { id: 'permits',      sec: 'secPermits',      btn: 'modPermitsBtn',      crumb: 'nav.permits',      desc: 'permits.desc' },
   { id: 'cases',        sec: 'secCases',        btn: 'modCasesBtn',        crumb: 'nav.cases',        desc: 'cases.desc' },
@@ -946,7 +935,12 @@ const MODULES = [
   { id: 'docs',         sec: 'secDocs',         btn: 'modDocsBtn',         crumb: 'nav.docs',         desc: 'docs.desc' },
   { id: 'team',         sec: 'secTeam',         btn: 'modTeamBtn',         crumb: 'nav.team',         desc: 'team.desc' },
   { id: 'rates',        sec: 'secRates',        btn: 'modRatesBtn',        crumb: 'nav.rates',        desc: 'rates.desc' },
-  { id: 'profile',      sec: 'secProfile',      btn: 'modProfileBtn',      crumb: 'nav.profile',      desc: 'profile.desc' },
+  { id: 'masterdata',   sec: 'secMasterData',   btn: 'modMasterDataBtn',  crumb: 'nav.masterData',  desc: 'masterData.desc' },
+  // Dua di bawah ini pribadi/lintas klien — dipicu dari menu akun di
+  // topbar (#menuMyCasesBtn/#menuProfileBtn), BUKAN sidebar, supaya
+  // tidak tercampur dengan modul milik satu workspace klien di atas.
+  { id: 'mycases',      sec: 'secMyCases',      btn: 'menuMyCasesBtn',     crumb: 'nav.mycases',      desc: 'mycases.desc' },
+  { id: 'profile',      sec: 'secProfile',      btn: 'menuProfileBtn',     crumb: 'nav.profile',      desc: 'profile.desc' },
 ];
 let modAktif = 'dashboard';
 
@@ -967,8 +961,10 @@ function switchModuleAll(mod) {
   if (mod === 'docs' && !DC.loaded) muatDocsSemua();
   if (mod === 'team' && !TM.loaded) muatTimSemua();
   if (mod === 'rates' && !RT.loaded) muatTarifSemua();
+  if (mod === 'masterdata' && !MD.loaded) muatMasterDataSemua();
   if (mod === 'profile' && !PR.loaded) muatProfilSemua();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  $('#userMenu').style.display = 'none';
 }
 
 /* Breadcrumb + judul halaman: nama organisasi tetap, keterangan ikut modul. */
@@ -993,6 +989,23 @@ MODULES.forEach((m) => {
   if (b) b.onclick = () => switchModuleAll(m.id);
 });
 
+/* Menu akun topbar (Profil Saya / Perkara Saya / Keluar) — lihat Bagian 2
+   rencana migrasi: dipisah dari sidebar supaya tidak tercampur dengan
+   modul milik satu workspace klien. */
+$('#userMenuBtn').addEventListener('click', (e) => {
+  // Klik tombol di dalam menu (mis. logoutBtn) sudah punya handler-nya
+  // sendiri dan menutup menu lewat switchModuleAll/logout — jangan
+  // toggle ulang di sini kalau yang diklik memang salah satu isinya,
+  // supaya tidak langsung terbuka lagi sepersekian detik kemudian.
+  if (e.target.closest('#userMenu button')) return;
+  const menu = $('#userMenu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#userMenuBtn')) $('#userMenu').style.display = 'none';
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#userMenu').style.display = 'none'; });
+
 /* ---------------------------------------------------------------- drawer generik */
 let auxKind = null; // 'case' | 'project' | 'pendampingan'
 function bukaAuxDrawer(kind, judul, bodyHtml, onSave) {
@@ -1008,9 +1021,9 @@ function tutupAuxDrawer() {
 }
 $('#auxDClose').onclick = tutupAuxDrawer; $('#auxDCancel').onclick = tutupAuxDrawer;
 
-const TAHAP_NAMA = nameProxy('tahap');
-const PERAN_KLIEN_NAMA = nameProxy('peranKlien');
-const CASE_STATUS_NAMA = nameProxy('caseStatus');
+const TAHAP_NAMA = nameProxy('tahap', 'cases_tahap');
+const PERAN_KLIEN_NAMA = nameProxy('peranKlien', 'cases_peran_klien');
+const CASE_STATUS_NAMA = nameProxy('caseStatus', 'cases_status_siklus');
 
 /* ================================================================
    MODUL LITIGASI & SIDANG
@@ -1083,9 +1096,9 @@ function caseFormHTML(row, hearings, minutes) {
     <input id="cs_jenis" placeholder="${esc(t('cases.f.jenisPh'))}" value="${esc(row?.jenis_perkara || '')}"></div>
   <div class="grid2" style="margin-top:12px">
     <div class="f"><label>${t('cases.f.peran')}</label>
-      ${opsiKustom('cs_peran', r.peranKlien.map((v) => ({ v, l: PERAN_KLIEN_NAMA[v] })), row?.peran_klien, t('common.none'))}</div>
+      <select id="cs_peran">${opsi(r.peranKlien.map((v) => ({ v, l: PERAN_KLIEN_NAMA[v] })), row?.peran_klien, t('common.none'))}</select></div>
     <div class="f"><label>${t('cases.f.tahap')}</label>
-      ${opsiKustom('cs_tahap', r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row?.tahap || 'pendaftaran', t('common.none'))}</div>
+      <select id="cs_tahap">${opsi(r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row?.tahap || 'pendaftaran', t('common.none'))}</select></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.lawan')}</label>
     <input id="cs_lawan" value="${esc(row?.lawan_pihak_teks || '')}"></div>
@@ -1094,8 +1107,12 @@ function caseFormHTML(row, hearings, minutes) {
     <div class="f"><label>${t('cases.f.pic')}</label><select id="cs_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, t('common.none'))}</select></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.status')}</label>
-    ${opsiKustom('cs_status', r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row?.status_siklus || 'aktif', t('common.none'))}</div>
+    <select id="cs_status">${opsi(r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row?.status_siklus || 'aktif', t('common.none'))}</select></div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.keterangan')}</label><textarea id="cs_ket" rows="2">${esc(row?.keterangan || '')}</textarea></div>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
+    <div id="lampiran_perkara"></div>
+  </div>
   ${row ? `
   <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
     <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('cases.hearingTitle')}</h4>
@@ -1127,7 +1144,7 @@ async function bukaCaseDrawer(id) {
   let row = null, hearings = [], minutes = [];
   if (id) { const r = await Api.getCase(id); row = r.row; hearings = r.hearings; minutes = r.minutes; }
   bukaAuxDrawer('case', id ? t('cases.drawerTitle') : t('cases.drawerTitleNew'), caseFormHTML(row, hearings, minutes), simpanCase);
-  ['cs_peran', 'cs_tahap', 'cs_status'].forEach(pasangOpsiKustom);
+  renderLampiranPanel('lampiran_perkara', 'case', id, { clientOrgId: S.ws.client_org_id });
   if (id) {
     $('#cs_h_add').onclick = async () => {
       const tgl = $('#cs_h_tgl').value, jam = $('#cs_h_jam').value, agenda = $('#cs_h_agenda').value;
@@ -1148,10 +1165,10 @@ async function bukaCaseDrawer(id) {
 async function simpanCase() {
   const body = {
     nomorPerkara: $('#cs_nomor').value.trim(), pengadilan: $('#cs_pengadilan').value.trim() || null,
-    jenisPerkara: $('#cs_jenis').value.trim() || null, peranKlien: bacaOpsiKustom('cs_peran') || null,
-    tahap: bacaOpsiKustom('cs_tahap'), lawanPihakTeks: $('#cs_lawan').value.trim() || null,
+    jenisPerkara: $('#cs_jenis').value.trim() || null, peranKlien: $('#cs_peran').value || null,
+    tahap: $('#cs_tahap').value, lawanPihakTeks: $('#cs_lawan').value.trim() || null,
     tanggalDaftar: $('#cs_tgldaftar').value || null, picLegalId: $('#cs_pic').value || null,
-    statusSiklus: bacaOpsiKustom('cs_status'), keterangan: $('#cs_ket').value.trim() || null,
+    statusSiklus: $('#cs_status').value, keterangan: $('#cs_ket').value.trim() || null,
   };
   if (!body.nomorPerkara) return toast(t('cases.err.nomor'));
   try {
@@ -1166,7 +1183,7 @@ $('#addCaseBtn').onclick = () => bukaCaseDrawer(null);
    MODUL PROYEK LEGAL
    ================================================================ */
 const PJ = { rows: [], ref: null, dashboard: null, loaded: false, editing: null };
-const PROJECT_STATUS_NAMA = nameProxy('projStatus');
+const PROJECT_STATUS_NAMA = nameProxy('projStatus', 'legal_projects_status');
 const PROJECT_SW_NAMA = nameProxy('projSW');
 
 async function muatProjectsSemua() {
@@ -1244,14 +1261,18 @@ function projectFormHTML(row) {
     <input type="range" id="pj_progress" min="0" max="100" step="5" value="${row?.progress_persen ?? 0}"></div>
   <div class="grid2" style="margin-top:12px">
     <div class="f"><label>${t('projects.f.target')}</label><input type="date" id="pj_target" value="${esc(row?.target_selesai ? row.target_selesai.slice(0,10) : '')}"></div>
-    <div class="f"><label>${t('projects.f.status')}</label>${opsiKustom('pj_status', r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', t('common.none'))}</div>
+    <div class="f"><label>${t('projects.f.status')}</label><select id="pj_status">${opsi(r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>${t('projects.f.keterangan')}</label><textarea id="pj_ket" rows="3">${esc(row?.keterangan || '')}</textarea></div>`;
+  <div class="f" style="margin-top:12px"><label>${t('projects.f.keterangan')}</label><textarea id="pj_ket" rows="3">${esc(row?.keterangan || '')}</textarea></div>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
+    <div id="lampiran_proyek"></div>
+  </div>`;
 }
 async function bukaProjectDrawer(row) {
   PJ.editing = row ? row.id : null;
   bukaAuxDrawer('project', row ? t('projects.drawerTitle') : t('projects.drawerTitleNew'), projectFormHTML(row), simpanProject);
-  pasangOpsiKustom('pj_status');
+  renderLampiranPanel('lampiran_proyek', 'project', row ? row.id : null, { clientOrgId: S.ws.client_org_id });
   const range = $('#pj_progress');
   if (range) range.addEventListener('input', () => { $('#pj_progress_val').textContent = range.value; });
 }
@@ -1259,7 +1280,7 @@ async function simpanProject() {
   const body = {
     namaProyek: $('#pj_nama').value.trim(), kategori: $('#pj_kategori').value.trim() || null,
     picLegalId: $('#pj_pic').value || null, progressPersen: Number($('#pj_progress').value),
-    targetSelesai: $('#pj_target').value || null, status: bacaOpsiKustom('pj_status'),
+    targetSelesai: $('#pj_target').value || null, status: $('#pj_status').value,
     keterangan: $('#pj_ket').value.trim() || null,
   };
   if (!body.namaProyek) return toast(t('projects.err.nama'));
@@ -1275,8 +1296,8 @@ $('#addProjectBtn').onclick = () => bukaProjectDrawer(null);
    MODUL HUB PENDAMPINGAN
    ================================================================ */
 const PD = { rows: [], ref: null, loaded: false, editing: null };
-const JENIS_PD_NAMA = nameProxy('jenisPd');
-const STATUS_PD_NAMA = nameProxy('statusPd');
+const JENIS_PD_NAMA = nameProxy('jenisPd', 'pendampingan_jenis');
+const STATUS_PD_NAMA = nameProxy('statusPd', 'pendampingan_status');
 
 async function muatPendampinganSemua() {
   showApiErr('');
@@ -1316,27 +1337,31 @@ function pendampinganFormHTML(row) {
   return `
   <div class="grid2">
     <div class="f"><label>${t('pendampingan.f.jenis')} <span class="req">*</span></label>
-      ${opsiKustom('pd_jenis', r.jenis.map((v) => ({ v, l: JENIS_PD_NAMA[v] })), row?.jenis, t('common.none'))}</div>
+      <select id="pd_jenis">${opsi(r.jenis.map((v) => ({ v, l: JENIS_PD_NAMA[v] })), row?.jenis, t('common.none'))}</select></div>
     <div class="f"><label>${t('pendampingan.f.tanggal')}</label><input type="date" id="pd_tanggal" value="${esc(row?.tanggal_kegiatan ? row.tanggal_kegiatan.slice(0,10) : '')}"></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.lokasi')}</label><input id="pd_lokasi" value="${esc(row?.lokasi || '')}"></div>
   <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.pihak')}</label><input id="pd_pihak" value="${esc(row?.pihak_terlibat || '')}"></div>
   <div class="f" style="margin-top:12px"><label>${t('pendampingan.f.deskripsi')}</label><textarea id="pd_deskripsi" rows="3">${esc(row?.deskripsi || '')}</textarea></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>${t('pendampingan.f.status')}</label>${opsiKustom('pd_status', r.status.map((v) => ({ v, l: STATUS_PD_NAMA[v] })), row?.status || 'menunggu', t('common.none'))}</div>
+    <div class="f"><label>${t('pendampingan.f.status')}</label><select id="pd_status">${opsi(r.status.map((v) => ({ v, l: STATUS_PD_NAMA[v] })), row?.status || 'menunggu', t('common.none'))}</select></div>
     <div class="f"><label>${t('pendampingan.f.pic')}</label><select id="pd_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_id, t('common.none'))}</select></div>
+  </div>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
+    <div id="lampiran_pendampingan"></div>
   </div>`;
 }
 async function bukaPendampinganDrawer(row) {
   PD.editing = row ? row.id : null;
   bukaAuxDrawer('pendampingan', row ? t('pendampingan.drawerTitle') : t('pendampingan.drawerTitleNew'), pendampinganFormHTML(row), simpanPendampingan);
-  ['pd_jenis', 'pd_status'].forEach(pasangOpsiKustom);
+  renderLampiranPanel('lampiran_pendampingan', 'pendampingan', row ? row.id : null, { clientOrgId: S.ws.client_org_id });
 }
 async function simpanPendampingan() {
   const body = {
-    jenis: bacaOpsiKustom('pd_jenis'), tanggalKegiatan: $('#pd_tanggal').value || null,
+    jenis: $('#pd_jenis').value, tanggalKegiatan: $('#pd_tanggal').value || null,
     lokasi: $('#pd_lokasi').value.trim() || null, pihakTerlibat: $('#pd_pihak').value.trim() || null,
-    deskripsi: $('#pd_deskripsi').value.trim() || null, status: bacaOpsiKustom('pd_status'),
+    deskripsi: $('#pd_deskripsi').value.trim() || null, status: $('#pd_status').value,
     picId: $('#pd_pic').value || null,
   };
   if (!body.jenis) return toast(t('pendampingan.err.jenis'));
@@ -1423,6 +1448,7 @@ async function muatDashboardRingkas() {
   showApiErr('');
   try {
     const org = S.ws.client_org_id;
+    if (org) muatProfilPerusahaan(org); // tidak diawait — panel ini independen dari kartu ringkasan
     // Ditoleransi sebagian gagal: satu modul bermasalah tidak mengosongkan
     // seluruh dashboard — kartunya saja yang tampil "—".
     const hasil = await Promise.allSettled([
@@ -1479,7 +1505,7 @@ function gambarDashboard() {
     <div class="panel">
       <div class="panelhead"><div class="ttl2"><h3>${esc(t('dashboard.quickTitle'))}</h3></div></div>
       <div class="feed">
-        ${MODULES.filter((m) => m.id !== 'dashboard').map((m) => `
+        ${MODULES.filter((m) => !['dashboard', 'mycases', 'profile', 'masterdata'].includes(m.id)).map((m) => `
           <button class="it" data-go="${m.id}" style="width:100%;text-align:left">
             <span class="ic info">${ico({ kontrak:'file', permits:'shield', cases:'scale',
               projects:'folder', pendampingan:'users', docs:'archive' }[m.id])}</span>
@@ -1490,6 +1516,72 @@ function gambarDashboard() {
 
   document.querySelectorAll('#dashPanels [data-go]').forEach((b) => {
     b.onclick = () => switchModuleAll(b.dataset.go);
+  });
+}
+
+/* ---------------------------------------------------------------------
+   PROFIL PERUSAHAAN — panel di atas Dashboard. Bisa diedit Managing
+   Partner/Admin Staf MIKK ATAU admin_klien organisasi itu sendiri
+   (app.boleh_edit_klien(), db/18_client_orgs_edit_klien.sql) — peran
+   lain (PIC/staf biasa, legal_manager/viewer) hanya melihat. Tombol
+   Edit muncul/tidak berdasarkan `boleh_edit` dari API, bukan ditebak
+   dari peran workspace — itu cuma menghindari menawarkan tombol yang
+   memang akan ditolak RLS, bukan pemeriksaan hak akses yang sesungguhnya.
+   ------------------------------------------------------------------- */
+const KP_PROFIL = { row: null };
+async function muatProfilPerusahaan(orgId) {
+  try {
+    const { row } = await Api.getClientOrg(orgId);
+    KP_PROFIL.row = row;
+    renderProfilPerusahaan();
+  } catch (e) { /* non-fatal: panel disembunyikan saja kalau gagal dimuat */ }
+}
+function renderProfilPerusahaan() {
+  const r = KP_PROFIL.row;
+  const panel = $('#companyProfilePanel');
+  if (!r) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="panelhead">
+      <div class="ttl2"><h3>${esc(r.nama_legal)}</h3><p>${esc(r.nama_singkat)} · ${esc(r.sektor_usaha || '—')}</p></div>
+      ${r.boleh_edit ? `<button class="btn ghost" id="editProfilPerusahaanBtn">${esc(t('companyProfile.edit'))}</button>` : ''}
+    </div>
+    <div style="padding:16px 18px" class="grid2">
+      <div><div class="hint">${esc(t('companyProfile.npwp'))}</div><div class="doc">${esc(r.npwp || '—')}</div></div>
+      <div><div class="hint">${esc(t('companyProfile.nib'))}</div><div class="doc">${esc(r.nib || '—')}</div></div>
+      <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.alamat'))}</div><div>${esc(r.alamat || '—')}</div></div>
+      <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.kbli'))}</div><div>${(r.kbli || []).map((k) => `<span class="tag">${esc(k)}</span>`).join(' ') || '—'}</div></div>
+    </div>`;
+  if (r.boleh_edit) {
+    $('#editProfilPerusahaanBtn').onclick = () => bukaProfilPerusahaanDrawer(r);
+  }
+}
+function bukaProfilPerusahaanDrawer(r) {
+  bukaAuxDrawer('companyprofile', t('companyProfile.editTitle'), `
+    <div class="f"><label>${t('companyProfile.namaLegal')}</label><input id="cp_namaLegal" value="${esc(r.nama_legal)}"></div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="f"><label>${t('companyProfile.npwp')}</label><input id="cp_npwp" value="${esc(r.npwp || '')}"></div>
+      <div class="f"><label>${t('companyProfile.nib')}</label><input id="cp_nib" value="${esc(r.nib || '')}"></div>
+    </div>
+    <div class="f" style="margin-top:12px"><label>${t('companyProfile.sektorUsaha')}</label><input id="cp_sektor" value="${esc(r.sektor_usaha || '')}"></div>
+    <div class="f" style="margin-top:12px"><label>${t('companyProfile.alamat')}</label><textarea id="cp_alamat" rows="3">${esc(r.alamat || '')}</textarea></div>
+    <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
+      <input id="cp_kbli" value="${esc((r.kbli || []).join(', '))}">
+      <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>
+  `, async () => {
+    try {
+      await Api.updateClientOrg(r.client_org_id, {
+        namaLegal: $('#cp_namaLegal').value.trim(),
+        npwp: $('#cp_npwp').value.trim() || null,
+        nib: $('#cp_nib').value.trim() || null,
+        sektorUsaha: $('#cp_sektor').value.trim() || null,
+        alamat: $('#cp_alamat').value.trim() || null,
+        kbli: $('#cp_kbli').value.split(',').map((s) => s.trim()).filter(Boolean),
+      });
+      tutupAuxDrawer();
+      await muatProfilPerusahaan(r.client_org_id);
+      toast(t('common.saved'));
+    } catch (e) { toast(e.message || t('common.saveFailed')); }
   });
 }
 
@@ -1525,6 +1617,8 @@ onLangChange(() => {
   if (RT.loaded) renderTarifTable();
   if (MC.loaded) { renderMyCasesCards(); renderMyCasesTable(); renderKlienKhususPanel(); }
   if (PR.loaded) { renderProfilIdentitas(); renderProfilProjects(); renderProfilDocs(); }
+  if (MD.loaded) renderMasterDataPage();
+  if (KP_PROFIL.row) renderProfilPerusahaan();
 });
 
 /* ---------------------------------------------------------------- mulai */
@@ -1976,7 +2070,7 @@ async function bukaMyCaseDrawer(row) {
   try { MC.ref = await Api.casesReference(pemilikDariBarisPerkara(row)); }
   catch (e) { MC.ref = { pic: [], tahap: [], peranKlien: [], statusSiklus: [] }; }
   bukaAuxDrawer('mycase', t('mycases.drawerTitle', { nomor: row.nomor_perkara }), myCaseFormHTML(row), simpanMyCase);
-  ['mc_tahap', 'mc_status'].forEach(pasangOpsiKustom);
+  renderLampiranPanel('lampiran_mycase', 'case', row.id, pemilikDariBarisPerkara(row));
 }
 function myCaseFormHTML(row) {
   const r = MC.ref;
@@ -1984,17 +2078,21 @@ function myCaseFormHTML(row) {
   <div class="f"><label>${t('mycases.f.klien')}</label>
     <div class="ttl">${esc(row.klien_nama)} <span class="tag">${esc(JENIS_KLIEN_NAMA[row.jenis_klien] || row.jenis_klien)}</span></div></div>
   <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>${t('cases.f.tahap')}</label>${opsiKustom('mc_tahap', r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row.tahap, t('common.none'))}</div>
-    <div class="f"><label>${t('cases.f.status')}</label>${opsiKustom('mc_status', r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row.status_siklus, t('common.none'))}</div>
+    <div class="f"><label>${t('cases.f.tahap')}</label><select id="mc_tahap">${opsi(r.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), row.tahap, t('common.none'))}</select></div>
+    <div class="f"><label>${t('cases.f.status')}</label><select id="mc_status">${opsi(r.statusSiklus.map((v) => ({ v, l: CASE_STATUS_NAMA[v] || v })), row.status_siklus, t('common.none'))}</select></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.pic')}</label>
     <select id="mc_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row.pic_legal_id, t('common.none'))}</select></div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.keterangan')}</label><textarea id="mc_ket" rows="3">${esc(row.keterangan || '')}</textarea></div>
-  <p class="hint" style="margin-top:10px">${esc(t('mycases.editHint'))}</p>`;
+  <p class="hint" style="margin-top:10px">${esc(t('mycases.editHint'))}</p>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
+    <div id="lampiran_mycase"></div>
+  </div>`;
 }
 async function simpanMyCase() {
   const body = {
-    tahap: bacaOpsiKustom('mc_tahap'), statusSiklus: bacaOpsiKustom('mc_status'),
+    tahap: $('#mc_tahap').value, statusSiklus: $('#mc_status').value,
     picLegalId: $('#mc_pic').value || null, keterangan: $('#mc_ket').value.trim() || null,
   };
   try {
@@ -2008,11 +2106,14 @@ async function bukaMyCaseBaruDrawer() {
   let orgRows = [];
   try { orgRows = (await Api.clientOrgs()).rows; } catch (e) { /* tetap lanjut, list org kosong */ }
   MC.orgRows = orgRows;
+  // Tahap perkara sekarang dari Master Data (bukan hardcode) — /reference
+  // tidak butuh pemilik untuk ini, cuma untuk daftar PIC (lihat
+  // cases.routes.js: pemilik opsional di endpoint ini).
+  try { MC.refBaru = await Api.casesReference(); } catch (e) { MC.refBaru = { tahap: [] }; }
   await muatKlienKhususSemua();
   bukaAuxDrawer('mycasebaru', t('mycases.newTitle'), myCaseBaruFormHTML(), simpanMyCaseBaru);
   $('#mcb_tipe').addEventListener('change', gambarMyCaseBaruPemilik);
   gambarMyCaseBaruPemilik();
-  pasangOpsiKustom('mcb_tahap');
 }
 function myCaseBaruFormHTML() {
   return `
@@ -2025,8 +2126,7 @@ function myCaseBaruFormHTML() {
   <div class="f" id="mcb_pemilikWrap" style="margin-top:12px"></div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.nomor')} <span class="req">*</span></label><input id="mcb_nomor"></div>
   <div class="f" style="margin-top:12px"><label>${t('cases.f.tahap')}</label>
-    ${opsiKustom('mcb_tahap', ['pendaftaran','mediasi','persidangan','pembuktian','putusan','banding','kasasi','pk','selesai']
-      .map((v) => ({ v, l: TAHAP_NAMA[v] })), 'pendaftaran', t('common.none'))}</div>
+    <select id="mcb_tahap">${opsi(MC.refBaru.tahap.map((v) => ({ v, l: TAHAP_NAMA[v] })), 'pendaftaran', t('common.none'))}</select></div>
   <p class="hint" style="margin-top:10px">${esc(t('mycases.newHint'))}</p>`;
 }
 function gambarMyCaseBaruPemilik() {
@@ -2059,7 +2159,7 @@ async function simpanMyCaseBaru() {
   if (!pemilikId) return toast(t('mycases.err.klien'));
   if (!nomor) return toast(t('cases.err.nomor'));
   const body = {
-    nomorPerkara: nomor, tahap: bacaOpsiKustom('mcb_tahap'),
+    nomorPerkara: nomor, tahap: $('#mcb_tahap').value,
     // PIC diisi otomatis ke diri sendiri — supaya perkara baru langsung
     // muncul di "Perkara Saya" tanpa langkah penugasan terpisah. Bisa
     // diubah lagi lewat drawer edit (bukaMyCaseDrawer) kalau perlu.
@@ -2133,12 +2233,34 @@ $('#addKlienGrupBtn').onclick = () => bukaKlienGrupDrawer();
    Tidak ada endpoint baru: blob yang sama dengan unduhan, ditampilkan di
    modal alih-alih dipaksa men-download (lihat Api.previewDocumentBlob).
    ================================================================ */
+// Format Office (docx/xlsx/pptx + varian lama .doc/.xls/.ppt) tidak bisa
+// dirender langsung di browser lewat <img>/<iframe> blob seperti gambar/PDF
+// — dipakai Google Docs Viewer, yang mengambil sendiri berkasnya lewat URL
+// publik berumur pendek (lihat POST /api/documents/:id/preview-link).
+// Trade-off ini disengaja (dikonfirmasi pengguna): isi dokumen terkirim ke
+// server Google selama link ~5 menit itu valid.
+const OFFICE_MIME = new Set([
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]);
+
 async function bukaPreviewDokumen(id, mime, nama) {
   const modal = $('#previewModal'), body = $('#previewBody');
   $('#previewTitle').textContent = nama || '';
   body.innerHTML = `<p class="hint">${esc(t('docs.previewLoading'))}</p>`;
   modal.style.display = 'flex';
   try {
+    if (OFFICE_MIME.has(mime)) {
+      const { url } = await Api.createPreviewLink(id);
+      const viewerUrl = 'https://docs.google.com/gview?embedded=true&url=' + encodeURIComponent(url);
+      body.innerHTML = `<iframe src="${viewerUrl}" title="${esc(nama || '')}" style="width:100%;height:75vh;border:0"></iframe>
+        <p class="hint" style="margin-top:8px">${esc(t('docs.previewOfficeNote'))}</p>`;
+      return;
+    }
     const blob = await Api.previewDocumentBlob(id);
     const url = URL.createObjectURL(blob);
     if ((mime || '').startsWith('image/')) {
@@ -2284,3 +2406,130 @@ async function renderProfilDocs() {
     };
   } catch (e) { wrap.innerHTML = `<p class="hint">${esc(e.message || t('docs.loadError'))}</p>`; }
 }
+
+/* ================================================================
+   LAMPIRAN DOKUMEN — panel dipakai ulang di drawer kontrak/izin/
+   perkara/proyek/pendampingan. Sama persis pola dengan renderProfilDocs
+   di atas, cuma digeneralkan: ownerParams = objek pemilik dokumen
+   ({clientOrgId} untuk kontrak/izin/proyek/pendampingan yang selalu
+   org-scoped, atau hasil pemilikDariBarisPerkara() untuk perkara yang
+   bisa perorangan/kelompok), entityType/entityId = tautan
+   document_links yang sudah ada.
+   ================================================================ */
+async function renderLampiranPanel(containerId, entityType, entityId, ownerParams) {
+  const wrap = $('#' + containerId);
+  if (!wrap) return;
+  if (!entityId) { wrap.innerHTML = `<p class="hint">${esc(t('lampiran.simpanDulu'))}</p>`; return; }
+  try {
+    const { rows } = await Api.documents({ ...ownerParams, entityType, entityId });
+    wrap.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input type="file" id="${containerId}_file" style="flex:1;font-size:12px">
+        <button class="btn ghost" id="${containerId}_upload" type="button" style="padding:7px 14px;font-size:11px">${esc(t('lampiran.uploadBtn'))}</button>
+      </div>
+      <div class="tscroll"><table style="min-width:420px"><tbody>${
+        rows.map((d, i) => `<tr>
+          <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+          <td>${esc(d.nama_file)}</td><td>${fmtUkuran(d.ukuran_byte)}</td>
+          <td><button class="btn ghost" type="button" data-preview="${d.id}" data-mime="${esc(d.mime_type || '')}" data-fn="${esc(d.nama_file)}" style="padding:4px 7px;font-size:10.5px">${esc(t('docs.preview'))}</button>
+            <button class="btn ghost" type="button" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:4px 7px;font-size:10.5px">${esc(t('docs.download'))}</button></td>
+        </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted-2);padding:12px">${esc(t('lampiran.kosong'))}</td></tr>`
+      }</tbody></table></div>`;
+    wrap.querySelectorAll('[data-dl]').forEach((b) => {
+      b.onclick = () => Api.downloadDocument(b.dataset.dl, b.dataset.fn).catch((e) => toast(e.message || t('docs.downloadFail')));
+    });
+    wrap.querySelectorAll('[data-preview]').forEach((b) => {
+      b.onclick = () => bukaPreviewDokumen(b.dataset.preview, b.dataset.mime, b.dataset.fn);
+    });
+    $('#' + containerId + '_upload').onclick = async () => {
+      const fileEl = $('#' + containerId + '_file');
+      if (!fileEl.files.length) return toast(t('lampiran.uploadHint.pilih'));
+      const fd = new FormData();
+      fd.append('file', fileEl.files[0]);
+      Object.entries(ownerParams).forEach(([k, v]) => fd.append(k, v));
+      fd.append('entityType', entityType); fd.append('entityId', entityId);
+      try { await Api.uploadDocument(fd); toast(t('docs.uploaded')); renderLampiranPanel(containerId, entityType, entityId, ownerParams); }
+      catch (e) { toast(e.message || t('docs.uploadHint.fail')); }
+    };
+  } catch (e) { wrap.innerHTML = `<p class="hint">${esc(e.message || t('docs.loadError'))}</p>`; }
+}
+
+/* ================================================================
+   MODUL MASTER DATA — kelola opsi dropdown (mengganti "isi sendiri")
+   Lihat db/17_master_data_opsi.sql. Baca boleh siapa saja login;
+   tulis (RLS opsi_master_tulis) hanya Managing Partner/Admin Staf —
+   tombolnya sendiri sudah digerbangi lewat visibilitas #modMasterDataBtn
+   (lihat enterWorkspace), sama seperti pola Tarif Layanan.
+   ================================================================ */
+const KATEGORI_MASTER_DATA = [
+  'cases_tahap', 'cases_peran_klien', 'cases_status_siklus',
+  'contracts_status_siklus', 'contracts_jenis_dokumen', 'contracts_relasi_ke_induk',
+  'permits_status_siklus', 'legal_projects_status',
+  'pendampingan_jenis', 'pendampingan_status',
+];
+const MD = { rows: [], loaded: false, kategoriAktif: KATEGORI_MASTER_DATA[0] };
+
+async function muatMasterDataSemua() {
+  showApiErr('');
+  try {
+    const { rows } = await Api.masterData();
+    MD.rows = rows; MD.loaded = true;
+    renderMasterDataPage();
+  } catch (err) { showApiErr(err.message || t('masterData.loadError')); }
+}
+function renderMasterDataPage() {
+  $('#masterDataTabs').innerHTML = KATEGORI_MASTER_DATA.map((k) => `
+    <button class="chip ${k === MD.kategoriAktif ? 'on' : ''}" data-kat="${k}" style="margin:0 6px 6px 0">${esc(t('masterData.kategori.' + k))}</button>
+  `).join('');
+  document.querySelectorAll('#masterDataTabs [data-kat]').forEach((b) => {
+    b.onclick = () => { MD.kategoriAktif = b.dataset.kat; renderMasterDataPage(); };
+  });
+
+  const baris = MD.rows.filter((r) => r.kategori === MD.kategoriAktif).sort((a, b) => a.urutan - b.urutan);
+  $('#masterDataBody').innerHTML = baris.map((r) => `
+    <tr data-id="${r.id}" style="${r.aktif ? '' : 'opacity:.5'}">
+      <td><span class="doc">${esc(r.kode)}</span></td>
+      <td><input class="fld md_labelId" value="${esc(r.label_id)}" style="width:100%"></td>
+      <td><input class="fld md_labelEn" value="${esc(r.label_en || '')}" style="width:100%"></td>
+      <td><input class="fld md_urutan" type="number" value="${r.urutan}" style="width:70px"></td>
+      <td style="text-align:center"><input type="checkbox" class="md_aktif" ${r.aktif ? 'checked' : ''}></td>
+      <td><button class="btn ghost md_simpan" style="padding:5px 10px;font-size:11px">${esc(t('common.save'))}</button></td>
+    </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;color:var(--muted-2);padding:16px">${esc(t('masterData.kosong'))}</td></tr>`;
+
+  document.querySelectorAll('#masterDataBody tr[data-id]').forEach((tr) => {
+    tr.querySelector('.md_simpan').onclick = async () => {
+      const id = tr.dataset.id;
+      try {
+        await Api.updateMasterDataOption(id, {
+          labelId: tr.querySelector('.md_labelId').value.trim(),
+          labelEn: tr.querySelector('.md_labelEn').value.trim() || null,
+          urutan: Number(tr.querySelector('.md_urutan').value) || 0,
+          aktif: tr.querySelector('.md_aktif').checked,
+        });
+        toast(t('common.saved'));
+        await muatMasterDataUlang();
+      } catch (e) { toast(e.message || t('common.saveFailed')); }
+    };
+  });
+}
+async function muatMasterDataUlang() {
+  const { rows } = await Api.masterData();
+  MD.rows = rows;
+  setMasterDataLabels(rows); // supaya label yang baru diubah langsung kepakai di modul lain juga
+  renderMasterDataPage();
+}
+$('#masterDataAddBtn').onclick = async () => {
+  const kode = $('#md_new_kode').value.trim();
+  const labelId = $('#md_new_labelId').value.trim();
+  if (!kode || !labelId) return toast(t('masterData.err.wajib'));
+  try {
+    await Api.createMasterDataOption({
+      kategori: MD.kategoriAktif, kode, labelId,
+      labelEn: $('#md_new_labelEn').value.trim() || null,
+      urutan: MD.rows.filter((r) => r.kategori === MD.kategoriAktif).length,
+    });
+    $('#md_new_kode').value = ''; $('#md_new_labelId').value = ''; $('#md_new_labelEn').value = '';
+    toast(t('common.saved'));
+    await muatMasterDataUlang();
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
+};

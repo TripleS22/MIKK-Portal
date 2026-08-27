@@ -19,11 +19,10 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { queryAsUser, withUser } = require('../lib/db');
+const { queryAsUser, withUser, queryAnon } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
-router.use(authenticate);
 
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -34,6 +33,82 @@ const upload = multer({
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ---------------------------------------------------------------------
+// Link pratinjau publik berumur pendek — SATU-SATUNYA jalan dokumen di
+// sini boleh diakses TANPA header Authorization. Dibuat khusus untuk
+// Google Docs Viewer / MS Office Online (keduanya server pihak ketiga
+// yang mengambil sendiri berkasnya lewat URL, tidak bisa mengirim token
+// sesi kita). Sadar akan trade-off-nya: isi dokumen terkirim ke server
+// pihak ketiga selama link ini valid — makanya token dibuat SEPENDEK
+// mungkin umurnya (5 menit) dan hanya berlaku untuk SATU dokumen, bukan
+// jalan pintas ke seluruh arsip. Endpoint /preview-link (yang membuat
+// token ini) TETAP lewat authenticate + RLS seperti biasa — hanya
+// /public (yang memverifikasi token, bukan sesi) yang terbuka.
+// ---------------------------------------------------------------------
+const PREVIEW_LINK_TTL_MS = 5 * 60 * 1000;
+const PREVIEW_SECRET = process.env.DOCUMENT_LINK_SECRET;
+if (!PREVIEW_SECRET) {
+  console.warn('[documents] PERINGATAN: DOCUMENT_LINK_SECRET tidak diset — pratinjau Office akan gagal dibuat.');
+}
+
+function buatTokenPreview(documentId) {
+  const expiry = Date.now() + PREVIEW_LINK_TTL_MS;
+  const payload = `${documentId}.${expiry}`;
+  const sig = crypto.createHmac('sha256', PREVIEW_SECRET || '').update(payload).digest('base64url');
+  return `${Buffer.from(payload).toString('base64url')}.${sig}`;
+}
+
+function verifikasiTokenPreview(documentId, token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
+  const [payloadB64, sig] = token.split('.');
+  const payload = Buffer.from(payloadB64, 'base64url').toString('utf8');
+  const sigDihitung = crypto.createHmac('sha256', PREVIEW_SECRET || '').update(payload).digest('base64url');
+  const sigBuf = Buffer.from(sig || '');
+  const sigDihitungBuf = Buffer.from(sigDihitung);
+  if (sigBuf.length !== sigDihitungBuf.length || !crypto.timingSafeEqual(sigBuf, sigDihitungBuf)) return false;
+  const [id, expiryStr] = payload.split('.');
+  if (id !== documentId) return false;
+  return Date.now() <= Number(expiryStr);
+}
+
+// GET /api/documents/:id/public?token=...  — TANPA authenticate, lihat
+// catatan panjang di atas. Isi berkas apa adanya, TIDAK ada info dokumen
+// lain yang bisa digali dari sini (butuh tahu id-nya lebih dulu, dan
+// tokennya spesifik untuk id itu saja).
+router.get('/:id/public', async (req, res, next) => {
+  try {
+    if (!verifikasiTokenPreview(req.params.id, req.query.token)) {
+      return res.status(403).json({ error: 'Link pratinjau tidak valid atau sudah kedaluwarsa.' });
+    }
+    // Dibaca lewat app.dokumen_publik() (security definer, db/19) — bukan
+    // queryAsUser biasa, karena memang tidak ada sesi di sini. Validitas
+    // token di atas SUDAH jadi satu-satunya gerbang sebelum baris ini
+    // sempat dipanggil sama sekali; itu kenapa umurnya harus sangat pendek.
+    const { rows } = await queryAnon(`select * from app.dokumen_publik($1)`, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Dokumen tidak ditemukan.' });
+    const doc = rows[0];
+    const fullPath = path.join(UPLOAD_DIR, doc.storage_path);
+    if (!fs.existsSync(fullPath)) return res.status(410).json({ error: 'Berkas tidak ditemukan di penyimpanan server.' });
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.nama_file)}"`);
+    fs.createReadStream(fullPath).pipe(res);
+  } catch (err) { next(err); }
+});
+
+router.use(authenticate);
+
+// POST /api/documents/:id/preview-link — butuh login; RLS via queryAsUser
+// yang memutuskan boleh/tidaknya, sama seperti /download.
+router.post('/:id/preview-link', async (req, res, next) => {
+  try {
+    const { rows } = await queryAsUser(req.user.id, `select id from documents where id = $1`, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Dokumen tidak ditemukan, atau Anda tidak punya akses.' });
+    const token = buatTokenPreview(req.params.id);
+    const url = `${req.protocol}://${req.get('host')}/api/documents/${req.params.id}/public?token=${token}`;
+    res.json({ url, expiresInMs: PREVIEW_LINK_TTL_MS });
+  } catch (err) { next(err); }
+});
 
 // GET /api/documents?clientOrgId=&entityType=&entityId=
 // atau  ?individualClientId=...   atau  ?clientGroupId=...

@@ -10,6 +10,7 @@
 const express = require('express');
 const { queryAsUser, withUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { opsiKategori } = require('../lib/opsi-master');
 
 const router = express.Router();
 router.use(authenticate);
@@ -60,31 +61,33 @@ router.get('/dashboard', async (req, res, next) => {
 // PIC diresolusi dari client_assignments untuk pemilik yang bersangkutan.
 // Daftar tahap/peranKlien/statusSiklus di bawah adalah PRESET saja — sejak
 // 13_opsi_bebas_isi_sendiri.sql, database tidak lagi menegakkan daftar
-// tertutup ini; UI menawarkan opsi "Lainnya… (isi sendiri)" di sampingnya.
+// tertutup ini di level kolom — tapi UI sekarang HANYA menawarkan
+// dropdown dari Master Data (db/17_master_data_opsi.sql), bukan lagi
+// input bebas ketik. Pemilik OPSIONAL di sini (beda dari GET / dan
+// POST): dipakai untuk resolusi PIC saja — form "tambah perkara baru"
+// perlu memuat daftar tahap/peran/status SEBELUM pemiliknya dipilih.
 router.get('/reference', async (req, res, next) => {
-  const pemilik = pemilikDariQuery(req.query);
-  if (!pemilik) {
-    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
-  }
+  const pemilik = pemilikDariQuery(req.query) || { clientOrgId: null, individualClientId: null, clientGroupId: null };
   try {
-    const { rows } = await queryAsUser(
-      req.user.id,
-      `select distinct u.id, u.nama, ms.jabatan from users u
-         join client_assignments ca on ca.user_id = u.id
-         left join mikk_staff ms on ms.user_id = u.id
-        where ca.client_org_id is not distinct from $1
-          and ca.individual_client_id is not distinct from $2
-          and ca.client_group_id is not distinct from $3
-          and (ca.selesai is null or ca.selesai >= current_date)
-        order by u.nama`,
-      [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId]
-    );
-    res.json({
-      pic: rows,
-      tahap: ['pendaftaran','mediasi','persidangan','pembuktian','putusan','banding','kasasi','pk','selesai'],
-      peranKlien: ['penggugat','tergugat','pemohon','termohon','pelapor','terlapor','lainnya'],
-      statusSiklus: ['aktif', 'selesai', 'dicabut'],
-    });
+    const hasPemilik = req.query.clientOrgId || req.query.individualClientId || req.query.clientGroupId;
+    const [pic, tahap, peranKlien, statusSiklus] = await Promise.all([
+      hasPemilik ? queryAsUser(
+        req.user.id,
+        `select distinct u.id, u.nama, ms.jabatan from users u
+           join client_assignments ca on ca.user_id = u.id
+           left join mikk_staff ms on ms.user_id = u.id
+          where ca.client_org_id is not distinct from $1
+            and ca.individual_client_id is not distinct from $2
+            and ca.client_group_id is not distinct from $3
+            and (ca.selesai is null or ca.selesai >= current_date)
+          order by u.nama`,
+        [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId]
+      ) : Promise.resolve({ rows: [] }),
+      opsiKategori(queryAsUser, req.user.id, 'cases_tahap'),
+      opsiKategori(queryAsUser, req.user.id, 'cases_peran_klien'),
+      opsiKategori(queryAsUser, req.user.id, 'cases_status_siklus'),
+    ]);
+    res.json({ pic: pic.rows, tahap, peranKlien, statusSiklus });
   } catch (err) { next(err); }
 });
 

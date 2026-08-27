@@ -1,43 +1,63 @@
 // server/routes/auth.routes.js
 const express = require('express');
 const { queryAnon, queryAsUser } = require('../lib/db');
-const { signToken, checkPassword } = require('../lib/auth');
+const { signInWithPassword, refreshSession } = require('../lib/supabase-auth');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
 
 // POST /api/auth/login
-// Konteks: BELUM ada pengguna terautentikasi, jadi query pakai queryAnon.
-// Ini satu-satunya tempat di aplikasi yang boleh membaca users/local_auth
-// tanpa app.current_user_id — karena memang belum ada sesi untuk diset.
-router.post('/login', async (req, res) => {
+// Frontend TIDAK bicara langsung ke Supabase — kredensial tetap lewat
+// API kita sendiri, lalu diteruskan ke Supabase Auth di sini (lihat
+// server/lib/supabase-auth.js). Bentuk respons ({token, user}) sengaja
+// dipertahankan sama seperti sebelum migrasi, ditambah refreshToken.
+router.post('/login', async (req, res, next) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'Email dan kata sandi wajib diisi.' });
   }
-
-  const { rows } = await queryAnon(
-    `select u.id, u.email, u.nama, u.tipe, u.aktif, la.password_hash
-       from users u
-       join local_auth la on la.user_id = u.id
-      where lower(u.email) = lower($1)`,
-    [email]
-  );
-
-  const user = rows[0];
   // Pesan generik disengaja: tidak membedakan "email tidak ada" dari
   // "kata sandi salah", supaya tidak membantu penebakan akun yang ada.
   const gagal = () => res.status(401).json({ error: 'Email atau kata sandi salah.' });
 
-  if (!user || !user.aktif) return gagal();
-  const cocok = await checkPassword(password, user.password_hash);
-  if (!cocok) return gagal();
+  try {
+    let sesi;
+    try {
+      sesi = await signInWithPassword(email, password);
+    } catch (e) {
+      return gagal();
+    }
 
-  const token = signToken({ sub: user.id, email: user.email, nama: user.nama, tipe: user.tipe });
-  res.json({
-    token,
-    user: { id: user.id, email: user.email, nama: user.nama, tipe: user.tipe },
-  });
+    // Supabase Auth tidak tahu soal kolom `aktif` kita — akun yang sudah
+    // dinonaktifkan lewat aplikasi ini tetap harus ditolak di sini,
+    // walau kredensial Supabase-nya sendiri masih sah.
+    const { rows } = await queryAnon(
+      'select id, email, nama, tipe, aktif from users where lower(email) = lower($1)',
+      [email]
+    );
+    const user = rows[0];
+    if (!user || !user.aktif) return gagal();
+
+    res.json({
+      token: sesi.accessToken,
+      refreshToken: sesi.refreshToken,
+      user: { id: user.id, email: user.email, nama: user.nama, tipe: user.tipe },
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/refresh — access token Supabase berumur pendek (~1 jam
+// secara bawaan), jadi frontend memanggil ini diam-diam saat kedaluwarsa
+// alih-alih memaksa pengguna login ulang tiap jam.
+router.post('/refresh', async (req, res, next) => {
+  const { refreshToken } = req.body || {};
+  if (!refreshToken) return res.status(400).json({ error: 'refreshToken wajib disertakan.' });
+  try {
+    const sesi = await refreshSession(refreshToken);
+    res.json({ token: sesi.accessToken, refreshToken: sesi.refreshToken });
+  } catch (err) {
+    res.status(401).json({ error: 'Sesi tidak bisa diperpanjang. Silakan login kembali.' });
+  }
 });
 
 // GET /api/auth/workspaces

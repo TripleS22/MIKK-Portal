@@ -2,6 +2,7 @@
 const express = require('express');
 const { queryAsUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { opsiKategori } = require('../lib/opsi-master');
 
 const router = express.Router();
 router.use(authenticate);
@@ -46,7 +47,8 @@ router.get('/reference', async (req, res, next) => {
         order by u.nama`,
       [clientOrgId]
     );
-    res.json({ pic: rows, status: ['berjalan', 'selesai', 'tertunda', 'dibatalkan'] });
+    const status = await opsiKategori(queryAsUser, req.user.id, 'legal_projects_status');
+    res.json({ pic: rows, status });
   } catch (err) { next(err); }
 });
 

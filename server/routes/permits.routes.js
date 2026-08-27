@@ -7,6 +7,7 @@
 const express = require('express');
 const { queryAsUser, withUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { opsiKategori } = require('../lib/opsi-master');
 
 const router = express.Router();
 router.use(authenticate);
@@ -77,7 +78,7 @@ router.get('/reference', async (req, res, next) => {
   try {
     const { clientOrgId } = req.query;
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
-    const [types, pic] = await Promise.all([
+    const [types, pic, statusSiklus] = await Promise.all([
       queryAsUser(req.user.id,
         `select id, kode, nama, instansi, wajib from permit_types
           where masih_berlaku order by wajib desc, nama`),
@@ -88,12 +89,9 @@ router.get('/reference', async (req, res, next) => {
           where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
           order by u.nama`,
         [clientOrgId]),
+      opsiKategori(queryAsUser, req.user.id, 'permits_status_siklus'),
     ]);
-    res.json({
-      permitTypes: types.rows,
-      pic: pic.rows,
-      statusSiklus: ['aktif', 'dalam_pengurusan', 'dicabut', 'tidak_berlaku_lagi'],
-    });
+    res.json({ permitTypes: types.rows, pic: pic.rows, statusSiklus });
   } catch (err) { next(err); }
 });
 

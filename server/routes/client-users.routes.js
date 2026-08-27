@@ -20,7 +20,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { queryAsUser, withUser } = require('../lib/db');
-const { hashPassword } = require('../lib/auth');
+const { createAuthUser, updateAuthUserPassword } = require('../lib/supabase-auth');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
@@ -31,7 +31,8 @@ const PERAN = ['admin_klien', 'legal_manager', 'viewer'];
 /* Kata sandi awal dibuat sistem, bukan diketik admin. Admin yang mengetik
    sendiri cenderung memilih pola yang mudah ditebak dan memakainya ulang
    untuk banyak klien. Nilai ini ditampilkan SEKALI ke admin lalu tidak
-   pernah bisa dibaca lagi — yang tersimpan hanya hash bcrypt-nya. */
+   pernah bisa dibaca lagi — yang tersimpan hanya di Supabase Auth
+   (lihat server/lib/supabase-auth.js), bukan di database aplikasi ini. */
 function kataSandiAwal() {
   const abjad = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const acak = crypto.randomBytes(16);
@@ -66,13 +67,15 @@ router.get('/', async (req, res, next) => {
     const { clientOrgId } = req.query;
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
 
+    // punya_sandi selalu true sekarang: akun klien di sini SELALU dibuat
+    // sepasang dengan akun Supabase Auth-nya (lihat POST di bawah), tidak
+    // pernah ada baris users tanpa kredensial seperti dulu di local_auth.
     const { rows } = await queryAsUser(req.user.id,
       `select cm.id as membership_id, cm.peran, cm.aktif as membership_aktif, cm.created_at,
               u.id as user_id, u.nama, u.email, u.no_hp, u.aktif as user_aktif,
-              (la.user_id is not null) as punya_sandi
+              true as punya_sandi
          from client_memberships cm
          join users u on u.id = cm.user_id
-         left join local_auth la on la.user_id = u.id
         where cm.client_org_id = $1
         order by cm.peran, u.nama`,
       [clientOrgId]);
@@ -111,22 +114,32 @@ router.post('/', wajibAdminMikk, async (req, res, next) => {
     if (!org.length) return res.status(404).json({ error: 'Organisasi klien tidak ditemukan.' });
 
     const sandi = kataSandiAwal();
-    const hash = await hashPassword(sandi);
+
+    // Email yang sudah ada dipakai ulang, bukan ditolak: satu orang bisa
+    // sah menjadi anggota lebih dari satu organisasi klien (mis. konsultan
+    // yang menangani dua entitas dalam satu grup). Dibaca DI LUAR transaksi
+    // supaya panggilan HTTP ke Supabase Auth (di bawah) tidak terjadi
+    // sambil ada transaksi database yang terbuka.
+    const { rows: ada } = await queryAsUser(req.user.id,
+      'select id, nama, tipe from users where lower(email) = $1', [email]);
+    if (ada.length && ada[0].tipe === 'mikk_staff') {
+      return res.status(409).json({
+        error: 'Email ini milik staf MIKK. Gunakan penugasan staf, bukan akun klien.',
+      });
+    }
+
+    // Akun Supabase Auth dibuat SEBELUM baris users, supaya kalau langkah
+    // ini gagal (mis. email sudah dipakai di sisi Supabase) tidak ada
+    // baris users yatim yang sempat tersimpan.
+    let authUserId = null;
+    if (!ada.length) {
+      const akun = await createAuthUser(email, sandi);
+      authUserId = akun.id;
+    }
 
     const hasil = await withUser(req.user.id, async (client) => {
-      // Email yang sudah ada dipakai ulang, bukan ditolak: satu orang bisa
-      // sah menjadi anggota lebih dari satu organisasi klien (mis. konsultan
-      // yang menangani dua entitas dalam satu grup).
-      const { rows: ada } = await client.query(
-        'select id, nama, tipe from users where lower(email) = $1', [email]);
-
       let userId, dibuatBaru = false;
       if (ada.length) {
-        if (ada[0].tipe === 'mikk_staff') {
-          throw Object.assign(
-            new Error('Email ini milik staf MIKK. Gunakan penugasan staf, bukan akun klien.'),
-            { status: 409 });
-        }
         userId = ada[0].id;
         const { rows: bentrok } = await client.query(
           'select 1 from client_memberships where user_id = $1 and client_org_id = $2',
@@ -137,12 +150,10 @@ router.post('/', wajibAdminMikk, async (req, res, next) => {
         }
       } else {
         const { rows: u } = await client.query(
-          `insert into users (email, nama, tipe, no_hp) values ($1,$2,'client_user',$3)
-           returning id`, [email, nama, b.noHp || null]);
+          `insert into users (email, nama, tipe, no_hp, auth_user_id) values ($1,$2,'client_user',$3,$4)
+           returning id`, [email, nama, b.noHp || null, authUserId]);
         userId = u[0].id;
         dibuatBaru = true;
-        await client.query(
-          'insert into local_auth (user_id, password_hash) values ($1,$2)', [userId, hash]);
       }
 
       await client.query(
@@ -195,7 +206,7 @@ router.post('/:userId/reset-password', wajibAdminMikk, async (req, res, next) =>
     // terlihat oleh admin ini — RLS membatasi baris keanggotaan yang
     // terbaca, jadi pengguna di luar jangkauannya tidak akan ditemukan.
     const { rows: anggota } = await queryAsUser(req.user.id,
-      `select u.id, u.tipe from users u
+      `select u.id, u.tipe, u.email, u.auth_user_id from users u
          join client_memberships cm on cm.user_id = u.id
         where u.id = $1 limit 1`, [req.params.userId]);
     if (!anggota.length) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
@@ -204,12 +215,17 @@ router.post('/:userId/reset-password', wajibAdminMikk, async (req, res, next) =>
     }
 
     const sandi = kataSandiAwal();
-    const hash = await hashPassword(sandi);
-    await queryAsUser(req.user.id,
-      `insert into local_auth (user_id, password_hash) values ($1,$2)
-       on conflict (user_id) do update set password_hash = excluded.password_hash,
-                                           updated_at = now()`,
-      [req.params.userId, hash]);
+    let authUserId = anggota[0].auth_user_id;
+    if (authUserId) {
+      await updateAuthUserPassword(authUserId, sandi);
+    } else {
+      // Baris lama yang belum pernah ditautkan (belum pernah login lewat
+      // Supabase Auth sejak migrasi) — buat akunnya sekarang alih-alih gagal.
+      const akun = await createAuthUser(anggota[0].email, sandi);
+      authUserId = akun.id;
+      await queryAsUser(req.user.id, 'update users set auth_user_id = $1 where id = $2',
+        [authUserId, req.params.userId]);
+    }
     res.json({ kataSandiAwal: sandi });
   } catch (err) { next(err); }
 });
