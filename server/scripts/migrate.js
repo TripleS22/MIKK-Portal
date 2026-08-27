@@ -40,6 +40,7 @@ const ORDER = [
   '18_client_orgs_edit_klien.sql',
   '19_dokumen_publik_fungsi.sql',
   '20_document_links_pendampingan.sql',
+  '21_permit_types_master_data.sql',
 ];
 
 async function main() {

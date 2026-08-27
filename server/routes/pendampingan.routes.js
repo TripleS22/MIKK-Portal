@@ -31,10 +31,13 @@ router.get('/reference', async (req, res, next) => {
     const [{ rows }, jenis, status] = await Promise.all([
       queryAsUser(
         req.user.id,
+        // 'supervisi' dikecualikan — peran pengawasan, bukan penanggung
+        // jawab pendampingan (sama seperti permits.routes.js /reference).
         `select distinct u.id, u.nama, ms.jabatan from users u
            join client_assignments ca on ca.user_id = u.id
            left join mikk_staff ms on ms.user_id = u.id
-          where ca.client_org_id = $1 and (ca.selesai is null or ca.selesai >= current_date)
+          where ca.client_org_id = $1 and ca.peran in ('pic_utama','pendukung')
+            and (ca.selesai is null or ca.selesai >= current_date)
           order by u.nama`,
         [clientOrgId]
       ),

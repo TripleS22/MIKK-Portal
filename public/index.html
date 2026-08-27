@@ -603,28 +603,65 @@
         <div class="md-shell">
           <nav class="md-sidebar" id="masterDataTabs"></nav>
           <div class="md-content">
-            <div class="panel" style="margin-bottom:18px">
-              <div class="panelhead"><div class="ttl2"><h3 id="masterDataKatTitle"></h3></div></div>
-              <div class="tscroll"><table>
-                <thead><tr>
-                  <th data-i18n="masterData.th.kode">Kode</th>
-                  <th data-i18n="masterData.th.labelId">Label (Indonesia)</th>
-                  <th data-i18n="masterData.th.labelEn">Label (Inggris)</th>
-                  <th data-i18n="masterData.th.urutan">Urutan</th>
-                  <th data-i18n="masterData.th.aktif">Aktif</th>
-                  <th></th>
-                </tr></thead>
-                <tbody id="masterDataBody"></tbody>
-              </table></div>
-            </div>
-            <div class="panel">
-              <div class="panelhead"><div class="ttl2"><h3 data-i18n="masterData.addTitle">Tambah Opsi Baru</h3></div></div>
-              <div style="padding:16px 18px" class="grid2">
-                <div class="f"><label data-i18n="masterData.f.kode">Kode (disimpan di database)</label><input id="md_new_kode" placeholder="mis. mediasi_online"></div>
-                <div class="f"><label data-i18n="masterData.f.labelId">Label (Indonesia)</label><input id="md_new_labelId"></div>
-                <div class="f"><label data-i18n="masterData.f.labelEn">Label (Inggris, opsional)</label><input id="md_new_labelEn"></div>
+            <!-- Kategori opsi_master biasa (kode/label ID/label EN/urutan) -->
+            <div id="mdOpsiPanel">
+              <div class="panel" style="margin-bottom:18px">
+                <div class="panelhead"><div class="ttl2"><h3 id="masterDataKatTitle"></h3></div></div>
+                <div class="tscroll"><table>
+                  <thead><tr>
+                    <th data-i18n="masterData.th.kode">Kode</th>
+                    <th data-i18n="masterData.th.labelId">Label (Indonesia)</th>
+                    <th data-i18n="masterData.th.labelEn">Label (Inggris)</th>
+                    <th data-i18n="masterData.th.urutan">Urutan</th>
+                    <th data-i18n="masterData.th.aktif">Aktif</th>
+                    <th></th>
+                  </tr></thead>
+                  <tbody id="masterDataBody"></tbody>
+                </table></div>
               </div>
-              <div style="padding:0 18px 18px"><button class="btn gold" id="masterDataAddBtn" data-i18n="masterData.addBtn">+ Tambah Opsi</button></div>
+              <div class="panel">
+                <div class="panelhead"><div class="ttl2"><h3 data-i18n="masterData.addTitle">Tambah Opsi Baru</h3></div></div>
+                <div style="padding:16px 18px" class="grid2">
+                  <div class="f"><label data-i18n="masterData.f.kode">Kode (disimpan di database)</label><input id="md_new_kode" placeholder="mis. mediasi_online"></div>
+                  <div class="f"><label data-i18n="masterData.f.labelId">Label (Indonesia)</label><input id="md_new_labelId"></div>
+                  <div class="f"><label data-i18n="masterData.f.labelEn">Label (Inggris, opsional)</label><input id="md_new_labelEn"></div>
+                </div>
+                <div style="padding:0 18px 18px"><button class="btn gold" id="masterDataAddBtn" data-i18n="masterData.addBtn">+ Tambah Opsi</button></div>
+              </div>
+            </div>
+
+            <!-- Jenis Izin (permit_types) — kolom beda total, panel sendiri.
+                 Lihat db/21_permit_types_master_data.sql & catatan di
+                 GRUP_MASTER_DATA (public/js/app.js) untuk alasannya. -->
+            <div id="mdPermitTypesPanel" style="display:none">
+              <p class="hint" style="margin:0 0 14px" data-i18n="permitTypes.hint">Jenis izin yang ditawarkan dropdown modul Perizinan, sekaligus dipakai gap analysis (KBLI Terkait — kosong berarti berlaku semua sektor usaha). Nonaktifkan (jangan hapus) yang sudah pernah dipakai.</p>
+              <div class="panel" style="margin-bottom:18px">
+                <div class="tscroll"><table style="min-width:1000px">
+                  <thead><tr>
+                    <th data-i18n="permitTypes.th.kode">Kode</th>
+                    <th data-i18n="permitTypes.th.nama">Nama</th>
+                    <th data-i18n="permitTypes.th.instansi">Instansi</th>
+                    <th data-i18n="permitTypes.th.masaBerlaku">Masa Berlaku (bln)</th>
+                    <th data-i18n="permitTypes.th.kbli">KBLI Terkait</th>
+                    <th data-i18n="permitTypes.th.wajib">Wajib</th>
+                    <th data-i18n="masterData.th.aktif">Aktif</th>
+                    <th></th>
+                  </tr></thead>
+                  <tbody id="permitTypesBody"></tbody>
+                </table></div>
+              </div>
+              <div class="panel" id="permitTypesAddWrap">
+                <div class="panelhead"><div class="ttl2"><h3 data-i18n="permitTypes.addTitle">Tambah Jenis Izin</h3></div></div>
+                <div style="padding:16px 18px" class="grid2">
+                  <div class="f"><label data-i18n="permitTypes.f.kode">Kode</label><input id="pt_new_kode" placeholder="mis. nib"></div>
+                  <div class="f"><label data-i18n="permitTypes.f.nama">Nama</label><input id="pt_new_nama"></div>
+                  <div class="f"><label data-i18n="permitTypes.f.instansi">Instansi Penerbit (opsional)</label><input id="pt_new_instansi"></div>
+                  <div class="f"><label data-i18n="permitTypes.f.masaBerlaku">Masa Berlaku (bulan, opsional)</label><input id="pt_new_masaBerlaku" type="number" min="0"></div>
+                  <div class="f"><label data-i18n="permitTypes.f.kbli">KBLI Terkait (opsional)</label><input id="pt_new_kbli" placeholder="49213, 49426"></div>
+                  <div class="f"><label class="chk" style="margin-top:26px"><input type="checkbox" id="pt_new_wajib"><span data-i18n="permitTypes.f.wajib">Wajib dimiliki (muncul di gap analysis)</span></label></div>
+                </div>
+                <div style="padding:0 18px 18px"><button class="btn gold" id="permitTypesAddBtn" data-i18n="permitTypes.addBtn">+ Tambah Jenis Izin</button></div>
+              </div>
             </div>
           </div>
         </div>

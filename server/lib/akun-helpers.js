@@ -22,17 +22,23 @@ function kataSandiAwal() {
   return s;
 }
 
-/* Hanya Managing Partner & Admin Staf boleh membuat/mengelola akun —
-   baik akun customer maupun akun staf MIKK lain. Sama dengan batas yang
-   sudah ditegakkan RLS pada client_memberships/mikk_staff, disebutkan
-   lagi di sini agar penolakannya berpesan jelas, dan karena tabel
-   `users` sendiri tidak punya RLS (lihat peringatan di client-users.routes.js). */
+/* Hanya Managing Partner & Admin Staf boleh melakukan tindakan admin-only
+   — dipakai bukan cuma untuk akun (client-users/staff-users.routes.js),
+   tapi juga layar admin lain yang butuh gerbang serupa (mis.
+   permit-types.routes.js). Sama dengan batas yang sudah ditegakkan RLS
+   pada tabel terkait, disebutkan lagi di sini agar penolakannya
+   berpesan jelas SEBELUM sempat menyentuh database — dan karena tabel
+   `users` sendiri tidak punya RLS (lihat peringatan di
+   client-users.routes.js), jadi untuk endpoint akun ini SATU-SATUNYA
+   penjaga. Pesannya sengaja generik ("melakukan tindakan ini"), bukan
+   spesifik "mengelola akun", karena dipakai lintas beberapa jenis
+   tindakan berbeda. */
 async function wajibAdminMikk(req, res, next) {
   try {
     const { rows } = await queryAsUser(req.user.id, 'select app.is_mikk_admin() as ok');
     if (!rows[0]?.ok) {
       return res.status(403).json({
-        error: 'Hanya Managing Partner atau Admin Staf yang dapat mengelola akun.',
+        error: 'Hanya Managing Partner atau Admin Staf yang dapat melakukan tindakan ini.',
       });
     }
     next();

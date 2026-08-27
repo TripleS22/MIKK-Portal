@@ -2638,7 +2638,11 @@ async function renderLampiranPanel(containerId, entityType, entityId, ownerParam
 const GRUP_MASTER_DATA = [
   { grup: 'perkara', kategori: ['cases_tahap', 'cases_peran_klien', 'cases_status_siklus'] },
   { grup: 'kontrak', kategori: ['contracts_status_siklus', 'contracts_jenis_dokumen', 'contracts_relasi_ke_induk'] },
-  { grup: 'perizinan', kategori: ['permits_status_siklus'] },
+  // 'permit_types' BUKAN kategori opsi_master (lihat db/21) — kodenya
+  // tercampur di daftar yang sama supaya tampil berdekatan di sidebar,
+  // tapi renderMasterDataPage() menanganinya lewat panel terpisah
+  // (#mdPermitTypesPanel), bukan tabel opsi_master generik.
+  { grup: 'perizinan', kategori: ['permits_status_siklus', 'permit_types'] },
   { grup: 'proyek', kategori: ['legal_projects_status'] },
   { grup: 'pendampingan', kategori: ['pendampingan_jenis', 'pendampingan_status'] },
 ];
@@ -2666,6 +2670,17 @@ function renderMasterDataPage() {
     b.onclick = () => { MD.kategoriAktif = b.dataset.kat; renderMasterDataPage(); };
   });
   $('#masterDataKatTitle').textContent = t('masterData.kategori.' + MD.kategoriAktif);
+
+  // 'permit_types' bukan kategori opsi_master (lihat catatan GRUP_MASTER_DATA
+  // di atas) — kolomnya beda total (instansi, masa berlaku, KBLI), jadi
+  // panel kontennya juga terpisah, bukan tabel generik di bawah ini.
+  const pakaiPermitTypes = MD.kategoriAktif === 'permit_types';
+  $('#mdOpsiPanel').style.display = pakaiPermitTypes ? 'none' : 'block';
+  $('#mdPermitTypesPanel').style.display = pakaiPermitTypes ? 'block' : 'none';
+  if (pakaiPermitTypes) {
+    if (!PT.loaded) muatPermitTypesSemua(); else renderPermitTypesTable();
+    return;
+  }
 
   const baris = MD.rows.filter((r) => r.kategori === MD.kategoriAktif).sort((a, b) => a.urutan - b.urutan);
   $('#masterDataBody').innerHTML = baris.map((r) => `
@@ -2713,5 +2728,80 @@ $('#masterDataAddBtn').onclick = async () => {
     $('#md_new_kode').value = ''; $('#md_new_labelId').value = ''; $('#md_new_labelEn').value = '';
     toast(t('common.saved'));
     await muatMasterDataUlang();
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
+};
+
+/* ----------------------------------------------------------------
+   JENIS IZIN (permit_types) — bagian Master Data, panel sendiri
+   (lihat catatan di GRUP_MASTER_DATA & renderMasterDataPage di atas,
+   dan db/21_permit_types_master_data.sql untuk kenapa terpisah dari
+   opsi_master).
+   ---------------------------------------------------------------- */
+const PT = { rows: [], loaded: false, bolehKelola: false };
+
+async function muatPermitTypesSemua() {
+  showApiErr('');
+  try {
+    const { rows, bolehKelola } = await Api.permitTypes();
+    PT.rows = rows; PT.bolehKelola = bolehKelola; PT.loaded = true;
+    renderPermitTypesTable();
+  } catch (err) { showApiErr(err.message || t('permitTypes.loadError')); }
+}
+
+function renderPermitTypesTable() {
+  $('#permitTypesAddWrap').style.display = PT.bolehKelola ? 'block' : 'none';
+  $('#permitTypesBody').innerHTML = PT.rows.map((r) => `
+    <tr data-id="${r.id}" style="${r.masih_berlaku ? '' : 'opacity:.5'}">
+      <td><span class="doc">${esc(r.kode)}</span></td>
+      <td><input class="fld pt_nama" value="${esc(r.nama)}" style="width:100%" ${PT.bolehKelola ? '' : 'disabled'}></td>
+      <td><input class="fld pt_instansi" value="${esc(r.instansi || '')}" style="width:100%" ${PT.bolehKelola ? '' : 'disabled'}></td>
+      <td><input class="fld pt_masaBerlaku" type="number" min="0" value="${r.masa_berlaku_bulan ?? ''}" style="width:80px" ${PT.bolehKelola ? '' : 'disabled'}></td>
+      <td><input class="fld pt_kbli" value="${esc((r.kbli_terkait || []).join(', '))}" style="width:100%" placeholder="${esc(t('permitTypes.f.kbliPlaceholder'))}" ${PT.bolehKelola ? '' : 'disabled'}></td>
+      <td style="text-align:center"><input type="checkbox" class="pt_wajib" ${r.wajib ? 'checked' : ''} ${PT.bolehKelola ? '' : 'disabled'}></td>
+      <td style="text-align:center"><input type="checkbox" class="pt_aktif" ${r.masih_berlaku ? 'checked' : ''} ${PT.bolehKelola ? '' : 'disabled'}></td>
+      <td>${PT.bolehKelola ? `<button class="btn ghost pt_simpan" style="padding:5px 10px;font-size:11px">${esc(t('common.save'))}</button>` : ''}</td>
+    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted-2);padding:16px">${esc(t('permitTypes.kosong'))}</td></tr>`;
+
+  document.querySelectorAll('#permitTypesBody tr[data-id]').forEach((tr) => {
+    const btn = tr.querySelector('.pt_simpan');
+    if (!btn) return;
+    btn.onclick = async () => {
+      const id = tr.dataset.id;
+      const kbli = tr.querySelector('.pt_kbli').value.split(',').map((s) => s.trim()).filter(Boolean);
+      try {
+        await Api.updatePermitType(id, {
+          nama: tr.querySelector('.pt_nama').value.trim(),
+          instansi: tr.querySelector('.pt_instansi').value.trim() || null,
+          masaBerlakuBulan: tr.querySelector('.pt_masaBerlaku').value ? Number(tr.querySelector('.pt_masaBerlaku').value) : null,
+          kbliTerkait: kbli,
+          wajib: tr.querySelector('.pt_wajib').checked,
+          masihBerlaku: tr.querySelector('.pt_aktif').checked,
+        });
+        toast(t('common.saved'));
+        PT.loaded = false;
+        await muatPermitTypesSemua();
+      } catch (e) { toast(e.message || t('common.saveFailed')); }
+    };
+  });
+}
+
+$('#permitTypesAddBtn').onclick = async () => {
+  const kode = $('#pt_new_kode').value.trim();
+  const nama = $('#pt_new_nama').value.trim();
+  if (!kode || !nama) return toast(t('permitTypes.err.wajib'));
+  const kbli = $('#pt_new_kbli').value.split(',').map((s) => s.trim()).filter(Boolean);
+  try {
+    await Api.createPermitType({
+      kode, nama,
+      instansi: $('#pt_new_instansi').value.trim() || null,
+      masaBerlakuBulan: $('#pt_new_masaBerlaku').value ? Number($('#pt_new_masaBerlaku').value) : null,
+      kbliTerkait: kbli,
+      wajib: $('#pt_new_wajib').checked,
+    });
+    $('#pt_new_kode').value = ''; $('#pt_new_nama').value = ''; $('#pt_new_instansi').value = '';
+    $('#pt_new_masaBerlaku').value = ''; $('#pt_new_kbli').value = ''; $('#pt_new_wajib').checked = false;
+    toast(t('common.saved'));
+    PT.loaded = false;
+    await muatPermitTypesSemua();
   } catch (e) { toast(e.message || t('common.saveFailed')); }
 };

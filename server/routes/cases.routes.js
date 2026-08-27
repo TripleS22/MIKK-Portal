@@ -73,12 +73,15 @@ router.get('/reference', async (req, res, next) => {
     const [pic, tahap, peranKlien, statusSiklus] = await Promise.all([
       hasPemilik ? queryAsUser(
         req.user.id,
+        // 'supervisi' dikecualikan — peran pengawasan, bukan penanggung
+        // jawab perkara (sama seperti permits.routes.js /reference).
         `select distinct u.id, u.nama, ms.jabatan from users u
            join client_assignments ca on ca.user_id = u.id
            left join mikk_staff ms on ms.user_id = u.id
           where ca.client_org_id is not distinct from $1
             and ca.individual_client_id is not distinct from $2
             and ca.client_group_id is not distinct from $3
+            and ca.peran in ('pic_utama','pendukung')
             and (ca.selesai is null or ca.selesai >= current_date)
           order by u.nama`,
         [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId]

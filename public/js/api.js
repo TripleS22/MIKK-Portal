@@ -170,6 +170,12 @@ const Api = (() => {
     createMasterDataOption: (body) => call('/master-data', { method: 'POST', body }),
     updateMasterDataOption: (id, body) => call(`/master-data/${id}`, { method: 'PATCH', body }),
 
+    /* ---- Jenis Izin (permit_types) — bagian Master Data, tabel sendiri
+       karena kolomnya beda dari opsi_master (lihat db/21). ---- */
+    permitTypes: () => call('/permit-types'),
+    createPermitType: (body) => call('/permit-types', { method: 'POST', body }),
+    updatePermitType: (id, body) => call(`/permit-types/${id}`, { method: 'PATCH', body }),
+
     /* ---- Profil perusahaan (client_orgs) ---- */
     getClientOrg: (id) => call(`/client-orgs/${id}`),
     updateClientOrg: (id, body) => call(`/client-orgs/${id}`, { method: 'PATCH', body }),
