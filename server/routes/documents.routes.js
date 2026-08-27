@@ -1,13 +1,15 @@
 // server/routes/documents.routes.js
 //
-// Berkas fisik disimpan di disk lokal (folder `uploads/`), BUKAN di
-// direktori yang dilayani express.static — supaya tidak ada jalur akses
-// langsung tanpa lewat pengecekan RLS. Setiap unduhan wajib melalui
-// GET /api/documents/:id/download, yang lebih dulu menanyakan ke
-// Postgres (via queryAsUser, dengan RLS aktif) apakah baris dokumen ini
-// boleh dibaca pengguna yang sedang login — baru setelah itu berkasnya
-// di-stream. Kalau baris tidak ditemukan (karena RLS memblokir), unduhan
-// gagal sebelum satu byte pun terkirim.
+// Berkas fisik disimpan lewat server/lib/storage.js — disk lokal (Node
+// biasa) atau R2 (Cloudflare Workers), tergantung mana yang
+// diinisialisasi entrypoint yang jalan (server/index.js /
+// server/worker.js). BUKAN di direktori yang dilayani express.static —
+// supaya tidak ada jalur akses langsung tanpa lewat pengecekan RLS.
+// Setiap unduhan wajib melalui GET /api/documents/:id/download, yang
+// lebih dulu menanyakan ke Postgres (via queryAsUser, dengan RLS aktif)
+// apakah baris dokumen ini boleh dibaca pengguna yang sedang login —
+// baru setelah itu berkasnya dikirim. Kalau baris tidak ditemukan
+// (karena RLS memblokir), unduhan gagal sebelum satu byte pun terkirim.
 //
 // Dokumen bisa melekat ke salah satu dari TIGA jenis pemilik — persis
 // satu (lihat constraint documents_satu_pemilik di
@@ -16,16 +18,13 @@
 
 const express = require('express');
 const multer = require('multer');
-const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { queryAsUser, withUser, queryAnon } = require('../lib/db');
+const { putFile, getFileBuffer } = require('../lib/storage');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
-
-const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -88,11 +87,11 @@ router.get('/:id/public', async (req, res, next) => {
     const { rows } = await queryAnon(`select * from app.dokumen_publik($1)`, [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Dokumen tidak ditemukan.' });
     const doc = rows[0];
-    const fullPath = path.join(UPLOAD_DIR, doc.storage_path);
-    if (!fs.existsSync(fullPath)) return res.status(410).json({ error: 'Berkas tidak ditemukan di penyimpanan server.' });
+    const buf = await getFileBuffer(doc.storage_path);
+    if (!buf) return res.status(410).json({ error: 'Berkas tidak ditemukan di penyimpanan server.' });
     res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.nama_file)}"`);
-    fs.createReadStream(fullPath).pipe(res);
+    res.send(buf);
   } catch (err) { next(err); }
 });
 
@@ -157,11 +156,11 @@ router.post('/', upload.single('file'), async (req, res, next) => {
   }
   const pemilikId = terisi[0];
 
-  // WAJIB divalidasi SEBELUM menyentuh filesystem sama sekali — id pemilik
-  // berasal dari input pengguna dan dipakai sebagai nama folder di bawah.
-  // Tanpa validasi ini, nilai seperti "../../etc" bisa membuat mkdirSync
-  // membuat direktori di luar folder uploads/ sebelum RLS sempat menolak
-  // insert-nya di database.
+  // WAJIB divalidasi SEBELUM menyentuh penyimpanan sama sekali — id
+  // pemilik berasal dari input pengguna dan dipakai sebagai bagian path
+  // penyimpanan di bawah. Tanpa validasi ini, nilai seperti "../../etc"
+  // bisa membuat berkas tersimpan di luar folder yang dimaksud sebelum
+  // RLS sempat menolak insert-nya di database.
   if (!UUID_RE.test(pemilikId)) {
     return res.status(400).json({ error: 'ID pemilik dokumen tidak valid.' });
   }
@@ -169,7 +168,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
   try {
     const sha256 = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
     const storedName = `${crypto.randomUUID()}${path.extname(req.file.originalname) || ''}`;
-    const storagePath = path.join(pemilikId, storedName); // relatif — disimpan di DB
+    const storagePath = `${pemilikId}/${storedName}`; // relatif — disimpan di DB
 
     const result = await withUser(req.user.id, async (client) => {
       const { rows } = await client.query(
@@ -194,12 +193,10 @@ router.post('/', upload.single('file'), async (req, res, next) => {
       return doc;
     });
 
-    // Filesystem disentuh HANYA setelah baris database berhasil (RLS lolos).
-    // Kalau insert gagal (mis. RLS menolak org yang bukan miliknya), tidak
-    // ada folder atau berkas yang sempat dibuat sama sekali.
-    const clientDir = path.join(UPLOAD_DIR, pemilikId);
-    fs.mkdirSync(clientDir, { recursive: true });
-    fs.writeFileSync(path.join(clientDir, storedName), req.file.buffer);
+    // Penyimpanan disentuh HANYA setelah baris database berhasil (RLS
+    // lolos). Kalau insert gagal (mis. RLS menolak org yang bukan
+    // miliknya), tidak ada berkas yang sempat tersimpan sama sekali.
+    await putFile(storagePath, req.file.buffer);
 
     res.status(201).json({ id: result.id });
   } catch (err) { next(err); }
@@ -219,13 +216,13 @@ router.get('/:id/download', async (req, res, next) => {
       return res.status(404).json({ error: 'Dokumen tidak ditemukan, atau Anda tidak punya akses.' });
     }
     const doc = rows[0];
-    const fullPath = path.join(UPLOAD_DIR, doc.storage_path);
-    if (!fs.existsSync(fullPath)) {
+    const buf = await getFileBuffer(doc.storage_path);
+    if (!buf) {
       return res.status(410).json({ error: 'Berkas tidak ditemukan di penyimpanan server.' });
     }
     res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.nama_file)}"`);
-    fs.createReadStream(fullPath).pipe(res);
+    res.send(buf);
   } catch (err) { next(err); }
 });
 

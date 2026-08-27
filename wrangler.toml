@@ -1,0 +1,40 @@
+name = "mikk-portal"
+main = "server/worker.js"
+compatibility_date = "2026-08-27"
+compatibility_flags = ["nodejs_compat"]
+
+# Frontend statis (public/) disajikan langsung oleh Cloudflare di edge,
+# BUKAN lewat Express (lihat guard __dirname di server/app.js) — jauh
+# lebih cepat & tidak memakai kuota invocation Worker untuk aset statis.
+# run_worker_first memastikan /api/* SELALU sampai ke Express walau
+# (secara kebetulan) ada berkas statis dengan nama yang sama.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# wrangler versi yang dipakai untuk deploy (lihat catatan di server/worker.js
+# soal kenapa harus versi lama) belum dukung pola array ("/api/*") untuk
+# opsi ini — jadi true (SEMUA request masuk Worker dulu), dan server/worker.js
+# yang secara eksplisit meneruskan ke env.ASSETS.fetch() untuk selain /api/*.
+run_worker_first = true
+not_found_handling = "single-page-application"
+
+# Postgres (Supabase) lewat Hyperdrive — pool koneksi mikk_app (non-
+# superuser, RLS tetap aktif), BUKAN role postgres. Dibuat lewat:
+#   wrangler hyperdrive create mikk-portal-db --connection-string="postgresql://mikk_app:...@db.<ref>.supabase.co:5432/postgres"
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "57730509784743e1bdce77798a7ec187"
+
+# R2 TIDAK dipakai — aktivasinya di dashboard Cloudflare tidak bisa
+# diselesaikan (menolak lewat CLI: "Please enable R2 through the
+# Dashboard"). Dokumen disimpan di Supabase Storage lewat REST API
+# sebagai gantinya (lihat server/lib/storage.js, server/worker.js) —
+# tidak perlu binding apa pun di sini, cukup SUPABASE_URL/SERVICE_ROLE_KEY
+# yang sudah ada di bawah.
+
+# Nilai publik saja di sini (anon key memang dirancang aman terlihat).
+# SUPABASE_SERVICE_ROLE_KEY dan DOCUMENT_LINK_SECRET WAJIB lewat
+# `wrangler secret put <NAMA>` — jangan pernah ditulis di file ini.
+[vars]
+SUPABASE_URL = "https://dngfkbdikhfgxoppxfst.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuZ2ZrYmRpa2hmZ3hvcHB4ZnN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3OTY5MTgsImV4cCI6MjEwMzM3MjkxOH0.RUZEHXBABwmCyUa2OblUmDUynF5EyXqTxkO-80oSfus"

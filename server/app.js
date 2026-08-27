@@ -26,7 +26,26 @@ const masterDataRoutes = require('./routes/master-data.routes');
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+// BUKAN express.json() bawaan: rantai dependensinya (body-parser ->
+// raw-body -> iconv-lite) gagal di-bundle Cloudflare Workers ("require_streams
+// is not a function" — bug nyata di iconv-lite di bawah nodejs_compat,
+// sudah dicoba langsung, bukan tebakan). API ini cuma perlu JSON UTF-8
+// biasa (tidak ada kebutuhan deteksi charset lain), jadi middleware kecil
+// ini cukup dan tidak menyentuh iconv-lite sama sekali.
+app.use((req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD') return next();
+  const ct = req.headers['content-type'] || '';
+  if (!ct.includes('application/json')) return next();
+  let raw = '';
+  req.setEncoding('utf8');
+  req.on('data', (chunk) => { raw += chunk; });
+  req.on('end', () => {
+    if (!raw) { req.body = {}; return next(); }
+    try { req.body = JSON.parse(raw); next(); }
+    catch (e) { res.status(400).json({ error: 'JSON body tidak valid.' }); }
+  });
+  req.on('error', next);
+});
 if (process.env.NODE_ENV !== 'test') app.use(morgan('tiny'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -49,11 +68,19 @@ app.use('/api/my', myRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/master-data', masterDataRoutes);
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
+// Di Cloudflare Workers, frontend statis (public/) disajikan langsung
+// oleh Cloudflare lewat binding Assets (lihat wrangler.toml: [assets] +
+// run_worker_first hanya untuk /api/*) — bukan lewat Express, dan
+// __dirname pun tidak ada di modul yang di-bundle Workers. Blok ini
+// SENGAJA dilewati di situ; untuk Node biasa (dev lokal, VPS/Render)
+// perilakunya tidak berubah sama sekali.
+if (typeof __dirname !== 'undefined') {
+  app.use(express.static(path.join(__dirname, '..', 'public')));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+  });
+}
 
 // Penanganan galat terpusat. Kesalahan yang berasal dari constraint
 // database (lihat mapPgError di contracts.routes.js) sudah punya pesan

@@ -4,3 +4,5 @@ node_modules/
 uploads/*
 !uploads/.gitkeep
 *.local
+.wrangler/
+.dev.vars

@@ -1,0 +1,6 @@
+{
+  "name": "iconv-lite",
+  "version": "0.0.0-mikk-portal-stub",
+  "main": "index.js",
+  "description": "Stub lokal — lihat index.js dan 'overrides' di package.json root untuk alasannya."
+}

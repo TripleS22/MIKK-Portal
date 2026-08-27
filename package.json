@@ -20,5 +20,8 @@
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "pg": "^8.11.5"
+  },
+  "overrides": {
+    "iconv-lite": "file:./vendor/iconv-lite-stub"
   }
 }

@@ -13,6 +13,14 @@
 //   query akan berjalan sebagai peran database biasa tanpa RLS
 //   (tergantung peran koneksi), jadi withUser() WAJIB dipakai di semua
 //   query yang menyentuh data milik klien.
+//
+//   Pool TIDAK dibuat otomatis saat modul ini di-require — harus lewat
+//   initDb(connectionString) dulu. Ini disengaja supaya modul yang sama
+//   bisa dipakai dua jalur deploy yang connection string-nya datang dari
+//   tempat berbeda: server/index.js (Node biasa, dari APP_DATABASE_URL di
+//   .env) dan server/worker.js (Cloudflare Workers, dari binding
+//   Hyperdrive env.HYPERDRIVE.connectionString — bindings itu cuma ada di
+//   dalam fetch handler, tidak bisa dibaca saat modul di-load).
 
 const { Pool, types } = require('pg');
 
@@ -28,27 +36,38 @@ const { Pool, types } = require('pg');
 // mengembalikan nilai `date` apa adanya sebagai teks, tanpa dikonversi.
 types.setTypeParser(1082, (val) => val); // 1082 = OID tipe 'date' di Postgres
 
-// SENGAJA terpisah dari DATABASE_URL (yang dipakai migrate.js sebagai
-// superuser). Jika APP_DATABASE_URL tidak diset, server MENOLAK menyala
-// alih-alih diam-diam berjalan sebagai superuser dan melewati RLS — itu
-// kegagalan yang berbahaya karena semua terlihat normal sampai ada
-// kebocoran data antar klien yang tidak ketahuan sampai insiden nyata.
-const connectionString = process.env.APP_DATABASE_URL;
-if (!connectionString) {
-  console.error(
-    '[db] APP_DATABASE_URL tidak diset. Server TIDAK dijalankan: tanpa ini, ' +
-    'ada risiko nyata koneksi jatuh ke peran superuser yang melewati RLS ' +
-    'sepenuhnya, sehingga isolasi antar klien berhenti bekerja tanpa gejala ' +
-    'yang terlihat. Lihat README bagian "Dua koneksi database, bukan satu".'
-  );
-  process.exit(1);
+let pool = null;
+
+/**
+ * Wajib dipanggil SEKALI sebelum route mana pun menyentuh database.
+ * Aman dipanggil berkali-kali (mis. tiap fetch event di Workers) —
+ * panggilan kedua dst. jadi no-op kalau pool sudah ada.
+ */
+function initDb(connectionString) {
+  if (pool) return pool;
+  if (!connectionString) {
+    throw new Error(
+      'initDb() dipanggil tanpa connection string. Lihat README bagian ' +
+      '"Dua koneksi database, bukan satu" — APP_DATABASE_URL (Node biasa) ' +
+      'atau binding Hyperdrive (Cloudflare Workers) wajib diisi.'
+    );
+  }
+  pool = new Pool({ connectionString, max: 10, idleTimeoutMillis: 30000 });
+  pool.on('error', (err) => {
+    console.error('[db] Kesalahan tak terduga pada koneksi idle:', err.message);
+  });
+  return pool;
 }
 
-const pool = new Pool({ connectionString, max: 10, idleTimeoutMillis: 30000 });
-
-pool.on('error', (err) => {
-  console.error('[db] Kesalahan tak terduga pada koneksi idle:', err.message);
-});
+function getPool() {
+  if (!pool) {
+    throw new Error(
+      '[db] Pool belum diinisialisasi — initDb(connectionString) belum pernah ' +
+      'dipanggil. Lihat server/index.js (Node biasa) atau server/worker.js (Workers).'
+    );
+  }
+  return pool;
+}
 
 /**
  * Jalankan satu atau beberapa query di dalam transaksi yang tahu siapa
@@ -61,7 +80,7 @@ pool.on('error', (err) => {
  * @param {(client: import('pg').PoolClient) => Promise<any>} fn
  */
 async function withUser(userId, fn) {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query('BEGIN');
     if (userId) {
@@ -88,7 +107,7 @@ async function queryAsUser(userId, text, params) {
 
 /** Untuk operasi yang sah tanpa pengguna login (login, cek kesehatan server). */
 async function queryAnon(text, params) {
-  return pool.query(text, params);
+  return getPool().query(text, params);
 }
 
-module.exports = { pool, withUser, queryAsUser, queryAnon };
+module.exports = { initDb, getPool, withUser, queryAsUser, queryAnon };
