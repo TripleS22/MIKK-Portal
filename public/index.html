@@ -595,31 +595,34 @@
 
       <!-- ============================ MASTER DATA ============================ -->
       <div id="secMasterData" style="display:none">
-        <div class="panel" style="margin-bottom:18px;padding:16px 18px">
-          <p class="hint" style="margin:0 0 10px" data-i18n="masterData.hint">Pilih kategori, lalu kelola opsi yang ditawarkan di dropdown terkait. Nonaktifkan (jangan hapus) opsi yang sudah pernah dipakai — data lama tetap tampil apa adanya.</p>
-          <div id="masterDataTabs"></div>
-        </div>
-        <div class="panel" style="margin-bottom:18px">
-          <div class="tscroll"><table>
-            <thead><tr>
-              <th data-i18n="masterData.th.kode">Kode</th>
-              <th data-i18n="masterData.th.labelId">Label (Indonesia)</th>
-              <th data-i18n="masterData.th.labelEn">Label (Inggris)</th>
-              <th data-i18n="masterData.th.urutan">Urutan</th>
-              <th data-i18n="masterData.th.aktif">Aktif</th>
-              <th></th>
-            </tr></thead>
-            <tbody id="masterDataBody"></tbody>
-          </table></div>
-        </div>
-        <div class="panel">
-          <div class="panelhead"><div class="ttl2"><h3 data-i18n="masterData.addTitle">Tambah Opsi Baru</h3></div></div>
-          <div style="padding:16px 18px" class="grid2">
-            <div class="f"><label data-i18n="masterData.f.kode">Kode (disimpan di database)</label><input id="md_new_kode" placeholder="mis. mediasi_online"></div>
-            <div class="f"><label data-i18n="masterData.f.labelId">Label (Indonesia)</label><input id="md_new_labelId"></div>
-            <div class="f"><label data-i18n="masterData.f.labelEn">Label (Inggris, opsional)</label><input id="md_new_labelEn"></div>
+        <p class="hint" style="margin:0 0 14px" data-i18n="masterData.hint">Pilih kategori, lalu kelola opsi yang ditawarkan di dropdown terkait. Nonaktifkan (jangan hapus) opsi yang sudah pernah dipakai — data lama tetap tampil apa adanya.</p>
+        <div class="md-shell">
+          <nav class="md-sidebar" id="masterDataTabs"></nav>
+          <div class="md-content">
+            <div class="panel" style="margin-bottom:18px">
+              <div class="panelhead"><div class="ttl2"><h3 id="masterDataKatTitle"></h3></div></div>
+              <div class="tscroll"><table>
+                <thead><tr>
+                  <th data-i18n="masterData.th.kode">Kode</th>
+                  <th data-i18n="masterData.th.labelId">Label (Indonesia)</th>
+                  <th data-i18n="masterData.th.labelEn">Label (Inggris)</th>
+                  <th data-i18n="masterData.th.urutan">Urutan</th>
+                  <th data-i18n="masterData.th.aktif">Aktif</th>
+                  <th></th>
+                </tr></thead>
+                <tbody id="masterDataBody"></tbody>
+              </table></div>
+            </div>
+            <div class="panel">
+              <div class="panelhead"><div class="ttl2"><h3 data-i18n="masterData.addTitle">Tambah Opsi Baru</h3></div></div>
+              <div style="padding:16px 18px" class="grid2">
+                <div class="f"><label data-i18n="masterData.f.kode">Kode (disimpan di database)</label><input id="md_new_kode" placeholder="mis. mediasi_online"></div>
+                <div class="f"><label data-i18n="masterData.f.labelId">Label (Indonesia)</label><input id="md_new_labelId"></div>
+                <div class="f"><label data-i18n="masterData.f.labelEn">Label (Inggris, opsional)</label><input id="md_new_labelEn"></div>
+              </div>
+              <div style="padding:0 18px 18px"><button class="btn gold" id="masterDataAddBtn" data-i18n="masterData.addBtn">+ Tambah Opsi</button></div>
+            </div>
           </div>
-          <div style="padding:0 18px 18px"><button class="btn gold" id="masterDataAddBtn" data-i18n="masterData.addBtn">+ Tambah Opsi</button></div>
         </div>
       </div>
 

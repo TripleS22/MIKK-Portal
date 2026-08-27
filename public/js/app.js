@@ -2461,12 +2461,17 @@ async function renderLampiranPanel(containerId, entityType, entityId, ownerParam
    tombolnya sendiri sudah digerbangi lewat visibilitas #modMasterDataBtn
    (lihat enterWorkspace), sama seperti pola Tarif Layanan.
    ================================================================ */
-const KATEGORI_MASTER_DATA = [
-  'cases_tahap', 'cases_peran_klien', 'cases_status_siklus',
-  'contracts_status_siklus', 'contracts_jenis_dokumen', 'contracts_relasi_ke_induk',
-  'permits_status_siklus', 'legal_projects_status',
-  'pendampingan_jenis', 'pendampingan_status',
+// Dikelompokkan per modul supaya sidebar kedua tidak jadi satu baris
+// tombol panjang — urutan grup & isinya SENGAJA sama dengan urutan modul
+// di sidebar utama (Perkara, Kontrak, Perizinan, Proyek Legal, Pendampingan).
+const GRUP_MASTER_DATA = [
+  { grup: 'perkara', kategori: ['cases_tahap', 'cases_peran_klien', 'cases_status_siklus'] },
+  { grup: 'kontrak', kategori: ['contracts_status_siklus', 'contracts_jenis_dokumen', 'contracts_relasi_ke_induk'] },
+  { grup: 'perizinan', kategori: ['permits_status_siklus'] },
+  { grup: 'proyek', kategori: ['legal_projects_status'] },
+  { grup: 'pendampingan', kategori: ['pendampingan_jenis', 'pendampingan_status'] },
 ];
+const KATEGORI_MASTER_DATA = GRUP_MASTER_DATA.flatMap((g) => g.kategori);
 const MD = { rows: [], loaded: false, kategoriAktif: KATEGORI_MASTER_DATA[0] };
 
 async function muatMasterDataSemua() {
@@ -2478,12 +2483,18 @@ async function muatMasterDataSemua() {
   } catch (err) { showApiErr(err.message || t('masterData.loadError')); }
 }
 function renderMasterDataPage() {
-  $('#masterDataTabs').innerHTML = KATEGORI_MASTER_DATA.map((k) => `
-    <button class="chip ${k === MD.kategoriAktif ? 'on' : ''}" data-kat="${k}" style="margin:0 6px 6px 0">${esc(t('masterData.kategori.' + k))}</button>
+  $('#masterDataTabs').innerHTML = GRUP_MASTER_DATA.map((g) => `
+    <div class="md-sidebar-grp">
+      <h4>${esc(t('masterData.grup.' + g.grup))}</h4>
+      ${g.kategori.map((k) => `
+        <button class="${k === MD.kategoriAktif ? 'on' : ''}" data-kat="${k}">${esc(t('masterData.kategori.' + k))}</button>
+      `).join('')}
+    </div>
   `).join('');
   document.querySelectorAll('#masterDataTabs [data-kat]').forEach((b) => {
     b.onclick = () => { MD.kategoriAktif = b.dataset.kat; renderMasterDataPage(); };
   });
+  $('#masterDataKatTitle').textContent = t('masterData.kategori.' + MD.kategoriAktif);
 
   const baris = MD.rows.filter((r) => r.kategori === MD.kategoriAktif).sort((a, b) => a.urutan - b.urutan);
   $('#masterDataBody').innerHTML = baris.map((r) => `
