@@ -40,10 +40,13 @@ SUPABASE_URL = "https://dngfkbdikhfgxoppxfst.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuZ2ZrYmRpa2hmZ3hvcHB4ZnN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3OTY5MTgsImV4cCI6MjEwMzM3MjkxOH0.RUZEHXBABwmCyUa2OblUmDUynF5EyXqTxkO-80oSfus"
 
 # Email (Resend) -- kirim kata sandi awal akun CUSTOMER (lihat
-# server/lib/email.js). OPSIONAL: kalau RESEND_API_KEY (secret, di
-# bawah) belum diisi, akun customer tetap bisa dibuat lewat aplikasi --
-# kata sandinya cuma tidak ikut terkirim ke email. RESEND_FROM_EMAIL
-# harus dari domain yang sudah diverifikasi di dashboard Resend.
-#   wrangler secret put RESEND_API_KEY
-RESEND_FROM_EMAIL = "Portal MIKK <portal@domainanda.com>"
+# server/lib/email.js). RESEND_API_KEY sudah diisi (secret, lihat
+# `wrangler secret put RESEND_API_KEY` -- nilainya TIDAK ada di file ini).
+# RESEND_FROM_EMAIL masih pakai onboarding@resend.dev (domain uji bawaan
+# Resend, sudah dites terkirim sungguhan) -- BUKAN domain sendiri, karena
+# MIKK belum memverifikasi domain di dashboard Resend. Ganti ke
+# "Portal MIKK <portal@mikklaws.com>" (atau domain lain yang dipakai)
+# setelah domain itu diverifikasi -- lebih meyakinkan penerima & lolos
+# spam filter lebih baik daripada domain uji bersama ini.
+RESEND_FROM_EMAIL = "MIKK Portal <onboarding@resend.dev>"
 PORTAL_URL = "https://mikk-portal.sugaras644.workers.dev"
