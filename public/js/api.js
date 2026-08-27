@@ -87,6 +87,12 @@ const Api = (() => {
     updateClientUser: (id, body) => call(`/client-users/${id}`, { method: 'PATCH', body }),
     resetClientPassword: (userId) => call(`/client-users/${userId}/reset-password`, { method: 'POST' }),
 
+    /* ---- Akun staf MIKK (admin & PIC/legal) ---- */
+    staffUsers: () => call('/staff-users'),
+    createStaffUser: (body) => call('/staff-users', { method: 'POST', body }),
+    updateStaffUser: (userId, body) => call(`/staff-users/${userId}`, { method: 'PATCH', body }),
+    resetStaffPassword: (userId) => call(`/staff-users/${userId}/reset-password`, { method: 'POST' }),
+
     permits: (clientOrgId) => call('/permits', { qs: { clientOrgId } }),
     permitsDashboard: (clientOrgId) => call('/permits/dashboard', { qs: { clientOrgId } }),
     permitGap: (clientOrgId) => call('/permits/gap', { qs: { clientOrgId } }),

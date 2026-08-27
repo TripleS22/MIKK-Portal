@@ -230,6 +230,7 @@ async function enterWorkspace(ws) {
   const bolehTarif = ws.tipe === 'staf_firma' && ws.peran === 'managing_partner';
   $('#modRatesBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modMasterDataBtn').style.display = bolehTarif ? 'flex' : 'none';
+  $('#modStaffUsersBtn').style.display = bolehTarif ? 'flex' : 'none';
   // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
   // Sekarang diakses lewat menu akun di topbar, bukan sidebar (lihat
@@ -936,6 +937,7 @@ const MODULES = [
   { id: 'team',         sec: 'secTeam',         btn: 'modTeamBtn',         crumb: 'nav.team',         desc: 'team.desc' },
   { id: 'rates',        sec: 'secRates',        btn: 'modRatesBtn',        crumb: 'nav.rates',        desc: 'rates.desc' },
   { id: 'masterdata',   sec: 'secMasterData',   btn: 'modMasterDataBtn',  crumb: 'nav.masterData',  desc: 'masterData.desc' },
+  { id: 'staffusers',   sec: 'secStaffUsers',   btn: 'modStaffUsersBtn',  crumb: 'nav.staffUsers',  desc: 'staffUsers.desc' },
   // Dua di bawah ini pribadi/lintas klien — dipicu dari menu akun di
   // topbar (#menuMyCasesBtn/#menuProfileBtn), BUKAN sidebar, supaya
   // tidak tercampur dengan modul milik satu workspace klien di atas.
@@ -962,6 +964,7 @@ function switchModuleAll(mod) {
   if (mod === 'team' && !TM.loaded) muatTimSemua();
   if (mod === 'rates' && !RT.loaded) muatTarifSemua();
   if (mod === 'masterdata' && !MD.loaded) muatMasterDataSemua();
+  if (mod === 'staffusers' && !SU.loaded) muatStaffUsersSemua();
   if (mod === 'profile' && !PR.loaded) muatProfilSemua();
   window.scrollTo({ top: 0, behavior: 'smooth' });
   $('#userMenu').style.display = 'none';
@@ -1891,17 +1894,23 @@ function renderTimTable() {
 
 /* Menampilkan kredensial sekali, dengan peringatan bahwa ini satu-satunya
    kesempatan membacanya. */
-function tampilkanKredensial(nama, email, sandi) {
-  $('#teamNewCred').innerHTML = `<div class="acccode">
+function tampilkanKredensial(nama, email, sandi, targetId, opts) {
+  targetId = targetId || 'teamNewCred';
+  const emailInfo = opts && opts.emailTerkirim
+    ? `<div class="hint" style="color:#9ee6b4;margin-top:6px">${esc(t('team.credEmailSent'))}</div>`
+    : (opts && opts.emailTerkirim === false
+      ? `<div class="hint" style="color:#f4c2ce;margin-top:6px">${esc(t('team.credEmailFailed'))}</div>` : '');
+  $('#' + targetId).innerHTML = `<div class="acccode">
     <div class="kode">${esc(sandi)}</div>
     <div class="tx">
       <b>${esc(t('team.credTitle', { nama }))}</b>
       ${esc(t('team.credDesc'))}
       ${email ? `<div style="margin-top:4px;font-family:var(--mono);color:rgba(255,255,255,.9)">${esc(email)}</div>` : ''}
+      ${emailInfo}
     </div>
-    <button class="btn ghost" id="tutupCred">${esc(t('team.credClose'))}</button>
+    <button class="btn ghost" id="tutupCred_${targetId}">${esc(t('team.credClose'))}</button>
   </div>`;
-  $('#tutupCred').onclick = () => { $('#teamNewCred').innerHTML = ''; };
+  $('#tutupCred_' + targetId).onclick = () => { $('#' + targetId).innerHTML = ''; };
 }
 
 function timFormHTML(err) {
@@ -1973,7 +1982,9 @@ async function simpanTim() {
         noHp: d.noHp || null, peran: d.peran,
       });
       tutupAuxDrawer();
-      if (res.kataSandiAwal) tampilkanKredensial(d.nama, d.email, res.kataSandiAwal);
+      if (res.kataSandiAwal) {
+        tampilkanKredensial(d.nama, d.email, res.kataSandiAwal, 'teamNewCred', { emailTerkirim: res.emailTerkirim });
+      }
       toast(res.pesan || t('team.created'));
     }
     TM.loaded = false;
@@ -1987,9 +1998,9 @@ async function resetSandi(userId, nama) {
   // Menerbitkan kata sandi baru membatalkan yang lama — pastikan disengaja.
   if (!window.confirm(t('team.resetConfirm', { nama }))) return;
   try {
-    const { kataSandiAwal } = await Api.resetClientPassword(userId);
+    const { kataSandiAwal, emailTerkirim } = await Api.resetClientPassword(userId);
     const baris = TM.rows.find((r) => r.user_id === userId);
-    tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal);
+    tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal, 'teamNewCred', { emailTerkirim });
     TM.loaded = false;
     await muatTimSemua();
     toast(t('team.resetDone'));
@@ -1997,6 +2008,166 @@ async function resetSandi(userId, nama) {
 }
 
 $('#addTeamBtn').onclick = () => bukaTimDrawer(null);
+
+/* ================================================================
+   MODUL STAF MIKK — akun internal (admin & PIC/legal), berbeda dari
+   modul Team & Users di atas (itu akun CUSTOMER, per client_org).
+   Kata sandi awal di sini TIDAK dikirim ke email (lihat catatan
+   server/routes/staff-users.routes.js) — cuma ditampilkan sekali,
+   sama seperti perilaku Team sebelum pengiriman email ditambahkan.
+   ================================================================ */
+const JABATAN_PER_PERAN_SU = {
+  admin: ['managing_partner', 'admin_staf'],
+  pic_legal: ['senior_associate', 'associate'],
+};
+const SU = { rows: [], loaded: false, draft: null };
+
+async function muatStaffUsersSemua() {
+  showApiErr('');
+  try {
+    const { rows } = await Api.staffUsers();
+    SU.rows = rows; SU.loaded = true;
+    renderStaffUsersTable();
+  } catch (err) { showApiErr(err.message || t('staffUsers.loadError')); }
+}
+
+function renderStaffUsersTable() {
+  $('#staffUsersEmpty').style.display = SU.rows.length ? 'none' : 'block';
+  $('#staffUsersBody').innerHTML = SU.rows.map((r, i) => {
+    const nonaktif = !r.staff_aktif || !r.user_aktif;
+    return `<tr>
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td>${whoMini(r.nama, null)}</td>
+      <td><span class="doc">${esc(r.email)}</span></td>
+      <td><span class="tag">${esc(t('staffUsers.peran.' + r.peran))}</span></td>
+      <td>${esc(JABATAN_NAMA[r.jabatan] || r.jabatan)}${r.gelar ? `, ${esc(r.gelar)}` : ''}</td>
+      <td><span class="pill ${nonaktif ? 'p-tidak_dipantau' : 'p-aman'}">${
+        esc(nonaktif ? t('team.nonaktif') : t('team.aktif'))}</span></td>
+      <td><div class="rowact">
+        <button class="iconbtn" data-edit="${r.user_id}" title="${esc(t('team.editRole'))}">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+        <button class="iconbtn" data-reset="${r.user_id}" data-nama="${esc(r.nama)}" title="${esc(t('staffUsers.resetPw'))}">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  document.querySelectorAll('#staffUsersBody [data-edit]').forEach((b) => {
+    b.onclick = () => bukaStaffDrawer(SU.rows.find((r) => r.user_id === b.dataset.edit));
+  });
+  document.querySelectorAll('#staffUsersBody [data-reset]').forEach((b) => {
+    b.onclick = () => resetSandiStaf(b.dataset.reset, b.dataset.nama);
+  });
+}
+
+function staffFormHTML(err) {
+  const d = SU.draft;
+  const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
+  const opsiJabatan = JABATAN_PER_PERAN_SU[d.peran].map((v) =>
+    `<option value="${v}" ${d.jabatan === v ? 'selected' : ''}>${esc(JABATAN_NAMA[v])}</option>`).join('');
+
+  return `
+  ${d.userId ? '' : `
+  <div class="f"><label>${t('staffUsers.f.nama')} <span class="req">*</span></label>
+    <input id="su_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
+  <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.email')} <span class="req">*</span></label>
+    <input id="su_email" type="email" value="${esc(d.email || '')}">
+    <div class="hint">${esc(t('staffUsers.f.emailHint'))}</div>${e('email')}</div>
+  <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.noHp')}</label>
+    <input id="su_hp" inputmode="tel" value="${esc(d.noHp || '')}"></div>`}
+
+  <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.peran')} <span class="req">*</span></label>
+    <select id="su_peran">
+      <option value="admin" ${d.peran === 'admin' ? 'selected' : ''}>${esc(t('staffUsers.peran.admin'))}</option>
+      <option value="pic_legal" ${d.peran === 'pic_legal' ? 'selected' : ''}>${esc(t('staffUsers.peran.pic_legal'))}</option>
+    </select>
+    <div class="hint">${esc(t('staffUsers.f.peranHint'))}</div></div>
+  <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.jabatan')} <span class="req">*</span></label>
+    <select id="su_jabatan">${opsiJabatan}</select></div>
+  <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.gelar')}</label>
+    <input id="su_gelar" value="${esc(d.gelar || '')}"></div>
+
+  ${d.userId ? `
+  <label class="chk" style="margin-top:6px"><input type="checkbox" id="su_aktif" ${d.aktif !== false ? 'checked' : ''}>
+    <span><b>${t('staffUsers.f.aktif')}</b>${t('staffUsers.f.aktifDesc')}</span></label>` : `
+  <div class="warnbox wb-warn" style="margin:14px 0 0">
+    <span class="ic">🔑</span>
+    <div><b>${esc(t('team.f.sandiTitle'))}</b>${esc(t('team.f.sandiDesc'))}</div>
+  </div>`}`;
+}
+
+function bukaStaffDrawer(row) {
+  SU.draft = row ? {
+    userId: row.user_id, nama: row.nama, email: row.email,
+    peran: row.peran, jabatan: row.jabatan, gelar: row.gelar, aktif: row.staff_aktif,
+  } : { userId: null, nama: '', email: '', noHp: '', peran: 'pic_legal', jabatan: 'associate', gelar: '' };
+  bukaAuxDrawer('staffusers', row ? t('staffUsers.drawerTitle') : t('staffUsers.drawerTitleNew'),
+    staffFormHTML(), simpanStaff);
+  // Jabatan yang ditawarkan berubah sesuai peran — render ulang badan
+  // drawer saja (bukan seluruh layar) saat peran diganti.
+  $('#su_peran').onchange = () => {
+    SU.draft.peran = $('#su_peran').value;
+    SU.draft.jabatan = JABATAN_PER_PERAN_SU[SU.draft.peran][0];
+    gambarStaffDrawer();
+  };
+}
+
+function gambarStaffDrawer(err) {
+  const body = $('#auxDBody');
+  if (body) body.innerHTML = staffFormHTML(err);
+  $('#su_peran').onchange = () => {
+    SU.draft.peran = $('#su_peran').value;
+    SU.draft.jabatan = JABATAN_PER_PERAN_SU[SU.draft.peran][0];
+    gambarStaffDrawer();
+  };
+}
+
+async function simpanStaff() {
+  const d = SU.draft;
+  const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
+  const err = {};
+
+  if (!d.userId) {
+    d.nama = g('su_nama'); d.email = g('su_email'); d.noHp = g('su_hp');
+    if (!d.nama) err.nama = t('staffUsers.err.nama');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) err.email = t('staffUsers.err.email');
+  }
+  d.peran = g('su_peran'); d.jabatan = g('su_jabatan'); d.gelar = g('su_gelar');
+  if ($('#su_aktif')) d.aktif = $('#su_aktif').checked;
+  if (Object.keys(err).length) return gambarStaffDrawer(err);
+
+  const btn = $('#auxDSave'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    if (d.userId) {
+      await Api.updateStaffUser(d.userId, { jabatan: d.jabatan, gelar: d.gelar || null, aktif: d.aktif });
+      tutupAuxDrawer();
+      toast(t('common.saved'));
+    } else {
+      const res = await Api.createStaffUser({
+        nama: d.nama, email: d.email, noHp: d.noHp || null, jabatan: d.jabatan, gelar: d.gelar || null,
+      });
+      tutupAuxDrawer();
+      if (res.kataSandiAwal) tampilkanKredensial(d.nama, d.email, res.kataSandiAwal, 'staffNewCred');
+      toast(t('staffUsers.created'));
+    }
+    SU.loaded = false;
+    await muatStaffUsersSemua();
+  } catch (e) {
+    toast(e.message || t('common.saveFailed'));
+  } finally { btn.disabled = false; btn.textContent = t('common.save'); }
+}
+
+async function resetSandiStaf(userId, nama) {
+  if (!window.confirm(t('staffUsers.resetConfirm', { nama }))) return;
+  try {
+    const { kataSandiAwal } = await Api.resetStaffPassword(userId);
+    const baris = SU.rows.find((r) => r.user_id === userId);
+    tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal, 'staffNewCred');
+    toast(t('staffUsers.resetDone'));
+  } catch (e) { toast(e.message || t('common.saveFailed')); }
+}
+
+$('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
 
 /* ================================================================
    MODUL PERKARA SAYA — dashboard pribadi lintas klien

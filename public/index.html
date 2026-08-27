@@ -210,6 +210,10 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         <span data-i18n="nav.masterData">Master Data</span>
       </button>
+      <button id="modStaffUsersBtn" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M20 8v6M23 11h-6"/><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg>
+        <span data-i18n="nav.staffUsers">Staf MIKK</span>
+      </button>
     </nav>
 
     <div class="sb-help">
@@ -622,6 +626,34 @@
               </div>
               <div style="padding:0 18px 18px"><button class="btn gold" id="masterDataAddBtn" data-i18n="masterData.addBtn">+ Tambah Opsi</button></div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================ STAF MIKK (admin & PIC/legal) ============================ -->
+      <div id="secStaffUsers" style="display:none">
+        <p class="hint" style="margin:0 0 14px" data-i18n="staffUsers.hint">Akun internal MIKK — Admin (Managing Partner/Admin Staf) dan PIC &amp; Legal (Senior/Junior Associate). Kata sandi awal ditampilkan sekali di sini, TIDAK dikirim ke email (beda dengan akun customer).</p>
+        <div id="staffNewCred"></div>
+        <div class="bar">
+          <div style="flex:1"></div>
+          <button class="btn gold" id="addStaffBtn" data-i18n="staffUsers.add">+ Tambah Staf</button>
+        </div>
+        <div class="panel">
+          <div class="tscroll"><table style="min-width:820px">
+            <thead><tr>
+              <th style="width:34px">#</th>
+              <th data-i18n="staffUsers.th.nama">Nama</th>
+              <th data-i18n="staffUsers.th.email">Email</th>
+              <th data-i18n="staffUsers.th.peran">Peran</th>
+              <th data-i18n="staffUsers.th.jabatan">Jabatan</th>
+              <th data-i18n="staffUsers.th.status">Status</th>
+              <th style="width:120px" data-i18n="staffUsers.th.aksi">Aksi</th>
+            </tr></thead>
+            <tbody id="staffUsersBody"></tbody>
+          </table></div>
+          <div class="empty" id="staffUsersEmpty" style="display:none">
+            <h3 data-i18n="staffUsers.empty.title">Belum ada staf tercatat</h3>
+            <p data-i18n="staffUsers.empty.desc">Tambahkan staf pertama lewat tombol di atas.</p>
           </div>
         </div>
       </div>

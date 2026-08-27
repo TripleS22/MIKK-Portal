@@ -5,8 +5,19 @@ require('dotenv').config();
 const path = require('path');
 const { initDb, getPool } = require('./lib/db');
 const { initDiskStorage } = require('./lib/storage');
+const { initEmail } = require('./lib/email');
 
 initDiskStorage(path.join(__dirname, '..', 'uploads'));
+
+// RESEND_API_KEY opsional: kalau belum diisi, kirimKredensialCustomer()
+// gagal lunak (lihat server/lib/email.js) — akun customer tetap dibuat,
+// kata sandinya cuma tidak ikut terkirim ke email (tetap tampil sekali
+// di layar seperti sebelum fitur ini ada).
+initEmail({
+  apiKey: process.env.RESEND_API_KEY,
+  dariEmail: process.env.RESEND_FROM_EMAIL,
+  portalUrl: process.env.PORTAL_URL,
+});
 
 // SENGAJA terpisah dari DATABASE_URL (dipakai migrate.js/seed.js sebagai
 // superuser). Jika APP_DATABASE_URL tidak diset, server MENOLAK menyala

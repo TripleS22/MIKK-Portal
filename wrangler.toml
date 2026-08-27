@@ -33,8 +33,17 @@ id = "57730509784743e1bdce77798a7ec187"
 # yang sudah ada di bawah.
 
 # Nilai publik saja di sini (anon key memang dirancang aman terlihat).
-# SUPABASE_SERVICE_ROLE_KEY dan DOCUMENT_LINK_SECRET WAJIB lewat
-# `wrangler secret put <NAMA>` — jangan pernah ditulis di file ini.
+# SUPABASE_SERVICE_ROLE_KEY, DOCUMENT_LINK_SECRET, dan RESEND_API_KEY
+# WAJIB lewat `wrangler secret put <NAMA>` — jangan pernah ditulis di file ini.
 [vars]
 SUPABASE_URL = "https://dngfkbdikhfgxoppxfst.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuZ2ZrYmRpa2hmZ3hvcHB4ZnN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3OTY5MTgsImV4cCI6MjEwMzM3MjkxOH0.RUZEHXBABwmCyUa2OblUmDUynF5EyXqTxkO-80oSfus"
+
+# Email (Resend) -- kirim kata sandi awal akun CUSTOMER (lihat
+# server/lib/email.js). OPSIONAL: kalau RESEND_API_KEY (secret, di
+# bawah) belum diisi, akun customer tetap bisa dibuat lewat aplikasi --
+# kata sandinya cuma tidak ikut terkirim ke email. RESEND_FROM_EMAIL
+# harus dari domain yang sudah diverifikasi di dashboard Resend.
+#   wrangler secret put RESEND_API_KEY
+RESEND_FROM_EMAIL = "Portal MIKK <portal@domainanda.com>"
+PORTAL_URL = "https://mikk-portal.sugaras644.workers.dev"

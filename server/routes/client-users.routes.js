@@ -18,43 +18,16 @@
 // bukan dengan menambal di lapisan aplikasi.
 
 const express = require('express');
-const crypto = require('crypto');
 const { queryAsUser, withUser } = require('../lib/db');
 const { createAuthUser, updateAuthUserPassword } = require('../lib/supabase-auth');
 const { authenticate } = require('../middleware/authenticate');
+const { kataSandiAwal, wajibAdminMikk } = require('../lib/akun-helpers');
+const { kirimKredensialCustomer } = require('../lib/email');
 
 const router = express.Router();
 router.use(authenticate);
 
 const PERAN = ['admin_klien', 'legal_manager', 'viewer'];
-
-/* Kata sandi awal dibuat sistem, bukan diketik admin. Admin yang mengetik
-   sendiri cenderung memilih pola yang mudah ditebak dan memakainya ulang
-   untuk banyak klien. Nilai ini ditampilkan SEKALI ke admin lalu tidak
-   pernah bisa dibaca lagi — yang tersimpan hanya di Supabase Auth
-   (lihat server/lib/supabase-auth.js), bukan di database aplikasi ini. */
-function kataSandiAwal() {
-  const abjad = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-  const acak = crypto.randomBytes(16);
-  let s = '';
-  for (let i = 0; i < 14; i++) s += abjad[acak[i] % abjad.length];
-  return s;
-}
-
-/* Hanya Managing Partner & Admin Staf. Sama dengan batas yang sudah
-   ditegakkan RLS pada client_memberships — disebutkan lagi di sini agar
-   penolakannya berpesan jelas, dan karena tabel users tidak punya RLS. */
-async function wajibAdminMikk(req, res, next) {
-  try {
-    const { rows } = await queryAsUser(req.user.id, 'select app.is_mikk_admin() as ok');
-    if (!rows[0]?.ok) {
-      return res.status(403).json({
-        error: 'Hanya Managing Partner atau Admin Staf yang dapat mengelola akun klien.',
-      });
-    }
-    next();
-  } catch (err) { next(err); }
-}
 
 // ---------------------------------------------------------------------
 // GET /api/client-users?clientOrgId=
@@ -163,12 +136,30 @@ router.post('/', wajibAdminMikk, async (req, res, next) => {
       return { userId, dibuatBaru };
     });
 
+    // Hanya akun customer yang kata sandinya dikirim ke email secara
+    // otomatis (keputusan produk — akun staf MIKK, lihat staff-users.routes.js,
+    // tetap cuma ditampilkan sekali di layar ke admin yang membuatnya).
+    // Gagal lunak: kalau Resend belum diatur/gagal, akun & kata sandinya
+    // TETAP sah dibuat — admin masih bisa menyampaikannya manual dari
+    // kataSandiAwal yang tetap dikembalikan di respons ini.
+    let emailTerkirim = false;
+    if (hasil.dibuatBaru) {
+      const kirim = await kirimKredensialCustomer({
+        ke: email, nama, email, kataSandiAwal: sandi, namaOrg: org[0].nama_singkat,
+      });
+      emailTerkirim = kirim.terkirim;
+      if (!kirim.terkirim) {
+        console.warn(`[client-users] Gagal mengirim kredensial ke ${email}: ${kirim.alasan}`);
+      }
+    }
+
     res.status(201).json({
       userId: hasil.userId,
       // Kata sandi hanya bermakna untuk akun yang baru dibuat. Pengguna
       // lama tetap memakai kata sandinya sendiri — mengirim balik nilai
       // acak untuknya akan menyesatkan admin.
       kataSandiAwal: hasil.dibuatBaru ? sandi : null,
+      emailTerkirim,
       pesan: hasil.dibuatBaru ? null : 'Pengguna sudah ada; ditambahkan ke organisasi ini.',
     });
   } catch (err) { next(err); }
@@ -206,8 +197,10 @@ router.post('/:userId/reset-password', wajibAdminMikk, async (req, res, next) =>
     // terlihat oleh admin ini — RLS membatasi baris keanggotaan yang
     // terbaca, jadi pengguna di luar jangkauannya tidak akan ditemukan.
     const { rows: anggota } = await queryAsUser(req.user.id,
-      `select u.id, u.tipe, u.email, u.auth_user_id from users u
+      `select u.id, u.nama, u.tipe, u.email, u.auth_user_id, co.nama_singkat
+         from users u
          join client_memberships cm on cm.user_id = u.id
+         join client_orgs co on co.id = cm.client_org_id
         where u.id = $1 limit 1`, [req.params.userId]);
     if (!anggota.length) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
     if (anggota[0].tipe === 'mikk_staff') {
@@ -226,7 +219,15 @@ router.post('/:userId/reset-password', wajibAdminMikk, async (req, res, next) =>
       await queryAsUser(req.user.id, 'update users set auth_user_id = $1 where id = $2',
         [authUserId, req.params.userId]);
     }
-    res.json({ kataSandiAwal: sandi });
+
+    const kirim = await kirimKredensialCustomer({
+      ke: anggota[0].email, nama: anggota[0].nama, email: anggota[0].email,
+      kataSandiAwal: sandi, namaOrg: anggota[0].nama_singkat,
+    });
+    if (!kirim.terkirim) {
+      console.warn(`[client-users] Gagal mengirim kata sandi baru ke ${anggota[0].email}: ${kirim.alasan}`);
+    }
+    res.json({ kataSandiAwal: sandi, emailTerkirim: kirim.terkirim });
   } catch (err) { next(err); }
 });
 

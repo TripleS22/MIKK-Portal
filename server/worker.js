@@ -28,6 +28,7 @@ import { httpServerHandler } from 'cloudflare:node';
 
 const { initDbPerRequest } = require('./lib/db');
 const { initSupabaseStorage } = require('./lib/storage');
+const { initEmail } = require('./lib/email');
 const app = require('./app');
 
 const PORT = 3000;
@@ -55,6 +56,13 @@ export default {
       // service-role key server ini, sama seperti pola akses admin
       // Supabase Auth di server/lib/supabase-auth.js).
       initSupabaseStorage(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, 'mikk-documents');
+      // RESEND_API_KEY opsional (secret, lihat wrangler secret put) — kalau
+      // belum diisi, kirimKredensialCustomer() gagal lunak (server/lib/email.js).
+      initEmail({
+        apiKey: env.RESEND_API_KEY,
+        dariEmail: env.RESEND_FROM_EMAIL,
+        portalUrl: env.PORTAL_URL,
+      });
       ready = true;
     }
     return nodeHandler.fetch(request, env, ctx);
