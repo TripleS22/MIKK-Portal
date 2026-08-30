@@ -24,6 +24,7 @@ const clientGroupsRoutes = require('./routes/client-groups.routes');
 const myRoutes = require('./routes/my.routes');
 const profileRoutes = require('./routes/profile.routes');
 const masterDataRoutes = require('./routes/master-data.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 const app = express();
 
@@ -71,6 +72,7 @@ app.use('/api/client-groups', clientGroupsRoutes);
 app.use('/api/my', myRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/master-data', masterDataRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Di Cloudflare Workers, frontend statis (public/) disajikan langsung
 // oleh Cloudflare lewat binding Assets (lihat wrangler.toml: [assets] +

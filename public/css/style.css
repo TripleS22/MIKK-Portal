@@ -107,6 +107,21 @@ svg{flex:none}
   background:var(--crit);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center;
   border:2px solid var(--surface);
 }
+.bellmenu{
+  position:absolute;top:calc(100% + 8px);left:0;width:350px;max-width:90vw;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);z-index:50;overflow:hidden;
+}
+.bellmenu-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.bellmenu-head h4{font-family:var(--serif);font-size:13.5px;font-weight:600;margin:0}
+.bellmenu-head button{font-size:11px;color:var(--gold-dk);text-decoration:underline;text-underline-offset:2px}
+.bellmenu-head button:hover{color:var(--gold)}
+.bellmenu-list{max-height:360px;overflow-y:auto}
+.bellmenu-list .feed{padding:0}
+.bellmenu-list .it{cursor:pointer;width:100%;text-align:left;border:0;background:none;font:inherit}
+.bellmenu-list .it:hover{background:var(--paper)}
+.bellmenu-list .it.read{opacity:.5}
+.bellmenu-empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
 .orgpick{
   display:flex;align-items:center;gap:8px;padding:7px 12px;border:1px solid var(--line);
   border-radius:9px;font-size:12.5px;font-weight:500;max-width:250px;
@@ -121,8 +136,9 @@ svg{flex:none}
 }
 .userbox .nm{font-size:12.5px;font-weight:600;line-height:1.25}
 .userbox .rl{font-size:10.5px;color:var(--muted);line-height:1.25}
-.switchLink{font-size:11.5px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.switchLink{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
 .switchLink:hover{color:var(--gold-dk)}
+.switchLink svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
 /* =====================================================================
    AREA KONTEN — breadcrumb, judul halaman

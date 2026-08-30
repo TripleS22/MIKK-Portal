@@ -37,6 +37,7 @@ const ICONS = {
   eye:    '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
   dl:     '<path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/>',
   trash:  '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
 };
 const ico = (n) => `<svg viewBox="0 0 24 24">${ICONS[n] || ICONS.file}</svg>`;
 
@@ -199,7 +200,24 @@ function confirmDialog(msg, opts) {
 }
 
 /* ---------------------------------------------------------------- alur masuk */
-Api.setUnauthorizedHandler(() => { S.user = null; S.ws = null; goLogin(); });
+Api.setUnauthorizedHandler(() => { S.user = null; S.ws = null; lupakanWorkspaceTerakhir(); goLogin(); });
+
+/* Workspace yang sedang dibuka (S.ws) sebelumnya cuma disimpan di memori
+   JS -- refresh (F5) selalu balik ke "Pilih Workspace Anda" walau
+   sesungguhnya masih login & masih di satu klien tertentu, karena token
+   login (localStorage, lihat api.js) memang bertahan tapi PILIHAN
+   workspace-nya tidak. Simpan client_org_id terakhir supaya bisa
+   langsung masuk lagi ke situ setiap boot -- tapi tetap divalidasi
+   ulang terhadap daftar workspace yang SEGAR dari server (goWorkspacePicker
+   selalu memanggil Api.workspaces() dulu), jadi kalau akses sudah dicabut
+   sejak refresh terakhir, tetap jatuh balik ke pemilih seperti biasa. */
+const WS_REMEMBER_KEY = 'mikk_last_client_org_id';
+function ingatWorkspace(clientOrgId) {
+  try { if (clientOrgId) localStorage.setItem(WS_REMEMBER_KEY, clientOrgId); } catch (e) { /* localStorage tidak tersedia -- abaikan, bukan fatal */ }
+}
+function lupakanWorkspaceTerakhir() {
+  try { localStorage.removeItem(WS_REMEMBER_KEY); } catch (e) { /* non-fatal */ }
+}
 
 /* Kartu pemilih workspace — ikonnya mengikuti tipe workspace, seperti
    rancangan referensi (klien retainer vs ruang kerja advokat). */
@@ -246,6 +264,17 @@ async function goWorkspacePicker() {
     showApiErr(t('workspace.noAssignment'));
     return;
   }
+  // Kalau ada workspace yang diingat dari sesi sebelumnya (refresh) dan
+  // masih ada di daftar segar ini, langsung masuk lagi ke situ -- jangan
+  // paksa pilih ulang tiap F5. Kalau sudah tidak ada (akses dicabut,
+  // dsb.), lupakan saja dan lanjut ke pemilih seperti biasa.
+  let diingat = null;
+  try { diingat = localStorage.getItem(WS_REMEMBER_KEY); } catch (e) { /* non-fatal */ }
+  if (diingat) {
+    const cocok = list.find((w) => w.client_org_id === diingat);
+    if (cocok) return enterWorkspace(cocok);
+    lupakanWorkspaceTerakhir();
+  }
   if (list.length === 1) return enterWorkspace(list[0]);
 
   $('#screenLogin').style.display = 'none';
@@ -258,6 +287,7 @@ async function goWorkspacePicker() {
 
 async function enterWorkspace(ws) {
   S.ws = ws;
+  ingatWorkspace(ws.client_org_id);
   $('#screenLogin').style.display = 'none';
   $('#screenWorkspace').style.display = 'none';
   $('#screenApp').style.display = 'grid';
@@ -276,6 +306,7 @@ async function enterWorkspace(ws) {
   $('#modRatesBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modMasterDataBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modStaffUsersBtn').style.display = bolehTarif ? 'flex' : 'none';
+  $('#modKlienBaruBtn').style.display = bolehTarif ? 'flex' : 'none';
   // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
   // Sekarang diakses lewat menu akun di topbar, bukan sidebar (lihat
@@ -292,6 +323,7 @@ async function enterWorkspace(ws) {
 
   await muatSemua();
   switchModuleAll('dashboard');
+  muatNotifikasi(); // tidak perlu ditunggu -- cuma mengisi badge bel, tidak menghalangi render dashboard
 }
 
 /* Cap waktu masuk: momennya disimpan sekali di S.masukPada, tapi
@@ -754,8 +786,15 @@ $('#loginForm').addEventListener('submit', async (e) => {
   } finally { btn.disabled = false; btn.textContent = t('login.submit'); }
 });
 
-$('#logoutBtn').onclick = () => { Api.logout(); S.user = null; S.ws = null; goLogin(); };
+$('#logoutBtn').onclick = async () => {
+  if (!(await confirmDialog(t('common.confirmLogout'), { okText: t('common.logout') }))) return;
+  Api.logout(); S.user = null; S.ws = null; lupakanWorkspaceTerakhir(); goLogin();
+};
 $('#switchWsBtn').onclick = () => {
+  // Pindah workspace secara sadar -- jangan langsung dilempar balik ke
+  // workspace lama ini kalau kebetulan di-refresh sementara masih di
+  // layar pemilih (lihat WS_REMEMBER_KEY).
+  lupakanWorkspaceTerakhir();
   $('#screenApp').style.display = 'none';
   $('#screenWorkspace').style.display = 'flex';
   $('#wsGrid').innerHTML = S.wsList.map((w, i) => wsCardHTML(w, i)).join('');
@@ -1048,6 +1087,7 @@ const MODULES = [
   { id: 'rates',        sec: 'secRates',        btn: 'modRatesBtn',        crumb: 'nav.rates',        desc: 'rates.desc' },
   { id: 'masterdata',   sec: 'secMasterData',   btn: 'modMasterDataBtn',  crumb: 'nav.masterData',  desc: 'masterData.desc' },
   { id: 'staffusers',   sec: 'secStaffUsers',   btn: 'modStaffUsersBtn',  crumb: 'nav.staffUsers',  desc: 'staffUsers.desc' },
+  { id: 'klienbaru',    sec: 'secKlienBaru',    btn: 'modKlienBaruBtn',   crumb: 'nav.klienBaru',   desc: 'klienBaru.desc' },
   // Dua di bawah ini pribadi/lintas klien — dipicu dari menu akun di
   // topbar (#menuMyCasesBtn/#menuProfileBtn), BUKAN sidebar, supaya
   // tidak tercampur dengan modul milik satu workspace klien di atas.
@@ -1093,6 +1133,7 @@ function switchModuleAll(mod) {
   if (mod === 'rates' && !RT.loaded) muatTarifSemua();
   if (mod === 'masterdata' && !MD.loaded) muatMasterDataSemua();
   if (mod === 'staffusers' && !SU.loaded) muatStaffUsersSemua();
+  if (mod === 'klienbaru') resetFormKlienBaru();
   if (mod === 'profile' && !PR.loaded) muatProfilSemua();
   if (mod === 'companyprofile') { KP_PROFIL.mode = 'view'; renderCompanyProfilePage(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1138,6 +1179,74 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('#userMenuBtn')) $('#userMenu').style.display = 'none';
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#userMenu').style.display = 'none'; });
+
+/* ---------------------------------------------------------------- notifikasi bel
+   Sumbernya sama dengan panel "Perlu Perhatian" di Dashboard (kontrak/izin
+   akan berakhir, gap izin wajib, sidang ≤7 hari, proyek terlambat) — lihat
+   server/routes/notifications.routes.js. Status "sudah dibaca" TIDAK
+   disimpan di server (lihat komentar di sana), cuma di localStorage
+   browser ini per pengguna — jadi kalau buka dari perangkat lain,
+   status baca tidak ikut. */
+const NOTIF = { items: [], loaded: false };
+function notifDibacaKey() { return 'mikk_notif_dibaca:' + (S.user ? S.user.id : '-'); }
+function notifDibacaSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(notifDibacaKey()) || '[]')); }
+  catch (e) { return new Set(); }
+}
+function notifSimpanDibaca(set) {
+  try { localStorage.setItem(notifDibacaKey(), JSON.stringify([...set])); } catch (e) { /* non-fatal */ }
+}
+async function muatNotifikasi() {
+  if (!S.ws || !S.ws.client_org_id) { NOTIF.items = []; NOTIF.loaded = true; gambarBellBadge(); return; }
+  try {
+    const { items } = await Api.notifications(S.ws.client_org_id);
+    NOTIF.items = items; NOTIF.loaded = true;
+  } catch (e) { NOTIF.items = []; }
+  gambarBellBadge();
+  if ($('#bellMenu').style.display !== 'none') gambarBellMenu();
+}
+function gambarBellBadge() {
+  const dibaca = notifDibacaSet();
+  const belum = NOTIF.items.filter((it) => !dibaca.has(it.id)).length;
+  const badge = $('#bellCount');
+  badge.style.display = belum ? 'grid' : 'none';
+  badge.textContent = belum > 99 ? '99+' : String(belum);
+}
+function gambarBellMenu() {
+  const dibaca = notifDibacaSet();
+  if (!NOTIF.items.length) {
+    $('#bellList').innerHTML = `<div class="bellmenu-empty">${esc(t('notif.kosong'))}</div>`;
+    return;
+  }
+  $('#bellList').innerHTML = `<div class="feed">${NOTIF.items.map((it) => `
+    <button class="it${dibaca.has(it.id) ? ' read' : ''}" data-notif-id="${esc(it.id)}" data-go="${esc(it.modul)}">
+      <span class="ic ${it.tingkat}">${ico(it.tingkat === 'crit' ? 'alert' : it.tingkat === 'warn' ? 'clock' : 'cal')}</span>
+      <span class="tx"><b>${esc(it.judul)}</b><span>${esc(it.teks)}</span></span>
+    </button>`).join('')}</div>`;
+  document.querySelectorAll('#bellList [data-notif-id]').forEach((b) => {
+    b.onclick = () => {
+      const dibacaBaru = notifDibacaSet(); dibacaBaru.add(b.dataset.notifId); notifSimpanDibaca(dibacaBaru);
+      $('#bellMenu').style.display = 'none';
+      switchModuleAll(b.dataset.go);
+      gambarBellBadge();
+    };
+  });
+}
+$('#bellBtn').addEventListener('click', async (e) => {
+  e.stopPropagation();
+  const menu = $('#bellMenu');
+  const buka = menu.style.display === 'none';
+  menu.style.display = buka ? 'block' : 'none';
+  if (buka) { await muatNotifikasi(); gambarBellMenu(); }
+});
+$('#bellMarkAllBtn').onclick = () => {
+  notifSimpanDibaca(new Set(NOTIF.items.map((it) => it.id)));
+  gambarBellBadge(); gambarBellMenu();
+};
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#bellWrap')) $('#bellMenu').style.display = 'none';
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#bellMenu').style.display = 'none'; });
 
 /* ---------------------------------------------------------------- drawer generik */
 let auxKind = null; // 'case' | 'project' | 'pendampingan'
@@ -2441,9 +2550,20 @@ async function simpanTim() {
     if (!d.nama) err.nama = t('team.err.nama');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) err.email = t('team.err.email');
   }
+  const aktifSebelum = d.aktif; // sebelum ditimpa nilai checkbox saat ini
   d.peran = g('tm_peran');
   if ($('#tm_aktif')) d.aktif = $('#tm_aktif').checked;
   if (Object.keys(err).length) return gambarTimDrawer(err);
+
+  // Menonaktifkan lewat centang ini efeknya sama seperti mencabut akses
+  // orangnya -- gampang tidak sengaja ter-uncheck lalu langsung Simpan,
+  // jadi pastikan disengaja dulu, sama seperti aksi reset-password.
+  if (d.membershipId && aktifSebelum && !d.aktif) {
+    if (!(await confirmDialog(t('team.deactivateConfirm', { nama: d.nama }), { okText: t('team.deactivateOk') }))) {
+      d.aktif = true; if ($('#tm_aktif')) $('#tm_aktif').checked = true;
+      return;
+    }
+  }
 
   const btn = $('#auxDSave'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
   try {
@@ -2607,9 +2727,17 @@ async function simpanStaff() {
     if (!d.nama) err.nama = t('staffUsers.err.nama');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) err.email = t('staffUsers.err.email');
   }
+  const aktifSebelum = d.aktif;
   d.peran = g('su_peran'); d.jabatan = g('su_jabatan'); d.gelar = g('su_gelar');
   if ($('#su_aktif')) d.aktif = $('#su_aktif').checked;
   if (Object.keys(err).length) return gambarStaffDrawer(err);
+
+  if (d.userId && aktifSebelum && !d.aktif) {
+    if (!(await confirmDialog(t('staffUsers.deactivateConfirm', { nama: d.nama }), { okText: t('staffUsers.deactivateOk') }))) {
+      d.aktif = true; if ($('#su_aktif')) $('#su_aktif').checked = true;
+      return;
+    }
+  }
 
   const btn = $('#auxDSave'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
   try {
@@ -2643,6 +2771,49 @@ async function resetSandiStaf(userId, nama) {
 }
 
 $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
+
+/* ================================================================
+   MODUL KLIEN BARU — buat organisasi client_orgs baru. Sengaja halaman
+   penuh (bukan drawer), sama seperti Profil Perusahaan — field cukup
+   banyak untuk dilihat sekaligus di drawer sempit. Bukan penugasan
+   akun (itu tetap lewat Team & Users, yang SUDAH mengirim email
+   kredensial+link masuk lewat kirimKredensialCustomer) -- setelah
+   organisasi ini tersimpan, pengguna diarahkan LANGSUNG masuk ke
+   workspace-nya lalu ke Team & Users untuk menambah akun pertama,
+   supaya "buat klien" dan "kirim akun ke email" terasa satu alur.
+   ================================================================ */
+function resetFormKlienBaru() {
+  ['kb_namaLegal','kb_namaSingkat','kb_npwp','kb_nib','kb_sektor','kb_alamat','kb_kbli'].forEach((id) => { const el = $('#' + id); if (el) el.value = ''; });
+  $('#kb_statusRetainer').value = 'aktif';
+}
+$('#kbSaveBtn').onclick = async () => {
+  const namaLegal = $('#kb_namaLegal').value.trim();
+  const namaSingkat = $('#kb_namaSingkat').value.trim();
+  if (!namaLegal) return toast(t('klienBaru.err.namaLegal'), 'warning');
+  if (!namaSingkat) return toast(t('klienBaru.err.namaSingkat'), 'warning');
+  const kbli = $('#kb_kbli').value.split(',').map((s) => s.trim()).filter(Boolean);
+  const btn = $('#kbSaveBtn'); btn.disabled = true; const teksAsli = btn.textContent; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    const { id } = await Api.createClientOrg({
+      namaLegal, namaSingkat, npwp: $('#kb_npwp').value.trim() || null, nib: $('#kb_nib').value.trim() || null,
+      sektorUsaha: $('#kb_sektor').value.trim() || null, alamat: $('#kb_alamat').value.trim() || null,
+      kbli, statusRetainer: $('#kb_statusRetainer').value,
+    });
+    toast(t('klienBaru.created', { nama: namaSingkat }), 'success');
+    // Masuk ke workspace yang baru dibuat -- reuse enterWorkspace() apa
+    // adanya (peran tetap peran staf yang sedang login, cuma organisasinya
+    // yang baru) supaya seluruh gerbang/label topbar ikut benar, lalu
+    // langsung ke Team & Users karena di situlah akun customer dibuat +
+    // emailnya terkirim (bukan diulang di sini).
+    const wsBaru = { client_org_id: id, nama_singkat: namaSingkat, nama_legal: namaLegal, peran: S.ws.peran, tipe: 'staf_firma' };
+    S.wsList = [...(S.wsList || []), wsBaru];
+    await enterWorkspace(wsBaru);
+    switchModuleAll('team');
+    toast(t('klienBaru.lanjutTambahAkun'), 'info');
+  } catch (e) {
+    toast(e.message || t('common.saveFailed'), 'error');
+  } finally { btn.disabled = false; btn.textContent = teksAsli; }
+};
 
 /* ================================================================
    MODUL PERKARA SAYA — dashboard pribadi lintas klien

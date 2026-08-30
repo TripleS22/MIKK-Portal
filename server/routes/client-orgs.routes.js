@@ -10,9 +10,46 @@
 const express = require('express');
 const { queryAsUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { wajibAdminMikk } = require('../lib/akun-helpers');
 
 const router = express.Router();
 router.use(authenticate);
+
+// POST /api/client-orgs — buat organisasi klien baru ("Klien Baru").
+// RLS client_orgs_tulis (02_rls_dan_views.sql) sudah membatasi INSERT
+// hanya untuk is_mikk_admin(); wajibAdminMikk di sini cuma supaya
+// pesan tolaknya jelas SEBELUM menyentuh database (pola yang sama
+// dipakai client-users/staff-users/permit-types.routes.js).
+router.post('/', wajibAdminMikk, async (req, res, next) => {
+  const b = req.body || {};
+  const namaLegal = String(b.namaLegal || '').trim();
+  const namaSingkat = String(b.namaSingkat || '').trim();
+  if (!namaLegal) return res.status(400).json({ error: 'Nama legal wajib diisi.' });
+  if (!namaSingkat) return res.status(400).json({ error: 'Nama singkat wajib diisi.' });
+  try {
+    const { rows } = await queryAsUser(
+      req.user.id,
+      `insert into client_orgs
+         (nama_legal, nama_singkat, npwp, nib, kbli, sektor_usaha, alamat, status_retainer)
+       values ($1,$2,$3,$4,$5,$6,$7,$8)
+       returning id`,
+      [
+        namaLegal, namaSingkat, b.npwp || null, b.nib || null,
+        Array.isArray(b.kbli) ? b.kbli : [], b.sektorUsaha || null, b.alamat || null,
+        b.statusRetainer || 'aktif',
+      ]
+    );
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: `Nama singkat "${namaSingkat}" sudah dipakai organisasi lain — pilih yang lain.` });
+    }
+    if (err.code === '23514') {
+      return res.status(400).json({ error: 'Status retainer tidak valid.' });
+    }
+    next(err);
+  }
+});
 
 router.get('/', async (req, res, next) => {
   try {

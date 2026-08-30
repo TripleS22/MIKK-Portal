@@ -179,6 +179,7 @@ const Api = (() => {
     updatePermitType: (id, body) => call(`/permit-types/${id}`, { method: 'PATCH', body }),
 
     /* ---- Profil perusahaan (client_orgs) ---- */
+    createClientOrg: (body) => call('/client-orgs', { method: 'POST', body }),
     getClientOrg: (id) => call(`/client-orgs/${id}`),
     updateClientOrg: (id, body) => call(`/client-orgs/${id}`, { method: 'PATCH', body }),
     customFields: (orgId) => call(`/client-orgs/${orgId}/custom-fields`),
@@ -188,5 +189,8 @@ const Api = (() => {
 
     /* ---- Pratinjau Office (Google Docs Viewer / MS Office Online) ---- */
     createPreviewLink: (id) => call(`/documents/${id}/preview-link`, { method: 'POST' }),
+
+    /* ---- Notifikasi bel topbar ---- */
+    notifications: (clientOrgId) => call('/notifications', { qs: { clientOrgId } }),
   };
 })();
