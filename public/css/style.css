@@ -282,6 +282,8 @@ select.fld{padding-right:26px}
 .btn.gold:hover{background:var(--gold-dk);color:#fff}
 .btn.wa{background:#16a34a;color:#fff}
 .btn.wa:hover{background:#128040}
+.btn.crit{background:var(--crit);color:#fff}
+.btn.crit:hover{background:#a01a33}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
@@ -480,18 +482,48 @@ tbody tr:last-child td{border-bottom:none}
 .dbody{flex:1;overflow-y:auto;padding:20px}
 .dfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:9px;background:var(--paper)}
 .dfoot .btn{flex:1;justify-content:center}
+
+/* Modal konfirmasi standar (confirmDialog() di app.js) — pengganti
+   window.confirm() bawaan browser, dipakai #confirmVeil (BUKAN #veil
+   milik drawer, supaya bisa dipakai bersamaan tanpa saling menutup). */
+.confirmbox{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-46%);width:min(380px,90vw);
+  background:var(--surface);border-radius:14px;box-shadow:0 24px 60px rgba(13,27,47,.28);
+  z-index:71;display:none;padding:22px 22px 18px;text-align:center;
+}
+.confirmbox.on{display:block;animation:slide .18s cubic-bezier(.2,.8,.3,1)}
+.confirmbox .cb-icon{
+  width:44px;height:44px;border-radius:50%;margin:0 auto 12px;display:grid;place-items:center;
+  background:var(--warn-sf);color:var(--warn);
+}
+.confirmbox .cb-icon svg{width:22px;height:22px}
+.confirmbox h3{font-family:var(--serif);font-size:16px;font-weight:600;margin:0 0 6px}
+.confirmbox p{font-size:12.5px;color:var(--muted);line-height:1.55;margin:0 0 18px}
+.confirmbox .cb-actions{display:flex;gap:9px}
+.confirmbox .cb-actions .btn{flex:1;justify-content:center}
 .x{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:var(--muted);font-size:16px}
 .x:hover{background:var(--idle-sf);color:var(--ink)}
 
 /* =====================================================================
-   TOAST
+   TOAST — komponen notifikasi standar (4 varian, lihat toast() di
+   app.js). Warna solid per varian, bukan tint terang seperti .warnbox —
+   toast melayang di atas konten APA PUN, tint terang bisa hilang kontras
+   tergantung apa yang ada di baliknya; warna solid + ikon putih konsisten
+   di semua kondisi. Token warna (--ok/--warn/--crit) SAMA dengan yang
+   sudah dipakai .warnbox/.pill di tempat lain — bukan palet baru.
    ===================================================================== */
 .toast{
   position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:90;
-  background:var(--navy);color:#fff;padding:11px 17px;border-radius:10px;font-size:12.5px;
-  font-weight:500;display:none;box-shadow:0 10px 30px rgba(13,27,47,.32);max-width:90vw;
+  background:var(--navy);color:#fff;padding:11px 18px 11px 15px;border-radius:10px;font-size:12.5px;
+  font-weight:500;display:none;align-items:center;gap:10px;
+  box-shadow:0 10px 30px rgba(13,27,47,.32);max-width:90vw;
 }
-.toast.on{display:block;animation:up .2s ease-out}
+.toast.on{display:flex;animation:up .2s ease-out}
+.toast .ic{width:18px;height:18px;flex:none}
+.toast.t-success{background:var(--ok)}
+.toast.t-error{background:var(--crit)}
+.toast.t-warning{background:var(--warn)}
+.toast.t-info{background:var(--navy)}
 @keyframes up{from{transform:translate(-50%,10px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
 /* =====================================================================

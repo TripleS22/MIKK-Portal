@@ -904,6 +904,26 @@
   </div>
 </div>
 
+<!-- Modal konfirmasi standar — pengganti window.confirm() bawaan browser
+     (dulu dipakai di reset kata sandi), supaya tampilannya konsisten
+     dengan tema, bukan popup asing. Dipakai lewat confirmDialog() di
+     app.js, bukan langsung — satu elemen dipakai ulang untuk semua
+     konfirmasi, bukan dibuat per pemanggilan. -->
+<div class="veil" id="confirmVeil"></div>
+<div class="confirmbox" id="confirmBox" role="alertdialog" aria-modal="true">
+  <div class="cb-icon" id="confirmIcon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>
+    </svg>
+  </div>
+  <h3 id="confirmTitle"></h3>
+  <p id="confirmMsg"></p>
+  <div class="cb-actions">
+    <button class="btn ghost" id="confirmCancel" data-i18n="confirm.cancel">Batal</button>
+    <button class="btn crit" id="confirmOk" data-i18n="confirm.okDefault">Ya, lanjutkan</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/js/i18n.js"></script>

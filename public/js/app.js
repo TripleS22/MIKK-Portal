@@ -142,15 +142,60 @@ const S = {
   quickQueue: [], quickIdx: 0,
 };
 
-/* ---------------------------------------------------------------- toast */
+/* ----------------------------------------------------------------
+   TOAST — satu komponen notifikasi standar untuk seluruh aplikasi,
+   4 varian (warna & ikon mengikuti token tema yang SUDAH ada di
+   style.css: --ok/--warn/--crit dipakai juga oleh .warnbox/.pill,
+   bukan warna baru): 'success' (aksi berhasil), 'error' (gagal —
+   dari catch), 'warning' (validasi sebelum kirim — field belum
+   diisi, dst.), 'info' (default, netral, dipakai kalau type
+   dilewatkan atau tidak dikenali — perilaku toast() lama).
+   ---------------------------------------------------------------- */
 let tt;
-function toast(msg) {
-  const el = $('#toast'); el.textContent = msg; el.classList.add('on');
+const TOAST_IKON = {
+  success: '<path d="M20 6 9 17l-5-5"/>',
+  error: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9.5l-5 5M9.5 9.5l5 5"/>',
+  warning: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+};
+function toast(msg, type) {
+  type = TOAST_IKON[type] ? type : 'info';
+  const el = $('#toast');
+  el.className = 'toast t-' + type + ' on';
+  el.innerHTML = `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TOAST_IKON[type]}</svg><span>${esc(msg)}</span>`;
   clearTimeout(tt); tt = setTimeout(() => el.classList.remove('on'), 2600);
 }
 function showApiErr(msg) {
   const el = $('#apiErr'); if (!el) return;
   el.textContent = msg; el.classList.toggle('on', !!msg);
+}
+
+/* ----------------------------------------------------------------
+   CONFIRMDIALOG — pengganti window.confirm() bawaan browser, dipakai
+   di mana pun sebelumnya ada `if (!window.confirm(...)) return;`.
+   Kembalikan Promise<boolean> supaya pemanggilnya tetap `if (!(await
+   confirmDialog(...))) return;` — pola yang sama, cuma tampilannya
+   konsisten dengan tema (bukan popup asing bawaan browser).
+   ---------------------------------------------------------------- */
+function confirmDialog(msg, opts) {
+  opts = opts || {};
+  return new Promise((resolve) => {
+    $('#confirmTitle').textContent = opts.title || t('confirm.title');
+    $('#confirmMsg').textContent = msg;
+    $('#confirmCancel').textContent = opts.cancelText || t('confirm.cancel');
+    $('#confirmOk').textContent = opts.okText || t('confirm.okDefault');
+    $('#confirmVeil').classList.add('on');
+    $('#confirmBox').classList.add('on');
+    const selesai = (hasil) => {
+      $('#confirmVeil').classList.remove('on');
+      $('#confirmBox').classList.remove('on');
+      $('#confirmOk').onclick = null; $('#confirmCancel').onclick = null; $('#confirmVeil').onclick = null;
+      resolve(hasil);
+    };
+    $('#confirmOk').onclick = () => selesai(true);
+    $('#confirmCancel').onclick = () => selesai(false);
+    $('#confirmVeil').onclick = () => selesai(false);
+  });
 }
 
 /* ---------------------------------------------------------------- alur masuk */
@@ -559,10 +604,10 @@ async function simpanDrawer() {
     tutupDrawer();
     await Promise.all([muatDashboard(), muatDaftar(), refreshLedgerRow()]);
     render();
-    toast(t('common.saved'));
+    toast(t('common.saved'), 'success');
   } catch (e) {
     gambarDrawer({ _umum: e.message });
-    toast(e.message || t('common.saveFailed'));
+    toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 async function refreshLedgerRow() {
@@ -638,9 +683,9 @@ function gambarQuick(q, c, err) {
       await Api.updateContract(c.id, S.draft);
       S.draft = null;
       await Promise.all([muatDashboard(), refreshLedgerRow()]);
-      toast(t('common.saved'));
+      toast(t('common.saved'), 'success');
       renderCards(); renderHero(); renderQuick();
-    } catch (e) { toast(e.message || t('common.saveFailed')); btn.disabled = false; btn.innerHTML = t('kontrak.quick.next'); }
+    } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); btn.disabled = false; btn.innerHTML = t('kontrak.quick.next'); }
   };
 }
 
@@ -722,7 +767,7 @@ $('#ledGrid').onclick = async (e) => {
   try {
     const { row } = await Api.getContract(b.dataset.id);
     bukaDrawer(row);
-  } catch (err) { toast(err.message || t('kontrak.openError')); }
+  } catch (err) { toast(err.message || t('kontrak.openError'), 'error'); }
 };
 $('#ledGrid').onmouseover = (e) => { const b = e.target.closest('button[data-id]'); if (b) ledCap(b.dataset.id, Number(b.dataset.row)); };
 $('#ledGrid').onmouseleave = () => ledCap(null);
@@ -908,10 +953,10 @@ async function simpanPermit() {
     else await Api.createPermit({ ...P.draft, clientOrgId: S.ws.client_org_id });
     tutupPermitDrawer();
     await muatPermitsSemua();
-    toast(t('common.saved'));
+    toast(t('common.saved'), 'success');
   } catch (e) {
     gambarPermitDrawer({ _umum: e.message });
-    toast(e.message || t('common.saveFailed'));
+    toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 $('#addPermitBtn').onclick = () => bukaPermitDrawer(null);
@@ -1151,17 +1196,17 @@ async function bukaCaseDrawer(id) {
   if (id) {
     $('#cs_h_add').onclick = async () => {
       const tgl = $('#cs_h_tgl').value, jam = $('#cs_h_jam').value, agenda = $('#cs_h_agenda').value;
-      if (!tgl) return toast(t('cases.err.tglSidang'));
+      if (!tgl) return toast(t('cases.err.tglSidang'), 'warning');
       try { await Api.addHearing(id, { tanggalSidang: tgl, jamSidang: jam || null, agenda: agenda || null });
-        toast(t('cases.hearingAdded')); await bukaCaseDrawer(id); await muatCasesSemua();
-      } catch (e) { toast(e.message); }
+        toast(t('cases.hearingAdded'), 'success'); await bukaCaseDrawer(id); await muatCasesSemua();
+      } catch (e) { toast(e.message, 'error'); }
     };
     $('#cs_m_add').onclick = async () => {
       const isi = $('#cs_m_isi').value.trim();
-      if (!isi) return toast(t('cases.err.isiCatatan'));
+      if (!isi) return toast(t('cases.err.isiCatatan'), 'warning');
       try { await Api.addMinute(id, { isi, status: 'final' });
-        toast(t('cases.minuteAdded')); await bukaCaseDrawer(id);
-      } catch (e) { toast(e.message); }
+        toast(t('cases.minuteAdded'), 'success'); await bukaCaseDrawer(id);
+      } catch (e) { toast(e.message, 'error'); }
     };
   }
 }
@@ -1173,12 +1218,12 @@ async function simpanCase() {
     tanggalDaftar: $('#cs_tgldaftar').value || null, picLegalId: $('#cs_pic').value || null,
     statusSiklus: $('#cs_status').value, keterangan: $('#cs_ket').value.trim() || null,
   };
-  if (!body.nomorPerkara) return toast(t('cases.err.nomor'));
+  if (!body.nomorPerkara) return toast(t('cases.err.nomor'), 'warning');
   try {
     if (CS.editing) await Api.updateCase(CS.editing, body);
     else await Api.createCase({ ...body, clientOrgId: S.ws.client_org_id });
-    tutupAuxDrawer(); await muatCasesSemua(); toast(t('common.saved'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    tutupAuxDrawer(); await muatCasesSemua(); toast(t('common.saved'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 $('#addCaseBtn').onclick = () => bukaCaseDrawer(null);
 
@@ -1286,12 +1331,12 @@ async function simpanProject() {
     targetSelesai: $('#pj_target').value || null, status: $('#pj_status').value,
     keterangan: $('#pj_ket').value.trim() || null,
   };
-  if (!body.namaProyek) return toast(t('projects.err.nama'));
+  if (!body.namaProyek) return toast(t('projects.err.nama'), 'warning');
   try {
     if (PJ.editing) await Api.updateProject(PJ.editing, body);
     else await Api.createProject({ ...body, clientOrgId: S.ws.client_org_id });
-    tutupAuxDrawer(); await muatProjectsSemua(); toast(t('common.saved'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    tutupAuxDrawer(); await muatProjectsSemua(); toast(t('common.saved'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 $('#addProjectBtn').onclick = () => bukaProjectDrawer(null);
 
@@ -1367,12 +1412,12 @@ async function simpanPendampingan() {
     deskripsi: $('#pd_deskripsi').value.trim() || null, status: $('#pd_status').value,
     picId: $('#pd_pic').value || null,
   };
-  if (!body.jenis) return toast(t('pendampingan.err.jenis'));
+  if (!body.jenis) return toast(t('pendampingan.err.jenis'), 'warning');
   try {
     if (PD.editing) await Api.updatePendampingan(PD.editing, body);
     else await Api.createPendampingan({ ...body, clientOrgId: S.ws.client_org_id });
-    tutupAuxDrawer(); await muatPendampinganSemua(); toast(t('common.saved'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    tutupAuxDrawer(); await muatPendampinganSemua(); toast(t('common.saved'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 $('#addPendampinganBtn').onclick = () => bukaPendampinganDrawer(null);
 
@@ -1418,7 +1463,7 @@ function renderDocTable() {
   document.querySelectorAll('#docBody button[data-dl]').forEach((btn) => {
     btn.onclick = async () => {
       try { await Api.downloadDocument(btn.dataset.dl, btn.dataset.fn); }
-      catch (e) { toast(e.message || t('docs.downloadFail')); }
+      catch (e) { toast(e.message || t('docs.downloadFail'), 'error'); }
     };
   });
   document.querySelectorAll('#docBody button[data-preview]').forEach((btn) => {
@@ -1436,7 +1481,7 @@ $('#docUploadBtn').onclick = async () => {
   try {
     await Api.uploadDocument(fd);
     fileEl.value = ''; hint.textContent = '';
-    await muatDocsSemua(); toast(t('docs.uploaded'));
+    await muatDocsSemua(); toast(t('docs.uploaded'), 'success');
   } catch (e) { hint.textContent = e.message || t('docs.uploadHint.fail'); }
 };
 
@@ -1583,8 +1628,8 @@ function bukaProfilPerusahaanDrawer(r) {
       });
       tutupAuxDrawer();
       await muatProfilPerusahaan(r.client_org_id);
-      toast(t('common.saved'));
-    } catch (e) { toast(e.message || t('common.saveFailed')); }
+      toast(t('common.saved'), 'success');
+    } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
   });
 }
 
@@ -1817,9 +1862,9 @@ async function simpanTarif() {
     tutupAuxDrawer();
     RT.loaded = false;
     await muatTarifSemua();
-    toast(t('common.saved'));
+    toast(t('common.saved'), 'success');
   } catch (e) {
-    toast(e.message || t('common.saveFailed'));
+    toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 
@@ -1975,7 +2020,7 @@ async function simpanTim() {
     if (d.membershipId) {
       await Api.updateClientUser(d.membershipId, { peran: d.peran, aktif: d.aktif });
       tutupAuxDrawer();
-      toast(t('common.saved'));
+      toast(t('common.saved'), 'success');
     } else {
       const res = await Api.createClientUser({
         clientOrgId: S.ws.client_org_id, nama: d.nama, email: d.email,
@@ -1985,26 +2030,26 @@ async function simpanTim() {
       if (res.kataSandiAwal) {
         tampilkanKredensial(d.nama, d.email, res.kataSandiAwal, 'teamNewCred', { emailTerkirim: res.emailTerkirim });
       }
-      toast(res.pesan || t('team.created'));
+      toast(res.pesan || t('team.created'), 'success');
     }
     TM.loaded = false;
     await muatTimSemua();
   } catch (e) {
-    toast(e.message || t('common.saveFailed'));
+    toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 
 async function resetSandi(userId, nama) {
   // Menerbitkan kata sandi baru membatalkan yang lama — pastikan disengaja.
-  if (!window.confirm(t('team.resetConfirm', { nama }))) return;
+  if (!(await confirmDialog(t('team.resetConfirm', { nama }), { okText: t('team.resetPass') }))) return;
   try {
     const { kataSandiAwal, emailTerkirim } = await Api.resetClientPassword(userId);
     const baris = TM.rows.find((r) => r.user_id === userId);
     tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal, 'teamNewCred', { emailTerkirim });
     TM.loaded = false;
     await muatTimSemua();
-    toast(t('team.resetDone'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    toast(t('team.resetDone'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 
 $('#addTeamBtn').onclick = () => bukaTimDrawer(null);
@@ -2141,30 +2186,30 @@ async function simpanStaff() {
     if (d.userId) {
       await Api.updateStaffUser(d.userId, { jabatan: d.jabatan, gelar: d.gelar || null, aktif: d.aktif });
       tutupAuxDrawer();
-      toast(t('common.saved'));
+      toast(t('common.saved'), 'success');
     } else {
       const res = await Api.createStaffUser({
         nama: d.nama, email: d.email, noHp: d.noHp || null, jabatan: d.jabatan, gelar: d.gelar || null,
       });
       tutupAuxDrawer();
       if (res.kataSandiAwal) tampilkanKredensial(d.nama, d.email, res.kataSandiAwal, 'staffNewCred');
-      toast(t('staffUsers.created'));
+      toast(t('staffUsers.created'), 'success');
     }
     SU.loaded = false;
     await muatStaffUsersSemua();
   } catch (e) {
-    toast(e.message || t('common.saveFailed'));
+    toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 
 async function resetSandiStaf(userId, nama) {
-  if (!window.confirm(t('staffUsers.resetConfirm', { nama }))) return;
+  if (!(await confirmDialog(t('staffUsers.resetConfirm', { nama }), { okText: t('staffUsers.resetPw') }))) return;
   try {
     const { kataSandiAwal } = await Api.resetStaffPassword(userId);
     const baris = SU.rows.find((r) => r.user_id === userId);
     tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal, 'staffNewCred');
-    toast(t('staffUsers.resetDone'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    toast(t('staffUsers.resetDone'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 
 $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
@@ -2268,8 +2313,8 @@ async function simpanMyCase() {
   };
   try {
     await Api.updateCase(mcEditing.id, body);
-    tutupAuxDrawer(); await muatMyCasesSemua(); toast(t('common.saved'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    tutupAuxDrawer(); await muatMyCasesSemua(); toast(t('common.saved'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 
 /* ---- + Tambah Perkara Baru: pilih dulu jenis klien pemiliknya ---- */
@@ -2313,7 +2358,7 @@ function gambarMyCaseBaruPemilik() {
         await Api.createIndividualClient({ nama: nama.trim() });
         await muatKlienKhususSemua();
         gambarMyCaseBaruPemilik();
-      } catch (e) { toast(e.message || t('common.saveFailed')); }
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
     };
   } else if (tipe === 'grup') {
     wrap.innerHTML = `<label>${t('mycases.f.klien')}</label>
@@ -2327,8 +2372,8 @@ async function simpanMyCaseBaru() {
   const tipe = $('#mcb_tipe').value;
   const pemilikId = $('#mcb_pemilik')?.value;
   const nomor = $('#mcb_nomor').value.trim();
-  if (!pemilikId) return toast(t('mycases.err.klien'));
-  if (!nomor) return toast(t('cases.err.nomor'));
+  if (!pemilikId) return toast(t('mycases.err.klien'), 'warning');
+  if (!nomor) return toast(t('cases.err.nomor'), 'warning');
   const body = {
     nomorPerkara: nomor, tahap: $('#mcb_tahap').value,
     // PIC diisi otomatis ke diri sendiri — supaya perkara baru langsung
@@ -2341,8 +2386,8 @@ async function simpanMyCaseBaru() {
   };
   try {
     await Api.createCase(body);
-    tutupAuxDrawer(); await muatMyCasesSemua(); toast(t('common.saved'));
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+    tutupAuxDrawer(); await muatMyCasesSemua(); toast(t('common.saved'), 'success');
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 $('#addMyCaseBtn').onclick = () => bukaMyCaseBaruDrawer();
 
@@ -2368,14 +2413,14 @@ function bukaKlienIndivDrawer() {
     <div class="f" style="margin-top:12px"><label>${t('mycases.f.alamat')}</label><textarea id="ki_alamat" rows="2"></textarea></div>`,
     async () => {
       const nama = $('#ki_nama').value.trim();
-      if (!nama) return toast(t('mycases.err.nama'));
+      if (!nama) return toast(t('mycases.err.nama'), 'warning');
       try {
         await Api.createIndividualClient({
           nama, nik: $('#ki_nik').value.trim() || null,
           noHp: $('#ki_hp').value.trim() || null, alamat: $('#ki_alamat').value.trim() || null,
         });
-        tutupAuxDrawer(); await muatKlienKhususSemua(); renderKlienKhususPanel(); toast(t('common.saved'));
-      } catch (e) { toast(e.message || t('common.saveFailed')); }
+        tutupAuxDrawer(); await muatKlienKhususSemua(); renderKlienKhususPanel(); toast(t('common.saved'), 'success');
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
     });
 }
 function bukaKlienGrupDrawer() {
@@ -2388,12 +2433,12 @@ function bukaKlienGrupDrawer() {
       </div></div>`,
     async () => {
       const nama = $('#kg_nama').value.trim();
-      if (!nama) return toast(t('mycases.err.namaKelompok'));
+      if (!nama) return toast(t('mycases.err.namaKelompok'), 'warning');
       const anggotaIds = Array.from(document.querySelectorAll('.kg_anggota:checked')).map((el) => el.value);
       try {
         await Api.createClientGroup({ namaKelompok: nama, anggotaIds });
-        tutupAuxDrawer(); await muatKlienKhususSemua(); renderKlienKhususPanel(); toast(t('common.saved'));
-      } catch (e) { toast(e.message || t('common.saveFailed')); }
+        tutupAuxDrawer(); await muatKlienKhususSemua(); renderKlienKhususPanel(); toast(t('common.saved'), 'success');
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
     });
 }
 $('#addKlienIndivBtn').onclick = () => bukaKlienIndivDrawer();
@@ -2506,9 +2551,9 @@ function renderProfilIdentitas() {
           gelar: $('#pf_gelar').value.trim() || null, nomorIzinAdvokat: $('#pf_izin').value.trim() || null,
           nik: $('#pf_nik').value.trim() || null, alamat: $('#pf_alamat').value.trim() || null,
         });
-        toast(t('common.saved'));
+        toast(t('common.saved'), 'success');
         PR.me = await Api.profileMe(); renderProfilIdentitas();
-      } catch (e) { toast(e.message || t('common.saveFailed')); }
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
     };
   }
 }
@@ -2558,22 +2603,22 @@ async function renderProfilDocs() {
             <button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${esc(t('docs.download'))}</button></td>
         </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted-2);padding:16px">${esc(t('docs.empty.title'))}</td></tr>`}</tbody></table></div>`;
     document.querySelectorAll('#profileDocsPanel [data-dl]').forEach((btn) => {
-      btn.onclick = () => Api.downloadDocument(btn.dataset.dl, btn.dataset.fn).catch((e) => toast(e.message || t('docs.downloadFail')));
+      btn.onclick = () => Api.downloadDocument(btn.dataset.dl, btn.dataset.fn).catch((e) => toast(e.message || t('docs.downloadFail'), 'error'));
     });
     document.querySelectorAll('#profileDocsPanel [data-preview]').forEach((btn) => {
       btn.onclick = () => bukaPreviewDokumen(btn.dataset.preview, btn.dataset.mime, btn.dataset.fn);
     });
     $('#pf_docUpload').onclick = async () => {
       const fileEl = $('#pf_docFile');
-      if (!fileEl.files.length) return toast(t('docs.uploadHint.pilih'));
+      if (!fileEl.files.length) return toast(t('docs.uploadHint.pilih'), 'warning');
       const fd = new FormData();
       fd.append('file', fileEl.files[0]);
       Object.entries(owner).forEach(([k, v]) => fd.append(k, v));
       fd.append('kategoriArsip', p.jenis === 'perkara' ? 'perkara' : p.jenis === 'kontrak' ? 'kontrak' : 'lainnya');
       fd.append('entityType', entityTypeDariJenisProfil(p.jenis));
       fd.append('entityId', p.id);
-      try { await Api.uploadDocument(fd); fileEl.value = ''; toast(t('docs.uploaded')); renderProfilDocs(); }
-      catch (e) { toast(e.message || t('docs.uploadHint.fail')); }
+      try { await Api.uploadDocument(fd); fileEl.value = ''; toast(t('docs.uploaded'), 'success'); renderProfilDocs(); }
+      catch (e) { toast(e.message || t('docs.uploadHint.fail'), 'error'); }
     };
   } catch (e) { wrap.innerHTML = `<p class="hint">${esc(e.message || t('docs.loadError'))}</p>`; }
 }
@@ -2607,20 +2652,20 @@ async function renderLampiranPanel(containerId, entityType, entityId, ownerParam
         </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted-2);padding:12px">${esc(t('lampiran.kosong'))}</td></tr>`
       }</tbody></table></div>`;
     wrap.querySelectorAll('[data-dl]').forEach((b) => {
-      b.onclick = () => Api.downloadDocument(b.dataset.dl, b.dataset.fn).catch((e) => toast(e.message || t('docs.downloadFail')));
+      b.onclick = () => Api.downloadDocument(b.dataset.dl, b.dataset.fn).catch((e) => toast(e.message || t('docs.downloadFail'), 'error'));
     });
     wrap.querySelectorAll('[data-preview]').forEach((b) => {
       b.onclick = () => bukaPreviewDokumen(b.dataset.preview, b.dataset.mime, b.dataset.fn);
     });
     $('#' + containerId + '_upload').onclick = async () => {
       const fileEl = $('#' + containerId + '_file');
-      if (!fileEl.files.length) return toast(t('lampiran.uploadHint.pilih'));
+      if (!fileEl.files.length) return toast(t('lampiran.uploadHint.pilih'), 'warning');
       const fd = new FormData();
       fd.append('file', fileEl.files[0]);
       Object.entries(ownerParams).forEach(([k, v]) => fd.append(k, v));
       fd.append('entityType', entityType); fd.append('entityId', entityId);
-      try { await Api.uploadDocument(fd); toast(t('docs.uploaded')); renderLampiranPanel(containerId, entityType, entityId, ownerParams); }
-      catch (e) { toast(e.message || t('docs.uploadHint.fail')); }
+      try { await Api.uploadDocument(fd); toast(t('docs.uploaded'), 'success'); renderLampiranPanel(containerId, entityType, entityId, ownerParams); }
+      catch (e) { toast(e.message || t('docs.uploadHint.fail'), 'error'); }
     };
   } catch (e) { wrap.innerHTML = `<p class="hint">${esc(e.message || t('docs.loadError'))}</p>`; }
 }
@@ -2703,9 +2748,9 @@ function renderMasterDataPage() {
           urutan: Number(tr.querySelector('.md_urutan').value) || 0,
           aktif: tr.querySelector('.md_aktif').checked,
         });
-        toast(t('common.saved'));
+        toast(t('common.saved'), 'success');
         await muatMasterDataUlang();
-      } catch (e) { toast(e.message || t('common.saveFailed')); }
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
     };
   });
 }
@@ -2718,7 +2763,7 @@ async function muatMasterDataUlang() {
 $('#masterDataAddBtn').onclick = async () => {
   const kode = $('#md_new_kode').value.trim();
   const labelId = $('#md_new_labelId').value.trim();
-  if (!kode || !labelId) return toast(t('masterData.err.wajib'));
+  if (!kode || !labelId) return toast(t('masterData.err.wajib'), 'warning');
   try {
     await Api.createMasterDataOption({
       kategori: MD.kategoriAktif, kode, labelId,
@@ -2726,9 +2771,9 @@ $('#masterDataAddBtn').onclick = async () => {
       urutan: MD.rows.filter((r) => r.kategori === MD.kategoriAktif).length,
     });
     $('#md_new_kode').value = ''; $('#md_new_labelId').value = ''; $('#md_new_labelEn').value = '';
-    toast(t('common.saved'));
+    toast(t('common.saved'), 'success');
     await muatMasterDataUlang();
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 };
 
 /* ----------------------------------------------------------------
@@ -2777,10 +2822,10 @@ function renderPermitTypesTable() {
           wajib: tr.querySelector('.pt_wajib').checked,
           masihBerlaku: tr.querySelector('.pt_aktif').checked,
         });
-        toast(t('common.saved'));
+        toast(t('common.saved'), 'success');
         PT.loaded = false;
         await muatPermitTypesSemua();
-      } catch (e) { toast(e.message || t('common.saveFailed')); }
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
     };
   });
 }
@@ -2788,7 +2833,7 @@ function renderPermitTypesTable() {
 $('#permitTypesAddBtn').onclick = async () => {
   const kode = $('#pt_new_kode').value.trim();
   const nama = $('#pt_new_nama').value.trim();
-  if (!kode || !nama) return toast(t('permitTypes.err.wajib'));
+  if (!kode || !nama) return toast(t('permitTypes.err.wajib'), 'warning');
   const kbli = $('#pt_new_kbli').value.split(',').map((s) => s.trim()).filter(Boolean);
   try {
     await Api.createPermitType({
@@ -2800,8 +2845,8 @@ $('#permitTypesAddBtn').onclick = async () => {
     });
     $('#pt_new_kode').value = ''; $('#pt_new_nama').value = ''; $('#pt_new_instansi').value = '';
     $('#pt_new_masaBerlaku').value = ''; $('#pt_new_kbli').value = ''; $('#pt_new_wajib').checked = false;
-    toast(t('common.saved'));
+    toast(t('common.saved'), 'success');
     PT.loaded = false;
     await muatPermitTypesSemua();
-  } catch (e) { toast(e.message || t('common.saveFailed')); }
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 };
