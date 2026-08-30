@@ -36,6 +36,7 @@ const ICONS = {
   disk:   '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 12h20"/><path d="M6 16h.01M10 16h.01"/>',
   eye:    '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
   dl:     '<path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/>',
+  trash:  '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/>',
 };
 const ico = (n) => `<svg viewBox="0 0 24 24">${ICONS[n] || ICONS.file}</svg>`;
 
@@ -1056,11 +1057,18 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#userMe
 
 /* ---------------------------------------------------------------- drawer generik */
 let auxKind = null; // 'case' | 'project' | 'pendampingan'
-function bukaAuxDrawer(kind, judul, bodyHtml, onSave) {
+// saveLabel opsional — dipakai drawer View Profil Perusahaan supaya
+// tombol utamanya bertuliskan "Edit Profil" (mengarah ke drawer edit),
+// bukan "Simpan" (tidak ada yang disimpan di layar view). SELALU di-set
+// ulang di sini (bukan dibiarkan dari drawer sebelumnya) supaya label
+// tidak pernah nyangkut salah — default tetap t('common.save') seperti
+// sebelumnya untuk semua pemanggil lain yang tidak mengirim argumen ini.
+function bukaAuxDrawer(kind, judul, bodyHtml, onSave, saveLabel) {
   auxKind = kind;
   $('#auxDTitle').textContent = judul;
   $('#auxDBody').innerHTML = bodyHtml;
   $('#auxDSave').onclick = onSave;
+  $('#auxDSave').textContent = saveLabel || t('common.save');
   $('#veil').classList.add('on'); $('#auxDrawer').classList.add('on');
 }
 function tutupAuxDrawer() {
@@ -1592,7 +1600,7 @@ function renderProfilPerusahaan() {
   panel.innerHTML = `
     <div class="panelhead">
       <div class="ttl2"><h3>${esc(r.nama_legal)}</h3><p>${esc(r.nama_singkat)} · ${esc(r.sektor_usaha || '—')}</p></div>
-      ${r.boleh_edit ? `<button class="btn ghost" id="editProfilPerusahaanBtn">${esc(t('companyProfile.edit'))}</button>` : ''}
+      <button class="btn ghost" id="viewProfilPerusahaanBtn">${esc(t('companyProfile.viewBtn'))}</button>
     </div>
     <div style="padding:16px 18px" class="grid2">
       <div><div class="hint">${esc(t('companyProfile.npwp'))}</div><div class="doc">${esc(r.npwp || '—')}</div></div>
@@ -1600,10 +1608,58 @@ function renderProfilPerusahaan() {
       <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.alamat'))}</div><div>${esc(r.alamat || '—')}</div></div>
       <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.kbli'))}</div><div>${(r.kbli || []).map((k) => `<span class="tag">${esc(k)}</span>`).join(' ') || '—'}</div></div>
     </div>`;
-  if (r.boleh_edit) {
-    $('#editProfilPerusahaanBtn').onclick = () => bukaProfilPerusahaanDrawer(r);
-  }
+  // "Lihat Profil" selalu tampil (bukan cuma untuk yang boleh_edit) — ini
+  // View, bukan Edit; siapa pun yang bisa melihat panel ringkas ini boleh
+  // membuka detail lengkapnya (field kustom + dokumen). Tombol Edit di
+  // dalam View-lah yang digerbangi r.boleh_edit (lihat bukaProfilViewDrawer).
+  $('#viewProfilPerusahaanBtn').onclick = () => bukaProfilViewDrawer(r);
 }
+
+/* Satu baris field read-only di drawer View — otomatis melebar satu baris
+   penuh kalau isinya panjang (bukan dipotong/didesak sempit di grid 2
+   kolom), supaya field kustom yang isinya bisa apa saja (nama field
+   bebas ketik) tetap rapi tertata tanpa perlu diatur manual satu-satu. */
+function fieldRowRoHTML(label, value) {
+  const panjang = String(value || '').length > 40;
+  return `<div style="${panjang ? 'grid-column:1 / -1' : ''}">
+    <div class="hint">${esc(label)}</div><div>${esc(value || '—')}</div>
+  </div>`;
+}
+
+async function bukaProfilViewDrawer(r) {
+  let customFields = [];
+  try { customFields = (await Api.customFields(r.client_org_id)).rows; } catch (e) { /* non-fatal */ }
+
+  const html = `
+    <div class="grid2">
+      ${fieldRowRoHTML(t('companyProfile.namaLegal'), r.nama_legal)}
+      ${fieldRowRoHTML(t('companyProfile.sektorUsaha'), r.sektor_usaha)}
+      ${fieldRowRoHTML(t('companyProfile.npwp'), r.npwp)}
+      ${fieldRowRoHTML(t('companyProfile.nib'), r.nib)}
+      ${fieldRowRoHTML(t('companyProfile.alamat'), r.alamat)}
+      <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.kbli'))}</div>
+        <div>${(r.kbli || []).map((k) => `<span class="tag">${esc(k)}</span>`).join(' ') || '—'}</div></div>
+    </div>
+    ${customFields.length ? `
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('companyProfile.customFieldsTitle'))}</div>
+      <div class="grid2">${customFields.map((f) => fieldRowRoHTML(f.label, f.nilai)).join('')}</div>
+    </div>` : ''}
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('companyProfile.docsTitle'))}</div>
+      <div id="lampiran_profil"></div>
+    </div>`;
+
+  bukaAuxDrawer('companyprofile-view', t('companyProfile.viewTitle'), html,
+    () => { tutupAuxDrawer(); bukaProfilPerusahaanDrawer(r); },
+    t('companyProfile.edit'));
+  // View murni baca — tombol aksi cuma relevan kalau boleh_edit (RLS
+  // yang sebenarnya menegakkan, ini sekadar tidak menawarkan pintu yang
+  // memang terkunci, sama seperti pola bolehTarif di tempat lain).
+  $('#auxDSave').style.display = r.boleh_edit ? '' : 'none';
+  renderLampiranPanel('lampiran_profil', 'client_org', r.client_org_id, { clientOrgId: r.client_org_id });
+}
+
 function bukaProfilPerusahaanDrawer(r) {
   bukaAuxDrawer('companyprofile', t('companyProfile.editTitle'), `
     <div class="f"><label>${t('companyProfile.namaLegal')}</label><input id="cp_namaLegal" value="${esc(r.nama_legal)}"></div>
@@ -1616,6 +1672,11 @@ function bukaProfilPerusahaanDrawer(r) {
     <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
       <input id="cp_kbli" value="${esc((r.kbli || []).join(', '))}">
       <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>
+    <div class="f" style="margin-top:20px">
+      <label>${t('companyProfile.customFieldsTitle')}</label>
+      <div class="hint" style="margin-bottom:8px">${esc(t('companyProfile.customFieldsHint'))}</div>
+      <div id="cp_customFieldsWrap"></div>
+    </div>
   `, async () => {
     try {
       await Api.updateClientOrg(r.client_org_id, {
@@ -1631,6 +1692,62 @@ function bukaProfilPerusahaanDrawer(r) {
       toast(t('common.saved'), 'success');
     } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
   });
+  renderCustomFieldsEditor(r.client_org_id);
+}
+
+/* Field kustom (db/22_client_org_custom_fields.sql) — per-baris simpan/
+   hapus sendiri (pola yang sama dengan Master Data), BUKAN ikut disimpan
+   lewat tombol "Simpan" utama drawer edit di atas — supaya menambah satu
+   field tidak mengharuskan field lain (namaLegal, dst.) ikut terkirim
+   ulang, dan sebaliknya. */
+async function renderCustomFieldsEditor(orgId) {
+  const wrap = $('#cp_customFieldsWrap');
+  if (!wrap) return;
+  let rows = [];
+  try { rows = (await Api.customFields(orgId)).rows; } catch (e) { /* non-fatal */ }
+
+  wrap.innerHTML = `
+    <div class="tscroll"><table style="min-width:420px"><tbody>${
+      rows.map((f) => `<tr data-id="${f.id}">
+        <td><input class="fld cf_label" value="${esc(f.label)}" style="width:100%"></td>
+        <td><input class="fld cf_nilai" value="${esc(f.nilai || '')}" style="width:100%"></td>
+        <td><button class="btn ghost cf_simpan" type="button" style="padding:5px 10px;font-size:11px">${esc(t('common.save'))}</button></td>
+        <td><button class="iconbtn cf_hapus" type="button" title="${esc(t('common.delete'))}">${ico('trash')}</button></td>
+      </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted-2);padding:12px">${esc(t('companyProfile.customFieldsKosong'))}</td></tr>`
+    }</tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <input id="cf_new_label" placeholder="${esc(t('companyProfile.customFieldsLabelPlaceholder'))}" style="flex:1;min-width:140px" class="fld">
+      <input id="cf_new_nilai" placeholder="${esc(t('companyProfile.customFieldsValuePlaceholder'))}" style="flex:1;min-width:140px" class="fld">
+      <button class="btn ghost" type="button" id="cf_tambahBtn">${esc(t('companyProfile.customFieldsAddBtn'))}</button>
+    </div>`;
+
+  wrap.querySelectorAll('tr[data-id]').forEach((tr) => {
+    tr.querySelector('.cf_simpan').onclick = async () => {
+      const label = tr.querySelector('.cf_label').value.trim();
+      if (!label) return toast(t('companyProfile.customFieldsErrLabel'), 'warning');
+      try {
+        await Api.updateCustomField(tr.dataset.id, { label, nilai: tr.querySelector('.cf_nilai').value.trim() || null });
+        toast(t('common.saved'), 'success');
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+    };
+    tr.querySelector('.cf_hapus').onclick = async () => {
+      if (!(await confirmDialog(t('companyProfile.customFieldsHapusConfirm')))) return;
+      try {
+        await Api.deleteCustomField(tr.dataset.id);
+        toast(t('common.deleted'), 'success');
+        renderCustomFieldsEditor(orgId);
+      } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+    };
+  });
+  $('#cf_tambahBtn').onclick = async () => {
+    const label = $('#cf_new_label').value.trim();
+    if (!label) return toast(t('companyProfile.customFieldsErrLabel'), 'warning');
+    try {
+      await Api.createCustomField(orgId, { label, nilai: $('#cf_new_nilai').value.trim() || null });
+      toast(t('common.saved'), 'success');
+      renderCustomFieldsEditor(orgId);
+    } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+  };
 }
 
 /* ---------------------------------------------------------------- bahasa */

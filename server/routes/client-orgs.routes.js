@@ -74,4 +74,85 @@ router.patch('/:id', async (req, res, next) => {
   }
 });
 
+// ---------------------------------------------------------------------
+// Field kustom profil perusahaan (db/22_client_org_custom_fields.sql) —
+// bebas per klien, bukan skema terstruktur ala Master Data (lihat
+// catatan panjang di migrasinya untuk alasannya). RLS
+// (client_org_custom_fields_baca/tulis) yang menegakkan siapa boleh
+// apa — sama persis app.boleh_akses_klien()/boleh_edit_klien() yang
+// dipakai client_orgs sendiri, endpoint ini sekadar meneruskan.
+// ---------------------------------------------------------------------
+
+// GET /api/client-orgs/:id/custom-fields
+router.get('/:id/custom-fields', async (req, res, next) => {
+  try {
+    const { rows } = await queryAsUser(
+      req.user.id,
+      `select id, label, nilai, urutan from client_org_custom_fields
+        where client_org_id = $1 order by urutan, created_at`,
+      [req.params.id]
+    );
+    res.json({ rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/client-orgs/:id/custom-fields — tambah field baru
+router.post('/:id/custom-fields', async (req, res, next) => {
+  const b = req.body || {};
+  const label = String(b.label || '').trim();
+  if (!label) return res.status(400).json({ error: 'Nama field wajib diisi.' });
+  try {
+    const { rows: urutanRows } = await queryAsUser(req.user.id,
+      'select count(*)::int as n from client_org_custom_fields where client_org_id = $1', [req.params.id]);
+    const { rows } = await queryAsUser(
+      req.user.id,
+      `insert into client_org_custom_fields (client_org_id, label, nilai, urutan)
+       values ($1,$2,$3,$4) returning id`,
+      [req.params.id, label, b.nilai || null, urutanRows[0].n]
+    );
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) {
+    if (err.code === '42501') {
+      return next(Object.assign(new Error('Anda tidak memiliki akses untuk mengubah profil organisasi ini.'), { status: 403 }));
+    }
+    next(err);
+  }
+});
+
+// PATCH /api/client-orgs/custom-fields/:fieldId — ubah label/nilai/urutan
+router.patch('/custom-fields/:fieldId', async (req, res, next) => {
+  const b = req.body || {};
+  const set = [], val = [req.params.fieldId];
+  const taruh = (k, v) => { val.push(v); set.push(`${k} = $${val.length}`); };
+  if (Object.prototype.hasOwnProperty.call(b, 'label')) {
+    const label = String(b.label || '').trim();
+    if (!label) return res.status(400).json({ error: 'Nama field wajib diisi.' });
+    taruh('label', label);
+  }
+  if (Object.prototype.hasOwnProperty.call(b, 'nilai')) taruh('nilai', b.nilai || null);
+  if (Object.prototype.hasOwnProperty.call(b, 'urutan')) taruh('urutan', Number(b.urutan) || 0);
+  if (!set.length) return res.status(400).json({ error: 'Tidak ada perubahan yang dikirim.' });
+  try {
+    const { rows } = await queryAsUser(req.user.id,
+      `update client_org_custom_fields set ${set.join(', ')} where id = $1 returning id`, val);
+    if (!rows.length) return res.status(404).json({ error: 'Field tidak ditemukan, atau Anda tidak punya akses untuk mengubahnya.' });
+    res.json({ id: rows[0].id });
+  } catch (err) {
+    if (err.code === '42501') {
+      return next(Object.assign(new Error('Anda tidak memiliki akses untuk mengubah profil organisasi ini.'), { status: 403 }));
+    }
+    next(err);
+  }
+});
+
+// DELETE /api/client-orgs/custom-fields/:fieldId
+router.delete('/custom-fields/:fieldId', async (req, res, next) => {
+  try {
+    const { rows } = await queryAsUser(req.user.id,
+      'delete from client_org_custom_fields where id = $1 returning id', [req.params.fieldId]);
+    if (!rows.length) return res.status(404).json({ error: 'Field tidak ditemukan, atau Anda tidak punya akses untuk menghapusnya.' });
+    res.json({ id: rows[0].id });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

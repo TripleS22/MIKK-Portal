@@ -179,6 +179,10 @@ const Api = (() => {
     /* ---- Profil perusahaan (client_orgs) ---- */
     getClientOrg: (id) => call(`/client-orgs/${id}`),
     updateClientOrg: (id, body) => call(`/client-orgs/${id}`, { method: 'PATCH', body }),
+    customFields: (orgId) => call(`/client-orgs/${orgId}/custom-fields`),
+    createCustomField: (orgId, body) => call(`/client-orgs/${orgId}/custom-fields`, { method: 'POST', body }),
+    updateCustomField: (fieldId, body) => call(`/client-orgs/custom-fields/${fieldId}`, { method: 'PATCH', body }),
+    deleteCustomField: (fieldId) => call(`/client-orgs/custom-fields/${fieldId}`, { method: 'DELETE' }),
 
     /* ---- Pratinjau Office (Google Docs Viewer / MS Office Online) ---- */
     createPreviewLink: (id) => call(`/documents/${id}/preview-link`, { method: 'POST' }),

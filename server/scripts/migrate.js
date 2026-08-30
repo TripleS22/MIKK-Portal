@@ -41,6 +41,7 @@ const ORDER = [
   '19_dokumen_publik_fungsi.sql',
   '20_document_links_pendampingan.sql',
   '21_permit_types_master_data.sql',
+  '22_client_org_custom_fields.sql',
 ];
 
 async function main() {
