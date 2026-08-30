@@ -628,6 +628,7 @@ function bukaDrawerView(row) {
 }
 
 function tutupDrawer() {
+  navGen++; // batalkan fetch drawer-View yang mungkin masih berjalan (lihat catatan navGen)
   S.editing = null; S.draft = null; drawerRow = null;
   $('#veil').classList.remove('on'); $('#drawer').classList.remove('on');
 }
@@ -1004,6 +1005,7 @@ function bukaPermitDrawerView(row) {
 }
 
 function tutupPermitDrawer() {
+  navGen++;
   P.editing = null; P.draft = null;
   $('#veil').classList.remove('on'); $('#permitDrawer').classList.remove('on');
 }
@@ -1058,6 +1060,20 @@ const MODULES = [
   { id: 'companyprofile', sec: 'secCompanyProfile', btn: null, crumb: 'companyProfile.viewTitle', desc: 'companyProfile.pageDesc' },
 ];
 let modAktif = 'dashboard';
+
+// Dilaporkan langsung dari layar: klik baris (View perkara/Perkara Saya
+// perlu fetch dulu — bukaCaseDrawerView/bukaMyCaseDrawerView, async),
+// lalu SEBELUM fetch itu selesai, pindah modul lain lewat sidebar —
+// drawer-nya tetap muncul menimpa modul baru, seolah tidak mau
+// tertutup. Bukan tutupDrawer()/dst. yang tidak jalan (itu tetap
+// dipanggil di bawah) — masalahnya fetch yang SUDAH terlanjur berjalan
+// tetap menyelesaikan diri lalu memanggil bukaAuxDrawer() apa adanya,
+// tidak tahu penggunanya sudah pindah tempat. navGen menandai "generasi
+// navigasi saat ini" — dinaikkan tiap kali ada penutupan/perpindahan;
+// fungsi buka-drawer yang async menyimpan nilainya SEBELUM await, lalu
+// membatalkan diri (tidak jadi menampilkan apa pun) kalau nilainya
+// sudah berubah setelah fetch selesai.
+let navGen = 0;
 
 function switchModuleAll(mod) {
   tutupDrawer(); tutupPermitDrawer(); tutupAuxDrawer();
@@ -1141,6 +1157,7 @@ function bukaAuxDrawer(kind, judul, bodyHtml, onSave, saveLabel) {
   $('#veil').classList.add('on'); $('#auxDrawer').classList.add('on');
 }
 function tutupAuxDrawer() {
+  navGen++;
   auxKind = null;
   $('#veil').classList.remove('on'); $('#auxDrawer').classList.remove('on');
 }
@@ -1215,9 +1232,11 @@ function renderCaseTable() {
    formulir tambah), formulir tambahnya cuma muncul lagi setelah masuk
    Edit (bukaCaseDrawer) — supaya View tetap ringkas. */
 async function bukaCaseDrawerView(id) {
+  const gen = navGen;
   let row, hearings, minutes;
   try { ({ row, hearings, minutes } = await Api.getCase(id)); }
   catch (e) { toast(e.message || t('kontrak.openError'), 'error'); return; }
+  if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   const pic = CS.ref?.pic.find((p) => p.id === row.pic_legal_id);
   const html = `
     <div class="grid2">
@@ -1316,9 +1335,11 @@ function caseFormHTML(row, hearings, minutes) {
   </div>` : ''}`;
 }
 async function bukaCaseDrawer(id) {
+  const gen = navGen;
   CS.editing = id;
   let row = null, hearings = [], minutes = [];
   if (id) { const r = await Api.getCase(id); row = r.row; hearings = r.hearings; minutes = r.minutes; }
+  if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   bukaAuxDrawer('case', id ? t('cases.editTitle') : t('cases.drawerTitleNew'), caseFormHTML(row, hearings, minutes), simpanCase);
   renderLampiranPanel('lampiran_perkara', 'case', id, { clientOrgId: S.ws.client_org_id });
   if (id) {
@@ -1889,6 +1910,7 @@ function fieldRowRoHTML(label, value) {
    memutuskan blok #cpView atau #cpEdit yang ditampilkan. Dipanggil
    dari switchModuleAll('companyprofile') tiap kali dibuka. */
 async function renderCompanyProfilePage() {
+  const gen = navGen;
   const r = KP_PROFIL.row;
   if (!r) return;
   const editMode = KP_PROFIL.mode === 'edit';
@@ -1923,6 +1945,7 @@ async function renderCompanyProfilePage() {
 
   let customFields = [];
   try { customFields = (await Api.customFields(r.client_org_id)).rows; } catch (e) { /* non-fatal */ }
+  if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   $('#cpViewCustomWrap').style.display = customFields.length ? 'block' : 'none';
   $('#cpViewCustomFields').innerHTML = customFields.map((f) => fieldRowRoHTML(f.label, f.nilai)).join('');
 
@@ -2679,9 +2702,11 @@ let mcEditing = null;
    modul lain (drawer edit di sini SUDAH sederhana — cuma tahap/status/
    PIC/keterangan, lihat catatan di atas — View-nya jadi ringkas juga). */
 async function bukaMyCaseDrawerView(row) {
+  const gen = navGen;
   let ref;
   try { ref = await Api.casesReference(pemilikDariBarisPerkara(row)); }
   catch (e) { ref = { pic: [] }; }
+  if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   const pic = ref.pic.find((p) => p.id === row.pic_legal_id);
   const html = `
     <div>${fieldRowRoHTML(t('mycases.f.klien'), `${row.klien_nama} (${JENIS_KLIEN_NAMA[row.jenis_klien] || row.jenis_klien})`)}</div>
@@ -2700,9 +2725,11 @@ async function bukaMyCaseDrawerView(row) {
   renderLampiranPanel('lampiran_mycase', 'case', row.id, pemilikDariBarisPerkara(row));
 }
 async function bukaMyCaseDrawer(row) {
+  const gen = navGen;
   mcEditing = row;
   try { MC.ref = await Api.casesReference(pemilikDariBarisPerkara(row)); }
   catch (e) { MC.ref = { pic: [], tahap: [], peranKlien: [], statusSiklus: [] }; }
+  if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   bukaAuxDrawer('mycase', t('mycases.drawerTitle', { nomor: row.nomor_perkara }), myCaseFormHTML(row), simpanMyCase);
   renderLampiranPanel('lampiran_mycase', 'case', row.id, pemilikDariBarisPerkara(row));
 }
@@ -2737,6 +2764,7 @@ async function simpanMyCase() {
 
 /* ---- + Tambah Perkara Baru: pilih dulu jenis klien pemiliknya ---- */
 async function bukaMyCaseBaruDrawer() {
+  const gen = navGen;
   let orgRows = [];
   try { orgRows = (await Api.clientOrgs()).rows; } catch (e) { /* tetap lanjut, list org kosong */ }
   MC.orgRows = orgRows;
@@ -2745,6 +2773,7 @@ async function bukaMyCaseBaruDrawer() {
   // cases.routes.js: pemilik opsional di endpoint ini).
   try { MC.refBaru = await Api.casesReference(); } catch (e) { MC.refBaru = { tahap: [] }; }
   await muatKlienKhususSemua();
+  if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   bukaAuxDrawer('mycasebaru', t('mycases.newTitle'), myCaseBaruFormHTML(), simpanMyCaseBaru);
   $('#mcb_tipe').addEventListener('change', gambarMyCaseBaruPemilik);
   gambarMyCaseBaruPemilik();
