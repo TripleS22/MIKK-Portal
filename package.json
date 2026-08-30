@@ -7,6 +7,7 @@
   "scripts": {
     "migrate": "node server/scripts/migrate.js",
     "seed": "node server/scripts/seed.js",
+    "seed:demo": "node server/scripts/seed-demo.js",
     "dev": "node server/index.js",
     "start": "node server/index.js",
     "test:api": "node server/scripts/test-api.js"
