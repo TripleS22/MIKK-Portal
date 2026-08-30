@@ -231,43 +231,6 @@ svg{flex:none}
 .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:14px;margin-bottom:18px}
 
 /* =====================================================================
-   HERO / LEDGER (peta kelengkapan CRM Kontrak)
-   ===================================================================== */
-.hero{
-  background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:20px 22px;margin-bottom:18px;box-shadow:var(--shadow);
-}
-.hero-top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:20px;margin-bottom:18px}
-.eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--gold-dk)}
-.hero h2{font-family:var(--serif);font-size:26px;font-weight:500;margin:5px 0 3px;letter-spacing:-.015em}
-.hero p{margin:0;color:var(--muted);font-size:12.5px;max-width:60ch}
-.big{font-family:var(--serif);font-size:44px;font-weight:500;line-height:1;letter-spacing:-.02em}
-.big small{font-size:16px;color:var(--muted);font-weight:400}
-
-/* Kelengkapan Data — daftar progress bar sederhana, satu baris per
-   field inti (Nomor/Pihak kedua/Tanggal mulai/Tanggal berakhir/Nilai).
-   Mengganti widget "peta" (grid sel per kontrak per field) yang
-   dilaporkan pengguna membingungkan — bar tunggal per field (bukan sel
-   kecil per kontrak) jauh lebih cepat dibaca sepintas: makin panjang
-   bar terisi (emas), makin lengkap field itu di seluruh kontrak.
-   Interaksi klik (menyaring ke mode Isi Cepat untuk field itu) TETAP
-   sama seperti sebelumnya, cuma tampilannya yang berubah total. */
-.complete-list{display:flex;flex-direction:column;gap:14px}
-.complete-row{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:2px 0}
-.complete-row .cr-label{width:150px;flex:none;font-size:12.5px;color:var(--ink-2);font-weight:600}
-.complete-row:hover .cr-label,.complete-row.on .cr-label{color:var(--gold-dk)}
-.complete-row .cr-bar{flex:1;height:9px;border-radius:99px;background:#e5e9f0;overflow:hidden}
-.complete-row .cr-fill{height:100%;background:var(--gold);border-radius:99px;transition:width .4s cubic-bezier(.22,1,.36,1)}
-.complete-row.on .cr-fill{background:var(--navy)}
-.complete-row .cr-stat{width:96px;flex:none;text-align:right;font-size:11px;color:var(--muted);font-family:var(--mono)}
-@media (max-width:640px){
-  .complete-row{flex-wrap:wrap;gap:6px 14px}
-  .complete-row .cr-label{width:auto}
-  .complete-row .cr-stat{width:auto;margin-left:auto}
-  .complete-row .cr-bar{flex-basis:100%}
-}
-
-/* =====================================================================
    TOOLBAR — pencarian, penyaring, ekspor
    ===================================================================== */
 .bar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:14px}

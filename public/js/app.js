@@ -128,7 +128,6 @@ const JABATAN_NAMA = nameProxy('jabatan');
 const STATUS_NAMA = nameProxy('status');
 const SIKLUS_NAMA = nameProxy('siklus', 'contracts_status_siklus');
 const RELASI_NAMA = nameProxy('relasi', 'contracts_relasi_ke_induk');
-const ROWS_LEDGER = () => [t('kontrak.row.nomor'), t('kontrak.row.lawan'), t('kontrak.row.mulai'), t('kontrak.row.akhir'), t('kontrak.row.nilai')];
 const STATUS_KEYS = ['aman', 'pantau', 'peringatan', 'kritis', 'kedaluwarsa', 'digantikan', 'tanpa_batas', 'tidak_dipantau'];
 const PERMIT_STATUS_NAMA = nameProxy('permitStatus', 'permits_status_siklus');
 const JENIS_KLIEN_NAMA = nameProxy('jenisKlien');
@@ -352,30 +351,7 @@ const tglTampil = (iso) => !iso ? null : new Date(iso + 'T00:00:00')
   .toLocaleDateString(LANG === 'en' ? 'en-GB' : 'id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 const sisaTeks = (d) => d < 0 ? t('common.daysAgo', { n: Math.abs(d) }) : t('common.daysLeft', { n: d });
 
-/* ---------------------------------------------------------------- render: hero + kartu */
-const FIELD_KEYS_LEDGER = ['f_nomor', 'f_lawan', 'f_mulai', 'f_akhir', 'f_nilai'];
-function renderHero() {
-  $('#heroDesc').textContent = t('kontrak.heroDesc');
-  $('#pctSub').textContent = t('kontrak.pctSub');
-  const d = S.dashboard || {};
-  const pct = Number(d.kelengkapan_persen) || 0;
-  $('#pctBig').textContent = pct.toFixed ? Math.round(pct) : pct;
-
-  // Satu bar per field inti — persentase kontrak yang sudah terisi
-  // untuk field itu, dihitung dari S.ledger yang sudah dimuat (bukan
-  // lagi grid sel-per-kontrak). Diklik menyaring ke mode Isi Cepat
-  // untuk field itu, sama seperti sebelumnya.
-  const total = S.ledger.length;
-  $('#completeList').innerHTML = ROWS_LEDGER().map((label, i) => {
-    const terisi = total ? S.ledger.filter((c) => c[FIELD_KEYS_LEDGER[i]]).length : 0;
-    const pctBaris = total ? Math.round((terisi / total) * 100) : 0;
-    return `<button class="complete-row ${S.ledRow === i ? 'on' : ''}" data-row="${i}">
-      <span class="cr-label">${esc(label)}</span>
-      <span class="cr-bar"><span class="cr-fill" style="width:${pctBaris}%"></span></span>
-      <span class="cr-stat">${terisi}/${total} · ${pctBaris}%</span>
-    </button>`;
-  }).join('');
-}
+/* ---------------------------------------------------------------- render: kartu */
 function renderCards() {
   const d = S.dashboard || {};
   $('#cards').innerHTML = [
@@ -745,14 +721,14 @@ function gambarQuick(q, c, err) {
       S.draft = null;
       await Promise.all([muatDashboard(), refreshLedgerRow()]);
       toast(t('common.saved'), 'success');
-      renderCards(); renderHero(); renderQuick();
+      renderCards(); renderQuick();
     } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); btn.disabled = false; btn.innerHTML = t('kontrak.quick.next'); }
   };
 }
 
 /* ---------------------------------------------------------------- render utama */
 function render() {
-  renderHero(); renderCards();
+  renderCards();
   $('#viewTable').style.display = S.view === 'table' ? 'block' : 'none';
   $('#viewQuick').style.display = S.view === 'quick' ? 'block' : 'none';
   $('#vTable').classList.toggle('on', S.view === 'table');
@@ -823,13 +799,6 @@ document.querySelectorAll('thead th.srt').forEach((th) => {
     terapkanFilterLaluRender();
   };
 });
-$('#completeList').onclick = (e) => {
-  const b = e.target.closest('button[data-row]'); if (!b) return;
-  const r = Number(b.dataset.row);
-  S.ledRow = S.ledRow === r ? null : r;
-  S.view = 'quick'; S.quickIdx = 0; S.draft = null;
-  render();
-};
 $('#dClose').onclick = tutupDrawer; $('#dCancel').onclick = tutupDrawer; $('#veil').onclick = tutupDrawer;
 $('#dSave').onclick = simpanDrawer;
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#drawer').classList.contains('on')) tutupDrawer(); });

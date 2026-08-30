@@ -21,6 +21,9 @@ const SORT_MAP = {
   sisa: 'v.sisa_hari',
   skor: 'v.skor_kelengkapan',
   judul: 'v.judul',
+  nomor: 'v.nomor_dokumen',
+  lawan: 'v.lawan_pihak',
+  kategori: 'v.kategori_nama',
 };
 
 // GET /api/contracts?clientOrgId=&q=&kategori=&status=&lengkap=&sort=&dir=&page=&per=
