@@ -869,7 +869,7 @@ function renderPermitTable() {
     </tr>`;
   }).join('');
   document.querySelectorAll('#permitBody tr[data-id]').forEach((tr) => {
-    tr.onclick = () => bukaPermitDrawer(P.rows.find((p) => p.id === tr.dataset.id));
+    tr.onclick = () => bukaPermitDrawerView(P.rows.find((p) => p.id === tr.dataset.id));
   });
 }
 function renderGap() {
@@ -940,6 +940,10 @@ function validasiPermit() {
     err.tanggalKedaluwarsa = t('permits.err.kedaluwarsa');
   return Object.keys(err).length ? err : null;
 }
+// Klik baris tabel dulu ke bukaPermitDrawerView() (baca saja) —
+// bukaPermitDrawer() (form edit) sekarang dipanggil dari tombol "Edit"
+// di View, atau langsung dari tombol "+ Tambah Izin" (row=null, tidak
+// ada apa pun untuk dilihat dulu pada izin yang belum ada).
 function bukaPermitDrawer(row) {
   P.editing = row ? row.id : null;
   P.draft = row ? {
@@ -949,17 +953,56 @@ function bukaPermitDrawer(row) {
     tanpaBatas: row.tanpa_batas_waktu, status: row.status_siklus, keterangan: row.keterangan,
   } : { permitTypeId: null, picId: null, namaIzin: '', nomorIzin: null, instansiPenerbit: null,
         tanggalTerbit: null, tanggalKedaluwarsa: null, tanpaBatas: false, status: 'aktif', keterangan: null };
+  // Reset ke tombol Simpan — kalau sebelumnya drawer sempat dalam mode
+  // View, tombolnya sempat dipakai untuk "Edit" (lihat bukaPermitDrawerView).
+  $('#permitDSave').textContent = t('common.save');
+  $('#permitDSave').onclick = simpanPermit;
   gambarPermitDrawer();
   $('#veil').classList.add('on'); $('#permitDrawer').classList.add('on');
   setTimeout(() => { const el = $('#p_nama'); if (el) el.focus(); }, 60);
 }
 function gambarPermitDrawer(err) {
-  $('#permitDTitle').textContent = P.editing ? t('permits.drawerTitle') : t('permits.drawerTitleNew');
+  $('#permitDTitle').textContent = P.editing ? t('permits.editTitle') : t('permits.drawerTitleNew');
   $('#permitDBody').innerHTML = permitFormHTML(err);
   renderLampiranPanel('lampiran_izin', 'permit', P.editing, { clientOrgId: S.ws.client_org_id });
   const batas = $('#p_batas');
   if (batas) batas.addEventListener('change', () => { bacaPermitForm(); gambarPermitDrawer(); });
 }
+
+/* View — dibuka lebih dulu dari klik baris tabel. Sama pola dengan
+   bukaDrawerView (CRM Kontrak): field bacaan saja, dokumen tetap bisa
+   dilihat/diunggah, tombol "Edit" di footer masuk ke form sungguhan. */
+function bukaPermitDrawerView(row) {
+  P.editing = row.id;
+  $('#permitDTitle').textContent = t('permits.drawerTitle');
+  const jenisNama = row.permit_type_id ? (P.ref.permitTypes.find((pt) => pt.id === row.permit_type_id) || {}).nama : null;
+  const picNama = row.pic_id ? (P.ref.pic.find((p) => p.id === row.pic_id) || {}).nama : null;
+  $('#permitDBody').innerHTML = `
+    <div class="grid2">
+      ${fieldRowRoHTML(t('permits.f.jenis'), jenisNama)}
+      ${fieldRowRoHTML(t('permits.f.pic'), picNama)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('permits.f.nama'), row.nama_izin)}</div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('permits.f.nomor'), row.nomor_izin)}
+      ${fieldRowRoHTML(t('permits.f.instansi'), row.instansi_penerbit)}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('permits.f.terbit'), tglTampil(row.tanggal_terbit))}
+      ${fieldRowRoHTML(t('permits.f.kedaluwarsa'), row.tanpa_batas_waktu ? t('permits.f.tanpaBatas') : tglTampil(row.tanggal_kedaluwarsa))}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('permits.f.status'), PERMIT_STATUS_NAMA[row.status_siklus] || row.status_siklus)}</div>
+    ${row.keterangan ? `<div style="margin-top:12px">${fieldRowRoHTML(t('permits.f.keterangan'), row.keterangan)}</div>` : ''}
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('lampiran.title'))}</div>
+      <div id="lampiran_izin"></div>
+    </div>`;
+  renderLampiranPanel('lampiran_izin', 'permit', row.id, { clientOrgId: S.ws.client_org_id });
+  $('#permitDSave').textContent = t('common.edit');
+  $('#permitDSave').onclick = () => bukaPermitDrawer(row);
+  $('#veil').classList.add('on'); $('#permitDrawer').classList.add('on');
+}
+
 function tutupPermitDrawer() {
   P.editing = null; P.draft = null;
   $('#veil').classList.remove('on'); $('#permitDrawer').classList.remove('on');
@@ -1163,8 +1206,59 @@ function renderCaseTable() {
     </tr>`;
   }).join('');
   document.querySelectorAll('#caseBody tr[data-id]').forEach((tr) => {
-    tr.onclick = () => bukaCaseDrawer(tr.dataset.id);
+    tr.onclick = () => bukaCaseDrawerView(tr.dataset.id);
   });
+}
+/* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
+   modul lain. Perkara punya sub-daftar (sidang, catatan sidang) selain
+   field pokok — di View keduanya tetap ditampilkan (baca saja, tanpa
+   formulir tambah), formulir tambahnya cuma muncul lagi setelah masuk
+   Edit (bukaCaseDrawer) — supaya View tetap ringkas. */
+async function bukaCaseDrawerView(id) {
+  let row, hearings, minutes;
+  try { ({ row, hearings, minutes } = await Api.getCase(id)); }
+  catch (e) { toast(e.message || t('kontrak.openError'), 'error'); return; }
+  const pic = CS.ref?.pic.find((p) => p.id === row.pic_legal_id);
+  const html = `
+    <div class="grid2">
+      ${fieldRowRoHTML(t('cases.f.nomor'), row.nomor_perkara)}
+      ${fieldRowRoHTML(t('cases.f.pengadilan'), row.pengadilan)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('cases.f.jenis'), row.jenis_perkara)}</div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('cases.f.peran'), PERAN_KLIEN_NAMA[row.peran_klien] || row.peran_klien)}
+      ${fieldRowRoHTML(t('cases.f.tahap'), TAHAP_NAMA[row.tahap] || row.tahap)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('cases.f.lawan'), row.lawan_pihak_teks)}</div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('cases.f.tglDaftar'), row.tanggal_daftar ? tglTampil(row.tanggal_daftar) : null)}
+      ${fieldRowRoHTML(t('cases.f.pic'), pic?.nama)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('cases.f.status'), CASE_STATUS_NAMA[row.status_siklus] || row.status_siklus)}</div>
+    ${row.keterangan ? `<div style="margin-top:12px">${fieldRowRoHTML(t('cases.f.keterangan'), row.keterangan)}</div>` : ''}
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+      <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('cases.hearingTitle')}</h4>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${hearings.map((h) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:12px">
+          <span><b>${esc(tglTampil(h.tanggal_sidang))}</b> ${h.jam_sidang ? esc(h.jam_sidang.slice(0,5)) : ''} — ${esc(h.agenda || '')}</span>
+          <span class="tag">${esc(h.status)}</span></div>`).join('') || `<p style="font-size:12px;color:var(--muted);margin:0">${esc(t('cases.hearingEmpty'))}</p>`}
+      </div>
+    </div>
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+      <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('cases.minutesTitle')}</h4>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${minutes.map((m) => `<div style="padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:12px">
+          <div class="sub" style="margin-bottom:3px">${esc(tglTampil(m.created_at.slice(0,10)))} · ${esc(m.dicatat_oleh_nama || '—')} · ${esc(m.status)}</div>
+          ${esc(m.isi)}</div>`).join('') || `<p style="font-size:12px;color:var(--muted);margin:0">${esc(t('cases.minutesEmpty'))}</p>`}
+      </div>
+    </div>
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('lampiran.title'))}</div>
+      <div id="lampiran_perkara"></div>
+    </div>`;
+  bukaAuxDrawer('case-view', t('cases.drawerTitle'), html,
+    () => { tutupAuxDrawer(); bukaCaseDrawer(id); }, t('common.edit'));
+  renderLampiranPanel('lampiran_perkara', 'case', id, { clientOrgId: S.ws.client_org_id });
 }
 function caseFormHTML(row, hearings, minutes) {
   const r = CS.ref;
@@ -1225,7 +1319,7 @@ async function bukaCaseDrawer(id) {
   CS.editing = id;
   let row = null, hearings = [], minutes = [];
   if (id) { const r = await Api.getCase(id); row = r.row; hearings = r.hearings; minutes = r.minutes; }
-  bukaAuxDrawer('case', id ? t('cases.drawerTitle') : t('cases.drawerTitleNew'), caseFormHTML(row, hearings, minutes), simpanCase);
+  bukaAuxDrawer('case', id ? t('cases.editTitle') : t('cases.drawerTitleNew'), caseFormHTML(row, hearings, minutes), simpanCase);
   renderLampiranPanel('lampiran_perkara', 'case', id, { clientOrgId: S.ws.client_org_id });
   if (id) {
     $('#cs_h_add').onclick = async () => {
@@ -1328,8 +1422,34 @@ function renderProjectTable() {
     </tr>`;
   }).join('');
   document.querySelectorAll('#projectBody tr[data-id]').forEach((tr) => {
-    tr.onclick = () => bukaProjectDrawer(PJ.rows.find((p) => p.id === tr.dataset.id));
+    tr.onclick = () => bukaProjectDrawerView(PJ.rows.find((p) => p.id === tr.dataset.id));
   });
+}
+/* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
+   bukaDrawerView (CRM Kontrak) / bukaPermitDrawerView (Perizinan). */
+function bukaProjectDrawerView(row) {
+  const pic = PJ.ref.pic.find((p) => p.id === row.pic_legal_id);
+  const html = `
+    <div class="grid2">
+      ${fieldRowRoHTML(t('projects.f.nama'), row.nama_proyek)}
+      ${fieldRowRoHTML(t('projects.f.kategori'), row.kategori)}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('projects.f.pic'), pic?.nama)}
+      ${fieldRowRoHTML(t('projects.f.status'), PROJECT_STATUS_NAMA[row.status] || row.status)}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('projects.f.progress'), row.progress_persen + '%')}
+      ${fieldRowRoHTML(t('projects.f.target'), row.target_selesai ? tglTampil(row.target_selesai) : null)}
+    </div>
+    ${row.keterangan ? `<div style="margin-top:12px">${fieldRowRoHTML(t('projects.f.keterangan'), row.keterangan)}</div>` : ''}
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('lampiran.title'))}</div>
+      <div id="lampiran_proyek"></div>
+    </div>`;
+  bukaAuxDrawer('project-view', t('projects.drawerTitle'), html,
+    () => { tutupAuxDrawer(); bukaProjectDrawer(row); }, t('common.edit'));
+  renderLampiranPanel('lampiran_proyek', 'project', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function projectFormHTML(row) {
   const r = PJ.ref;
@@ -1353,7 +1473,7 @@ function projectFormHTML(row) {
 }
 async function bukaProjectDrawer(row) {
   PJ.editing = row ? row.id : null;
-  bukaAuxDrawer('project', row ? t('projects.drawerTitle') : t('projects.drawerTitleNew'), projectFormHTML(row), simpanProject);
+  bukaAuxDrawer('project', row ? t('projects.editTitle') : t('projects.drawerTitleNew'), projectFormHTML(row), simpanProject);
   renderLampiranPanel('lampiran_proyek', 'project', row ? row.id : null, { clientOrgId: S.ws.client_org_id });
   const range = $('#pj_progress');
   if (range) range.addEventListener('input', () => { $('#pj_progress_val').textContent = range.value; });
@@ -1411,8 +1531,31 @@ function renderPendampinganTable() {
       <td>${whoMini(r.pic_nama, r.pic_jabatan ? JABATAN_NAMA[r.pic_jabatan] : null)}</td>
     </tr>`).join('');
   document.querySelectorAll('#pendampinganBody tr[data-id]').forEach((tr) => {
-    tr.onclick = () => bukaPendampinganDrawer(PD.rows.find((r) => r.id === tr.dataset.id));
+    tr.onclick = () => bukaPendampinganDrawerView(PD.rows.find((r) => r.id === tr.dataset.id));
   });
+}
+/* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
+   modul lain (CRM Kontrak/Perizinan/Proyek Legal). */
+function bukaPendampinganDrawerView(row) {
+  const html = `
+    <div class="grid2">
+      ${fieldRowRoHTML(t('pendampingan.f.jenis'), JENIS_PD_NAMA[row.jenis] || row.jenis)}
+      ${fieldRowRoHTML(t('pendampingan.f.tanggal'), row.tanggal_kegiatan ? tglTampil(row.tanggal_kegiatan) : null)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('pendampingan.f.lokasi'), row.lokasi)}</div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('pendampingan.f.pihak'), row.pihak_terlibat)}</div>
+    ${row.deskripsi ? `<div style="margin-top:12px">${fieldRowRoHTML(t('pendampingan.f.deskripsi'), row.deskripsi)}</div>` : ''}
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('pendampingan.f.status'), STATUS_PD_NAMA[row.status] || row.status)}
+      ${fieldRowRoHTML(t('pendampingan.f.pic'), row.pic_nama)}
+    </div>
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('lampiran.title'))}</div>
+      <div id="lampiran_pendampingan"></div>
+    </div>`;
+  bukaAuxDrawer('pendampingan-view', t('pendampingan.drawerTitle'), html,
+    () => { tutupAuxDrawer(); bukaPendampinganDrawer(row); }, t('common.edit'));
+  renderLampiranPanel('lampiran_pendampingan', 'pendampingan', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function pendampinganFormHTML(row) {
   const r = PD.ref;
@@ -1436,7 +1579,7 @@ function pendampinganFormHTML(row) {
 }
 async function bukaPendampinganDrawer(row) {
   PD.editing = row ? row.id : null;
-  bukaAuxDrawer('pendampingan', row ? t('pendampingan.drawerTitle') : t('pendampingan.drawerTitleNew'), pendampinganFormHTML(row), simpanPendampingan);
+  bukaAuxDrawer('pendampingan', row ? t('pendampingan.editTitle') : t('pendampingan.drawerTitleNew'), pendampinganFormHTML(row), simpanPendampingan);
   renderLampiranPanel('lampiran_pendampingan', 'pendampingan', row ? row.id : null, { clientOrgId: S.ws.client_org_id });
 }
 async function simpanPendampingan() {
@@ -1962,15 +2105,37 @@ function renderTarifTable() {
     </tr>`;
   }).join('');
 
-  if (RT.bolehUbah) {
-    document.querySelectorAll('#ratesBody tr[data-id]').forEach((tr) => {
-      tr.onclick = () => bukaTarifDrawer(RT.rows.find((r) => r.id === tr.dataset.id));
-    });
-  } else {
-    document.querySelectorAll('#ratesBody tr[data-id]').forEach((tr) => {
-      tr.style.cursor = 'default';
-    });
-  }
+  // Baris SEKARANG selalu bisa diklik (dulu cuma kalau boleh_ubah) —
+  // bukaTarifDrawerView() murni baca, siapa pun yang bisa melihat modul
+  // ini boleh melihat detailnya; tombol "Edit" di dalam View-lah yang
+  // digerbangi RT.bolehUbah (sama pola dengan boleh_edit Profil
+  // Perusahaan), bukan lagi seluruh baris tabel disembunyikan dari klik.
+  document.querySelectorAll('#ratesBody tr[data-id]').forEach((tr) => {
+    tr.onclick = () => bukaTarifDrawerView(RT.rows.find((r) => r.id === tr.dataset.id));
+  });
+}
+function bukaTarifDrawerView(row) {
+  const harga = row.butuh_penawaran ? t('rates.penawaran')
+    : `${rupiah(row.harga)}${row.harga_termasuk_ppn ? ` (${t('rates.termasukPpn')})` : ''}`;
+  const html = `
+    <div class="grid2">
+      ${fieldRowRoHTML(t('rates.f.kode'), row.kode)}
+      ${fieldRowRoHTML(t('rates.f.jenis'), LAYANAN_NAMA[row.jenis_layanan] || row.jenis_layanan)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('rates.f.nama'), row.nama)}</div>
+    ${row.deskripsi ? `<div style="margin-top:12px">${fieldRowRoHTML(t('rates.f.deskripsi'), row.deskripsi)}</div>` : ''}
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('rates.f.harga'), harga)}
+      ${row.butuh_penawaran ? '' : fieldRowRoHTML(t('rates.f.satuan'), SATUAN_NAMA[row.satuan] || row.satuan)}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('rates.f.durasi'), row.durasi_menit ? `${row.durasi_menit} ${t('prospect.menit')}` : null)}
+      ${fieldRowRoHTML(t('rates.f.berlakuSampai'), row.berlaku_sampai ? tglTampil(row.berlaku_sampai) : null)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('rates.f.aktif'), row.aktif ? t('rates.aktif') : t('rates.nonaktif'))}</div>`;
+  bukaAuxDrawer('rate-view', t('rates.viewTitle'), html,
+    RT.bolehUbah ? () => { tutupAuxDrawer(); bukaTarifDrawer(row); } : null, t('common.edit'));
+  $('#auxDSave').style.display = RT.bolehUbah ? '' : 'none';
 }
 
 function tarifFormHTML(err) {
@@ -2497,7 +2662,7 @@ function renderMyCasesTable() {
     </tr>`;
   }).join('');
   document.querySelectorAll('#myCasesBody tr[data-id]').forEach((tr) => {
-    tr.onclick = () => bukaMyCaseDrawer(MC.rows.find((c) => c.id === tr.dataset.id));
+    tr.onclick = () => bukaMyCaseDrawerView(MC.rows.find((c) => c.id === tr.dataset.id));
   });
 }
 function pemilikDariBarisPerkara(row) {
@@ -2510,6 +2675,30 @@ function pemilikDariBarisPerkara(row) {
    & Sidang milik klien terkait. Di sini fokus ke apa yang paling sering
    diubah dari sudut pandang "perkara saya": tahap, status, PIC, catatan. */
 let mcEditing = null;
+/* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
+   modul lain (drawer edit di sini SUDAH sederhana — cuma tahap/status/
+   PIC/keterangan, lihat catatan di atas — View-nya jadi ringkas juga). */
+async function bukaMyCaseDrawerView(row) {
+  let ref;
+  try { ref = await Api.casesReference(pemilikDariBarisPerkara(row)); }
+  catch (e) { ref = { pic: [] }; }
+  const pic = ref.pic.find((p) => p.id === row.pic_legal_id);
+  const html = `
+    <div>${fieldRowRoHTML(t('mycases.f.klien'), `${row.klien_nama} (${JENIS_KLIEN_NAMA[row.jenis_klien] || row.jenis_klien})`)}</div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('cases.f.tahap'), TAHAP_NAMA[row.tahap] || row.tahap)}
+      ${fieldRowRoHTML(t('cases.f.status'), CASE_STATUS_NAMA[row.status_siklus] || row.status_siklus)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('cases.f.pic'), pic?.nama)}</div>
+    ${row.keterangan ? `<div style="margin-top:12px">${fieldRowRoHTML(t('cases.f.keterangan'), row.keterangan)}</div>` : ''}
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('lampiran.title'))}</div>
+      <div id="lampiran_mycase"></div>
+    </div>`;
+  bukaAuxDrawer('mycase-view', t('mycases.drawerTitle', { nomor: row.nomor_perkara }), html,
+    () => { tutupAuxDrawer(); bukaMyCaseDrawer(row); }, t('common.edit'));
+  renderLampiranPanel('lampiran_mycase', 'case', row.id, pemilikDariBarisPerkara(row));
+}
 async function bukaMyCaseDrawer(row) {
   mcEditing = row;
   try { MC.ref = await Api.casesReference(pemilikDariBarisPerkara(row)); }
