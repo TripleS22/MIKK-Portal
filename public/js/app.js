@@ -800,7 +800,7 @@ document.querySelectorAll('thead th.srt').forEach((th) => {
     terapkanFilterLaluRender();
   };
 });
-$('#dClose').onclick = tutupDrawer; $('#dCancel').onclick = tutupDrawer; $('#veil').onclick = tutupDrawer;
+$('#dClose').onclick = tutupDrawer; $('#dCancel').onclick = tutupDrawer;
 $('#dSave').onclick = simpanDrawer;
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#drawer').classList.contains('on')) tutupDrawer(); });
 
@@ -1029,7 +1029,6 @@ $('#addPermitBtn').onclick = () => bukaPermitDrawer(null);
 $('#permitDClose').onclick = tutupPermitDrawer;
 $('#permitDCancel').onclick = tutupPermitDrawer;
 $('#permitDSave').onclick = simpanPermit;
-$('#veil').addEventListener('click', () => { if ($('#permitDrawer').classList.contains('on')) tutupPermitDrawer(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#permitDrawer').classList.contains('on')) tutupPermitDrawer(); });
 
 /* ================================================================
@@ -1162,6 +1161,20 @@ function tutupAuxDrawer() {
   $('#veil').classList.remove('on'); $('#auxDrawer').classList.remove('on');
 }
 $('#auxDClose').onclick = tutupAuxDrawer; $('#auxDCancel').onclick = tutupAuxDrawer;
+
+/* Klik area gelap (veil) menutup drawer yang sedang terbuka — SATU
+   listener untuk ketiganya (#drawer kontrak, #permitDrawer, #auxDrawer
+   generik), bukan tersebar seperti sebelumnya. Sebelumnya #auxDrawer
+   (dipakai Litigasi, Proyek Legal, Pendampingan, Arsip Dokumen, Team &
+   Users, Tarif Layanan, Master Data, Staf MIKK) sama sekali tidak
+   punya handler ini — akibatnya, karena #veil menutupi seluruh layar
+   termasuk sidebar (position:fixed;inset:0;z-index:60, sidebar tidak
+   punya z-index jadi tertutup), klik pada tombol modul sidebar saat
+   auxDrawer terbuka tertelan oleh veil: tidak menutup drawer, tidak
+   pindah modul, terlihat seperti "drawer tidak tertutup". Ketiga fungsi
+   tutup* di bawah aman dipanggil meski drawernya sendiri sedang tidak
+   terbuka (no-op), jadi tidak perlu dicek dulu drawer mana yang aktif. */
+$('#veil').addEventListener('click', () => { tutupDrawer(); tutupPermitDrawer(); tutupAuxDrawer(); });
 
 const TAHAP_NAMA = nameProxy('tahap', 'cases_tahap');
 const PERAN_KLIEN_NAMA = nameProxy('peranKlien', 'cases_peran_klien');
