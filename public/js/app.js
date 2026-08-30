@@ -353,6 +353,7 @@ const tglTampil = (iso) => !iso ? null : new Date(iso + 'T00:00:00')
 const sisaTeks = (d) => d < 0 ? t('common.daysAgo', { n: Math.abs(d) }) : t('common.daysLeft', { n: d });
 
 /* ---------------------------------------------------------------- render: hero + kartu */
+const FIELD_KEYS_LEDGER = ['f_nomor', 'f_lawan', 'f_mulai', 'f_akhir', 'f_nilai'];
 function renderHero() {
   $('#heroDesc').textContent = t('kontrak.heroDesc');
   $('#pctSub').textContent = t('kontrak.pctSub');
@@ -360,20 +361,20 @@ function renderHero() {
   const pct = Number(d.kelengkapan_persen) || 0;
   $('#pctBig').textContent = pct.toFixed ? Math.round(pct) : pct;
 
-  $('#ledLabels').innerHTML = ROWS_LEDGER().map((r, i) =>
-    `<button data-row="${i}" class="${S.ledRow === i ? 'on' : ''}">${esc(r)}</button>`).join('');
-  const FIELD_KEYS = ['f_nomor', 'f_lawan', 'f_mulai', 'f_akhir', 'f_nilai'];
-  $('#ledGrid').innerHTML = S.ledger.map((c) =>
-    FIELD_KEYS.map((k, i) =>
-      `<button class="cell ${c[k] ? 'f' : 'e'}" data-id="${c.id}" data-row="${i}" aria-label="${esc(c.judul)}"></button>`
-    ).join('')
-  ).join('');
-}
-function ledCap(idOrNull, row) {
-  const L = $('#ledCap');
-  if (!idOrNull) { L.innerHTML = ''; return; }
-  const c = S.ledger.find((x) => x.id === idOrNull);
-  L.innerHTML = c ? `<b>${esc(c.judul)}</b> · ${esc(ROWS_LEDGER()[row])}` : '';
+  // Satu bar per field inti — persentase kontrak yang sudah terisi
+  // untuk field itu, dihitung dari S.ledger yang sudah dimuat (bukan
+  // lagi grid sel-per-kontrak). Diklik menyaring ke mode Isi Cepat
+  // untuk field itu, sama seperti sebelumnya.
+  const total = S.ledger.length;
+  $('#completeList').innerHTML = ROWS_LEDGER().map((label, i) => {
+    const terisi = total ? S.ledger.filter((c) => c[FIELD_KEYS_LEDGER[i]]).length : 0;
+    const pctBaris = total ? Math.round((terisi / total) * 100) : 0;
+    return `<button class="complete-row ${S.ledRow === i ? 'on' : ''}" data-row="${i}">
+      <span class="cr-label">${esc(label)}</span>
+      <span class="cr-bar"><span class="cr-fill" style="width:${pctBaris}%"></span></span>
+      <span class="cr-stat">${terisi}/${total} · ${pctBaris}%</span>
+    </button>`;
+  }).join('');
 }
 function renderCards() {
   const d = S.dashboard || {};
@@ -576,8 +577,16 @@ function draftDariBaris(c) {
 
 /* ---------------------------------------------------------------- drawer */
 let drawerRow = null;
+// Klik baris tabel dulu ke bukaDrawerView() (baca saja) — bukaDrawer()
+// (form edit) sekarang HANYA dipanggil dari tombol "Edit" di dalam View,
+// atau dari mode Isi Cepat (jalur terpisah, lihat renderQuick — sengaja
+// TIDAK lewat View, itu memang alur cepat isi berturut-turut).
 function bukaDrawer(row) {
   drawerRow = row; S.editing = row.id; S.draft = draftDariBaris(row);
+  // Reset ke tombol Simpan — kalau sebelumnya drawer sempat dalam mode
+  // View, tombolnya sempat dipakai untuk "Edit" (lihat bukaDrawerView).
+  $('#dSave').textContent = t('common.save');
+  $('#dSave').onclick = simpanDrawer;
   gambarDrawer();
   $('#veil').classList.add('on'); $('#drawer').classList.add('on');
   if (S.draft.lawanPihakNama) {
@@ -586,11 +595,62 @@ function bukaDrawer(row) {
   setTimeout(() => { const el = $('#i_nomor'); if (el) el.focus(); }, 60);
 }
 function gambarDrawer(err) {
-  $('#dTitle').textContent = t('kontrak.drawerTitle');
+  $('#dTitle').textContent = t('kontrak.editTitle');
   $('#dBody').innerHTML = formHTML(drawerRow, err);
   pasangFormEvent(() => gambarDrawer());
   if (drawerRow) renderLampiranPanel('lampiran_kontrak', 'contract', drawerRow.id, { clientOrgId: S.ws.client_org_id });
 }
+
+/* View — dibuka lebih dulu dari klik baris tabel. Field bacaan saja,
+   dokumen tetap bisa dilihat/diunggah (renderLampiranPanel yang sama
+   dipakai form edit) — tombol "Edit" di footer-lah yang masuk ke form
+   sungguhan (bukaDrawer). Sama pola dengan drawer View Profil
+   Perusahaan sebelum itu jadi halaman penuh — di sini TETAP drawer
+   (field kontrak jauh lebih sedikit, drawer masih cukup lega). */
+function bukaDrawerView(row) {
+  drawerRow = row;
+  $('#dTitle').textContent = t('kontrak.drawerTitle');
+  const picNama = row.pic_legal_id ? (S.reference.pic.find((p) => p.id === row.pic_legal_id) || {}).nama : null;
+  const migrasi = row.catatan_migrasi
+    ? `<div class="warnbox wb-warn"><span class="ic">⚑</span><div><b>${esc(t('kontrak.migrasi'))}</b> ${esc(row.catatan_migrasi)}</div></div>` : '';
+  $('#dBody').innerHTML = `
+    ${migrasi}
+    <div class="grid2">
+      ${fieldRowRoHTML(t('kontrak.f.nomor'), row.nomor_dokumen)}
+      ${fieldRowRoHTML(t('kontrak.f.kategori'), row.kategori_nama)}
+    </div>
+    <div style="margin-top:12px">${fieldRowRoHTML(t('kontrak.f.judul'), row.judul)}</div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('kontrak.f.lawan'), row.lawan_pihak)}
+      ${fieldRowRoHTML(t('kontrak.f.jenis'), row.jenis_dokumen)}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('kontrak.f.pic'), picNama)}
+      ${fieldRowRoHTML(t('kontrak.f.status'), STATUS_NAMA[row.status_siklus] || row.status_siklus)}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('kontrak.f.mulai'), tglTampil(row.tanggal_mulai))}
+      ${fieldRowRoHTML(t('kontrak.f.akhir'), row.tanpa_batas_waktu ? t('kontrak.tanpaBatas') : tglTampil(row.tanggal_berakhir))}
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      ${fieldRowRoHTML(t('kontrak.f.nilai'), row.nilai_tidak_relevan ? t('kontrak.f.nirnilai') : rupiah(row.nilai_kontrak))}
+      ${fieldRowRoHTML(t('kontrak.f.renew'), row.auto_renew ? t('common.ya') : t('common.tidak'))}
+    </div>
+    ${row.auto_renew && row.notice_period_hari != null ? `<div style="margin-top:12px">${
+      fieldRowRoHTML(t('kontrak.f.notice'), t('kontrak.f.hariSebelum', { n: row.notice_period_hari }))}</div>` : ''}
+    ${row.relasi_ke_induk ? `<div style="margin-top:12px">${
+      fieldRowRoHTML(t('kontrak.f.relasi'), RELASI_NAMA[row.relasi_ke_induk] || row.relasi_ke_induk)}</div>` : ''}
+    ${row.keterangan ? `<div style="margin-top:12px">${fieldRowRoHTML(t('kontrak.f.keterangan'), row.keterangan)}</div>` : ''}
+    <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('kontrak.docsTitle'))}</div>
+      <div id="lampiran_kontrak"></div>
+    </div>`;
+  renderLampiranPanel('lampiran_kontrak', 'contract', row.id, { clientOrgId: S.ws.client_org_id });
+  $('#dSave').textContent = t('common.edit');
+  $('#dSave').onclick = () => bukaDrawer(row);
+  $('#veil').classList.add('on'); $('#drawer').classList.add('on');
+}
+
 function tutupDrawer() {
   S.editing = null; S.draft = null; drawerRow = null;
   $('#veil').classList.remove('on'); $('#drawer').classList.remove('on');
@@ -754,7 +814,7 @@ $('#pg').onclick = (e) => {
 $('#tbody').onclick = (e) => {
   const tr = e.target.closest('tr[data-id]'); if (!tr) return;
   const row = S.list.rows.find((r) => r.id === tr.dataset.id);
-  if (row) bukaDrawer(row);
+  if (row) bukaDrawerView(row);
 };
 document.querySelectorAll('thead th.srt').forEach((th) => {
   th.onclick = () => {
@@ -763,16 +823,7 @@ document.querySelectorAll('thead th.srt').forEach((th) => {
     terapkanFilterLaluRender();
   };
 });
-$('#ledGrid').onclick = async (e) => {
-  const b = e.target.closest('button[data-id]'); if (!b) return;
-  try {
-    const { row } = await Api.getContract(b.dataset.id);
-    bukaDrawer(row);
-  } catch (err) { toast(err.message || t('kontrak.openError'), 'error'); }
-};
-$('#ledGrid').onmouseover = (e) => { const b = e.target.closest('button[data-id]'); if (b) ledCap(b.dataset.id, Number(b.dataset.row)); };
-$('#ledGrid').onmouseleave = () => ledCap(null);
-$('#ledLabels').onclick = (e) => {
+$('#completeList').onclick = (e) => {
   const b = e.target.closest('button[data-row]'); if (!b) return;
   const r = Number(b.dataset.row);
   S.ledRow = S.ledRow === r ? null : r;

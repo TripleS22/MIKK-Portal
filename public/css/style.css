@@ -244,24 +244,28 @@ svg{flex:none}
 .big{font-family:var(--serif);font-size:44px;font-weight:500;line-height:1;letter-spacing:-.02em}
 .big small{font-size:16px;color:var(--muted);font-weight:400}
 
-.ledger{display:flex;gap:12px;align-items:flex-start}
-.led-labels{display:grid;grid-template-rows:repeat(5,12px);gap:3px;flex:none;padding-top:1px}
-.led-labels button{
-  font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;line-height:12px;
-  padding:0;letter-spacing:.01em;
+/* Kelengkapan Data — daftar progress bar sederhana, satu baris per
+   field inti (Nomor/Pihak kedua/Tanggal mulai/Tanggal berakhir/Nilai).
+   Mengganti widget "peta" (grid sel per kontrak per field) yang
+   dilaporkan pengguna membingungkan — bar tunggal per field (bukan sel
+   kecil per kontrak) jauh lebih cepat dibaca sepintas: makin panjang
+   bar terisi (emas), makin lengkap field itu di seluruh kontrak.
+   Interaksi klik (menyaring ke mode Isi Cepat untuk field itu) TETAP
+   sama seperti sebelumnya, cuma tampilannya yang berubah total. */
+.complete-list{display:flex;flex-direction:column;gap:14px}
+.complete-row{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:2px 0}
+.complete-row .cr-label{width:150px;flex:none;font-size:12.5px;color:var(--ink-2);font-weight:600}
+.complete-row:hover .cr-label,.complete-row.on .cr-label{color:var(--gold-dk)}
+.complete-row .cr-bar{flex:1;height:9px;border-radius:99px;background:#e5e9f0;overflow:hidden}
+.complete-row .cr-fill{height:100%;background:var(--gold);border-radius:99px;transition:width .4s cubic-bezier(.22,1,.36,1)}
+.complete-row.on .cr-fill{background:var(--navy)}
+.complete-row .cr-stat{width:96px;flex:none;text-align:right;font-size:11px;color:var(--muted);font-family:var(--mono)}
+@media (max-width:640px){
+  .complete-row{flex-wrap:wrap;gap:6px 14px}
+  .complete-row .cr-label{width:auto}
+  .complete-row .cr-stat{width:auto;margin-left:auto}
+  .complete-row .cr-bar{flex-basis:100%}
 }
-.led-labels button:hover,.led-labels button.on{color:var(--ink);font-weight:600}
-.led-scroll{overflow-x:auto;flex:1;padding-bottom:4px}
-.led-grid{
-  display:grid;grid-template-rows:repeat(5,12px);grid-auto-flow:column;
-  grid-auto-columns:minmax(5px,1fr);gap:3px;min-width:100%;
-}
-.cell{border-radius:2px;background:var(--idle-sf);border:1px solid transparent;padding:0;min-width:5px}
-.cell.f{background:var(--ok)}
-.cell.e{background:#dfe5ee}
-.cell:hover{border-color:var(--navy);z-index:2}
-.led-cap{margin-top:9px;font-size:11.5px;color:var(--muted);min-height:17px;font-family:var(--mono)}
-.led-cap b{color:var(--ink);font-family:var(--sans)}
 
 /* =====================================================================
    TOOLBAR — pencarian, penyaring, ekspor
