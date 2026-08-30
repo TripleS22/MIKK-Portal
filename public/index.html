@@ -262,8 +262,10 @@
       <div class="errbar" id="apiErr"></div>
 
       <nav class="crumb">
-        <svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span data-i18n="nav.dashboard">Dashboard</span>
+        <button class="crumb-home" id="crumbHome" type="button">
+          <svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span data-i18n="nav.dashboard">Dashboard</span>
+        </button>
         <span class="sep" id="crumbSep">›</span>
         <span class="cur" id="crumbCur">Dashboard</span>
       </nav>
@@ -753,6 +755,60 @@
           <div class="empty" id="profileProjectEmpty" style="display:none">
             <h3 data-i18n="profile.empty.title">Belum ada proyek/perkara</h3>
             <p data-i18n="profile.empty.desc">Yang ditugaskan ke Anda akan muncul di sini.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================ PROFIL PERUSAHAAN (halaman penuh) ============================
+           SENGAJA halaman penuh, BUKAN drawer/modal lagi — fieldnya
+           (data pokok + field kustom + dokumen) terlalu banyak untuk
+           drawer sempit, dan drawer-di-atas-drawer sempat bikin modal
+           pratinjau dokumen ketumpuk di belakangnya. Dipicu dari tombol
+           "Lihat Profil" di panel ringkas Dashboard lewat switchModuleAll
+           biasa (pola sama dengan modul lain), bukan bukaAuxDrawer(). -->
+      <div id="secCompanyProfile" style="display:none">
+        <div id="cpView">
+          <div class="panel" style="margin-bottom:18px">
+            <div class="panelhead">
+              <div class="ttl2"><h3 id="cpViewNamaLegal">—</h3><p id="cpViewSubtitle"></p></div>
+              <button class="btn gold" id="cpEditBtn" style="display:none" data-i18n="companyProfile.edit">Edit Profil</button>
+            </div>
+            <div style="padding:18px" class="grid2" id="cpViewFields"></div>
+          </div>
+          <div class="panel" style="margin-bottom:18px" id="cpViewCustomWrap">
+            <div class="panelhead"><div class="ttl2"><h3 data-i18n="companyProfile.customFieldsTitle">Info Tambahan</h3></div></div>
+            <div style="padding:18px" class="grid2" id="cpViewCustomFields"></div>
+          </div>
+          <div class="panel">
+            <div class="panelhead"><div class="ttl2"><h3 data-i18n="companyProfile.docsTitle">Dokumen Terkait</h3></div></div>
+            <div style="padding:18px" id="cpViewDocs"></div>
+          </div>
+        </div>
+
+        <div id="cpEdit" style="display:none">
+          <div class="panel">
+            <div class="panelhead"><div class="ttl2"><h3 data-i18n="companyProfile.editTitle">Edit Profil Perusahaan</h3></div></div>
+            <div style="padding:18px">
+              <div class="f"><label data-i18n="companyProfile.namaLegal">Nama Legal</label><input id="cp_namaLegal"></div>
+              <div class="grid2" style="margin-top:12px">
+                <div class="f"><label data-i18n="companyProfile.npwp">NPWP</label><input id="cp_npwp"></div>
+                <div class="f"><label data-i18n="companyProfile.nib">NIB</label><input id="cp_nib"></div>
+              </div>
+              <div class="f" style="margin-top:12px"><label data-i18n="companyProfile.sektorUsaha">Sektor Usaha</label><input id="cp_sektor"></div>
+              <div class="f" style="margin-top:12px"><label data-i18n="companyProfile.alamat">Alamat</label><textarea id="cp_alamat" rows="3"></textarea></div>
+              <div class="f" style="margin-top:12px"><label data-i18n="companyProfile.kbli">KBLI</label>
+                <input id="cp_kbli">
+                <div class="hint" data-i18n="companyProfile.kbliHint">Pisahkan dengan koma, mis. 49421, 52101</div></div>
+              <div class="f" style="margin-top:20px">
+                <label data-i18n="companyProfile.customFieldsTitle">Info Tambahan</label>
+                <div class="hint" style="margin-bottom:8px" data-i18n="companyProfile.customFieldsHint">Tambahkan field bebas untuk info lain yang tidak tercakup di atas (mis. nomor akta pendirian, tanggal berdiri).</div>
+                <div id="cp_customFieldsWrap"></div>
+              </div>
+            </div>
+            <div style="padding:0 18px 18px;display:flex;gap:9px">
+              <button class="btn ghost" id="cpCancelBtn" data-i18n="common.cancel">Batal</button>
+              <button class="btn gold" id="cpSaveBtn" data-i18n="common.save">Simpan</button>
+            </div>
           </div>
         </div>
       </div>

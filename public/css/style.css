@@ -132,6 +132,11 @@ svg{flex:none}
 .crumb svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7}
 .crumb .sep{color:var(--muted-2)}
 .crumb .cur{color:var(--ink);font-weight:600}
+/* Rumah breadcrumb bisa diklik kembali ke Dashboard — penting terutama
+   untuk halaman tanpa tombol sidebar sendiri (mis. Profil Perusahaan,
+   dibuka dari tombol di Dashboard, bukan dari sidebar). */
+.crumb-home{display:flex;align-items:center;gap:7px;color:inherit;font:inherit;background:none;border:none;padding:0;cursor:pointer}
+.crumb-home:hover{color:var(--gold-dk)}
 
 .pagehead{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;margin-bottom:18px}
 .pagehead .lead{flex:1;min-width:260px}

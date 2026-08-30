@@ -989,6 +989,10 @@ const MODULES = [
   // tidak tercampur dengan modul milik satu workspace klien di atas.
   { id: 'mycases',      sec: 'secMyCases',      btn: 'menuMyCasesBtn',     crumb: 'nav.mycases',      desc: 'mycases.desc' },
   { id: 'profile',      sec: 'secProfile',      btn: 'menuProfileBtn',     crumb: 'nav.profile',      desc: 'profile.desc' },
+  // Dipicu dari tombol "Lihat Profil" di panel ringkas Dashboard — tidak
+  // ada tombol sidebar/topbar sendiri (btn: null, switchModuleAll aman
+  // terhadap ini, lihat gambarKepalaHalaman/MODULES.forEach di bawah).
+  { id: 'companyprofile', sec: 'secCompanyProfile', btn: null, crumb: 'companyProfile.viewTitle', desc: 'companyProfile.pageDesc' },
 ];
 let modAktif = 'dashboard';
 
@@ -1012,6 +1016,7 @@ function switchModuleAll(mod) {
   if (mod === 'masterdata' && !MD.loaded) muatMasterDataSemua();
   if (mod === 'staffusers' && !SU.loaded) muatStaffUsersSemua();
   if (mod === 'profile' && !PR.loaded) muatProfilSemua();
+  if (mod === 'companyprofile') { KP_PROFIL.mode = 'view'; renderCompanyProfilePage(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
   $('#userMenu').style.display = 'none';
 }
@@ -1037,6 +1042,7 @@ MODULES.forEach((m) => {
   const b = $('#' + m.btn);
   if (b) b.onclick = () => switchModuleAll(m.id);
 });
+$('#crumbHome').onclick = () => switchModuleAll('dashboard');
 
 /* Menu akun topbar (Profil Saya / Perkara Saya / Keluar) — lihat Bagian 2
    rencana migrasi: dipisah dari sidebar supaya tidak tercampur dengan
@@ -1669,7 +1675,7 @@ function stepperDetailHTML(kode) {
    dari peran workspace — itu cuma menghindari menawarkan tombol yang
    memang akan ditolak RLS, bukan pemeriksaan hak akses yang sesungguhnya.
    ------------------------------------------------------------------- */
-const KP_PROFIL = { row: null };
+const KP_PROFIL = { row: null, mode: 'view' };
 async function muatProfilPerusahaan(orgId) {
   try {
     const { row } = await Api.getClientOrg(orgId);
@@ -1696,14 +1702,18 @@ function renderProfilPerusahaan() {
   // "Lihat Profil" selalu tampil (bukan cuma untuk yang boleh_edit) — ini
   // View, bukan Edit; siapa pun yang bisa melihat panel ringkas ini boleh
   // membuka detail lengkapnya (field kustom + dokumen). Tombol Edit di
-  // dalam View-lah yang digerbangi r.boleh_edit (lihat bukaProfilViewDrawer).
-  $('#viewProfilPerusahaanBtn').onclick = () => bukaProfilViewDrawer(r);
+  // dalam halaman View-lah yang digerbangi r.boleh_edit (lihat
+  // renderCompanyProfilePage). Pindah ke HALAMAN PENUH lewat
+  // switchModuleAll biasa — BUKAN drawer lagi (fieldnya kebanyakan untuk
+  // drawer sempit, dan drawer-di-atas-drawer sempat bikin modal pratinjau
+  // dokumen ketumpuk di belakangnya — dilaporkan langsung dari layar).
+  $('#viewProfilPerusahaanBtn').onclick = () => switchModuleAll('companyprofile');
 }
 
-/* Satu baris field read-only di drawer View — otomatis melebar satu baris
-   penuh kalau isinya panjang (bukan dipotong/didesak sempit di grid 2
-   kolom), supaya field kustom yang isinya bisa apa saja (nama field
-   bebas ketik) tetap rapi tertata tanpa perlu diatur manual satu-satu. */
+/* Satu baris field read-only di halaman View — otomatis melebar satu
+   baris penuh kalau isinya panjang (bukan dipotong/didesak sempit di
+   grid 2 kolom), supaya field kustom yang isinya bisa apa saja (nama
+   field bebas ketik) tetap rapi tertata tanpa perlu diatur manual. */
 function fieldRowRoHTML(label, value) {
   const panjang = String(value || '').length > 40;
   return `<div style="${panjang ? 'grid-column:1 / -1' : ''}">
@@ -1711,74 +1721,71 @@ function fieldRowRoHTML(label, value) {
   </div>`;
 }
 
-async function bukaProfilViewDrawer(r) {
+/* Halaman penuh Profil Perusahaan — dua "mode" di satu section
+   (#secCompanyProfile), bukan dua halaman terpisah: KP_PROFIL.mode
+   memutuskan blok #cpView atau #cpEdit yang ditampilkan. Dipanggil
+   dari switchModuleAll('companyprofile') tiap kali dibuka. */
+async function renderCompanyProfilePage() {
+  const r = KP_PROFIL.row;
+  if (!r) return;
+  const editMode = KP_PROFIL.mode === 'edit';
+  $('#cpView').style.display = editMode ? 'none' : 'block';
+  $('#cpEdit').style.display = editMode ? 'block' : 'none';
+
+  if (editMode) {
+    $('#cp_namaLegal').value = r.nama_legal || '';
+    $('#cp_npwp').value = r.npwp || '';
+    $('#cp_nib').value = r.nib || '';
+    $('#cp_sektor').value = r.sektor_usaha || '';
+    $('#cp_alamat').value = r.alamat || '';
+    $('#cp_kbli').value = (r.kbli || []).join(', ');
+    renderCustomFieldsEditor(r.client_org_id);
+    return;
+  }
+
+  $('#cpViewNamaLegal').textContent = r.nama_legal;
+  $('#cpViewSubtitle').textContent = `${r.nama_singkat} · ${r.sektor_usaha || '—'}`;
+  $('#cpViewFields').innerHTML = `
+    ${fieldRowRoHTML(t('companyProfile.namaLegal'), r.nama_legal)}
+    ${fieldRowRoHTML(t('companyProfile.sektorUsaha'), r.sektor_usaha)}
+    ${fieldRowRoHTML(t('companyProfile.npwp'), r.npwp)}
+    ${fieldRowRoHTML(t('companyProfile.nib'), r.nib)}
+    ${fieldRowRoHTML(t('companyProfile.alamat'), r.alamat)}
+    <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.kbli'))}</div>
+      <div>${(r.kbli || []).map((k) => `<span class="tag">${esc(k)}</span>`).join(' ') || '—'}</div></div>`;
+  // Tombol Edit cuma tampil kalau boleh_edit (RLS yang sebenarnya
+  // menegakkan, ini sekadar tidak menawarkan pintu yang memang terkunci).
+  $('#cpEditBtn').style.display = r.boleh_edit ? 'inline-flex' : 'none';
+  $('#cpEditBtn').onclick = () => { KP_PROFIL.mode = 'edit'; renderCompanyProfilePage(); };
+
   let customFields = [];
   try { customFields = (await Api.customFields(r.client_org_id)).rows; } catch (e) { /* non-fatal */ }
+  $('#cpViewCustomWrap').style.display = customFields.length ? 'block' : 'none';
+  $('#cpViewCustomFields').innerHTML = customFields.map((f) => fieldRowRoHTML(f.label, f.nilai)).join('');
 
-  const html = `
-    <div class="grid2">
-      ${fieldRowRoHTML(t('companyProfile.namaLegal'), r.nama_legal)}
-      ${fieldRowRoHTML(t('companyProfile.sektorUsaha'), r.sektor_usaha)}
-      ${fieldRowRoHTML(t('companyProfile.npwp'), r.npwp)}
-      ${fieldRowRoHTML(t('companyProfile.nib'), r.nib)}
-      ${fieldRowRoHTML(t('companyProfile.alamat'), r.alamat)}
-      <div style="grid-column:1 / -1"><div class="hint">${esc(t('companyProfile.kbli'))}</div>
-        <div>${(r.kbli || []).map((k) => `<span class="tag">${esc(k)}</span>`).join(' ') || '—'}</div></div>
-    </div>
-    ${customFields.length ? `
-    <div style="margin-top:20px">
-      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('companyProfile.customFieldsTitle'))}</div>
-      <div class="grid2">${customFields.map((f) => fieldRowRoHTML(f.label, f.nilai)).join('')}</div>
-    </div>` : ''}
-    <div style="margin-top:20px">
-      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('companyProfile.docsTitle'))}</div>
-      <div id="lampiran_profil"></div>
-    </div>`;
-
-  bukaAuxDrawer('companyprofile-view', t('companyProfile.viewTitle'), html,
-    () => { tutupAuxDrawer(); bukaProfilPerusahaanDrawer(r); },
-    t('companyProfile.edit'));
-  // View murni baca — tombol aksi cuma relevan kalau boleh_edit (RLS
-  // yang sebenarnya menegakkan, ini sekadar tidak menawarkan pintu yang
-  // memang terkunci, sama seperti pola bolehTarif di tempat lain).
-  $('#auxDSave').style.display = r.boleh_edit ? '' : 'none';
-  renderLampiranPanel('lampiran_profil', 'client_org', r.client_org_id, { clientOrgId: r.client_org_id });
+  renderLampiranPanel('cpViewDocs', 'client_org', r.client_org_id, { clientOrgId: r.client_org_id });
 }
 
-function bukaProfilPerusahaanDrawer(r) {
-  bukaAuxDrawer('companyprofile', t('companyProfile.editTitle'), `
-    <div class="f"><label>${t('companyProfile.namaLegal')}</label><input id="cp_namaLegal" value="${esc(r.nama_legal)}"></div>
-    <div class="grid2" style="margin-top:12px">
-      <div class="f"><label>${t('companyProfile.npwp')}</label><input id="cp_npwp" value="${esc(r.npwp || '')}"></div>
-      <div class="f"><label>${t('companyProfile.nib')}</label><input id="cp_nib" value="${esc(r.nib || '')}"></div>
-    </div>
-    <div class="f" style="margin-top:12px"><label>${t('companyProfile.sektorUsaha')}</label><input id="cp_sektor" value="${esc(r.sektor_usaha || '')}"></div>
-    <div class="f" style="margin-top:12px"><label>${t('companyProfile.alamat')}</label><textarea id="cp_alamat" rows="3">${esc(r.alamat || '')}</textarea></div>
-    <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
-      <input id="cp_kbli" value="${esc((r.kbli || []).join(', '))}">
-      <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>
-    <div class="f" style="margin-top:20px">
-      <label>${t('companyProfile.customFieldsTitle')}</label>
-      <div class="hint" style="margin-bottom:8px">${esc(t('companyProfile.customFieldsHint'))}</div>
-      <div id="cp_customFieldsWrap"></div>
-    </div>
-  `, async () => {
-    try {
-      await Api.updateClientOrg(r.client_org_id, {
-        namaLegal: $('#cp_namaLegal').value.trim(),
-        npwp: $('#cp_npwp').value.trim() || null,
-        nib: $('#cp_nib').value.trim() || null,
-        sektorUsaha: $('#cp_sektor').value.trim() || null,
-        alamat: $('#cp_alamat').value.trim() || null,
-        kbli: $('#cp_kbli').value.split(',').map((s) => s.trim()).filter(Boolean),
-      });
-      tutupAuxDrawer();
-      await muatProfilPerusahaan(r.client_org_id);
-      toast(t('common.saved'), 'success');
-    } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
-  });
-  renderCustomFieldsEditor(r.client_org_id);
-}
+$('#cpCancelBtn').onclick = () => { KP_PROFIL.mode = 'view'; renderCompanyProfilePage(); };
+$('#cpSaveBtn').onclick = async () => {
+  const r = KP_PROFIL.row;
+  const btn = $('#cpSaveBtn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    await Api.updateClientOrg(r.client_org_id, {
+      namaLegal: $('#cp_namaLegal').value.trim(),
+      npwp: $('#cp_npwp').value.trim() || null,
+      nib: $('#cp_nib').value.trim() || null,
+      sektorUsaha: $('#cp_sektor').value.trim() || null,
+      alamat: $('#cp_alamat').value.trim() || null,
+      kbli: $('#cp_kbli').value.split(',').map((s) => s.trim()).filter(Boolean),
+    });
+    toast(t('common.saved'), 'success');
+    KP_PROFIL.mode = 'view';
+    await muatProfilPerusahaan(r.client_org_id);
+    await renderCompanyProfilePage();
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+  finally { btn.disabled = false; btn.textContent = t('common.save'); }
+};
 
 /* Field kustom (db/22_client_org_custom_fields.sql) — per-baris simpan/
    hapus sendiri (pola yang sama dengan Master Data), BUKAN ikut disimpan
