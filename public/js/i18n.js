@@ -254,6 +254,12 @@ const I18N = {
     'dashboard.attn.sidang': 'Sidang dalam 7 hari',
     'dashboard.attn.proyekLate': 'Proyek melewati target',
     'dashboard.quickTitle': 'Buka Modul',
+    'dashboard.stepperTitle': 'Tahapan',
+    'dashboard.stepper.litigasi': 'Litigasi',
+    'dashboard.stepper.perizinan': 'Perizinan',
+    'dashboard.stepper.kosong': 'Belum ada data tahapan.',
+    'dashboard.stepper.tahapKosong': 'Belum ada yang di tahap ini.',
+    'common.loading': 'Memuat…',
 
     'kontrak.pageDesc': 'Kelola, pantau, dan monitor seluruh kontrak perusahaan.',
     'nav.mycases': 'Perkara Saya',
@@ -862,6 +868,12 @@ const I18N = {
     'dashboard.attn.sidang': 'Hearings within 7 days',
     'dashboard.attn.proyekLate': 'Projects past target',
     'dashboard.quickTitle': 'Open a Module',
+    'dashboard.stepperTitle': 'Stages',
+    'dashboard.stepper.litigasi': 'Litigation',
+    'dashboard.stepper.perizinan': 'Permits',
+    'dashboard.stepper.kosong': 'No stage data yet.',
+    'dashboard.stepper.tahapKosong': 'Nothing at this stage yet.',
+    'common.loading': 'Loading…',
 
     'kontrak.pageDesc': 'Manage, track, and monitor every company contract.',
 

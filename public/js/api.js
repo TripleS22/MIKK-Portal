@@ -95,6 +95,7 @@ const Api = (() => {
 
     permits: (clientOrgId) => call('/permits', { qs: { clientOrgId } }),
     permitsDashboard: (clientOrgId) => call('/permits/dashboard', { qs: { clientOrgId } }),
+    permitsStatusSummary: (clientOrgId) => call('/permits/status-summary', { qs: { clientOrgId } }),
     permitGap: (clientOrgId) => call('/permits/gap', { qs: { clientOrgId } }),
     permitReference: (clientOrgId) => call('/permits/reference', { qs: { clientOrgId } }),
     getPermit: (id) => call(`/permits/one/${id}`),
@@ -106,6 +107,7 @@ const Api = (() => {
     // server/routes/cases.routes.js — perkara kini bisa dimiliki tiga jenis pihak).
     cases: (owner) => call('/cases', { qs: typeof owner === 'string' ? { clientOrgId: owner } : owner }),
     casesDashboard: (clientOrgId) => call('/cases/dashboard', { qs: { clientOrgId } }),
+    casesTahapSummary: (clientOrgId) => call('/cases/tahap-summary', { qs: { clientOrgId } }),
     casesReference: (owner) => call('/cases/reference', { qs: typeof owner === 'string' ? { clientOrgId: owner } : owner }),
     getCase: (id) => call(`/cases/one/${id}`),
     createCase: (body) => call('/cases', { method: 'POST', body }),

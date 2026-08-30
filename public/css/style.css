@@ -412,6 +412,60 @@ tbody tr:last-child td{border-bottom:none}
 .feed .tx span{font-size:11.5px;color:var(--muted);display:block;margin-top:1px}
 .feed .when{font-size:11px;color:var(--muted-2);white-space:nowrap;font-family:var(--mono)}
 
+/* =====================================================================
+   STEPPER DASHBOARD — pipeline tahapan Litigasi/Perizinan, pengganti
+   panel "Buka Modul" yang cuma daftar tautan datar. Murni CSS (tanpa
+   library animasi eksternal — keputusan disengaja, lihat app.js).
+   Timeline vertikal (bukan horizontal): kolomnya sempit (1 dari 3 grid
+   Dashboard) dan jumlah tahap bisa sampai 9 (Litigasi) — horizontal
+   akan terlalu padat/terpotong di layar biasa.
+   ===================================================================== */
+.stepper{display:flex;flex-direction:column;padding:2px 0}
+/* .stage (BUKAN .step) SENGAJA — ".step" sudah dipakai wizard horizontal
+   lain (lihat blok ".steps{...}" jauh di bawah, dipakai form tambah
+   kontrak cepat) dan TIDAK dinamespace di sana (bare ".step", bukan
+   ".steps .step"). Dites langsung: ".stepper .step" pun tetap kebocoran
+   garis ".step::after" dari wizard itu (specificity-nya beda pseudo-
+   element, tidak saling mengganti) — baru hilang total setelah dipakai
+   nama kelas yang sama sekali berbeda.
+   ---------------------------------------------------------------- */
+.stepper .stage{
+  position:relative;padding:0 4px 20px 38px;cursor:pointer;
+  animation:stepIn .4s cubic-bezier(.22,1,.36,1) both;
+}
+.stepper .stage:last-child{padding-bottom:2px}
+.stepper .stage::before{ /* garis penghubung ke tahap berikutnya */
+  content:'';position:absolute;left:13px;top:26px;bottom:2px;width:2px;
+  background:var(--line);transform:scaleY(0);transform-origin:top;
+  transition:transform .4s cubic-bezier(.22,1,.36,1);transition-delay:.1s;
+}
+.stepper .stage:last-child::before{display:none}
+.stepper .stage.shown::before{transform:scaleY(1)}
+.stepper .dot{
+  position:absolute;left:0;top:0;width:27px;height:27px;border-radius:50%;
+  display:grid;place-items:center;font-size:11px;font-weight:700;font-family:var(--mono);
+  background:var(--surface);color:var(--muted-2);border:2px solid var(--line);
+  transition:background .25s,border-color .25s,color .25s,transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+.stepper .stage.ada .dot{background:var(--gold-sf);border-color:var(--gold);color:var(--gold-dk)}
+.stepper .stage.on .dot{background:var(--navy);border-color:var(--navy);color:#fff;transform:scale(1.12)}
+.stepper .lbl{display:flex;align-items:center;gap:8px;min-height:27px}
+.stepper .lbl b{font-size:12.5px;font-weight:600;color:var(--ink);flex:1;line-height:1.3}
+.stepper .chev{width:15px;height:15px;color:var(--muted-2);flex:none;transition:transform .25s cubic-bezier(.22,1,.36,1)}
+.stepper .stage.on .chev{transform:rotate(90deg);color:var(--navy)}
+.stepper .detail{max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(.22,1,.36,1)}
+.stepper .stage.on .detail{max-height:320px}
+.stepper .detail-inner{padding:10px 2px 0;display:flex;flex-direction:column;gap:6px}
+.stepper .detail-item{
+  display:block;width:100%;text-align:left;font-size:11.5px;color:var(--ink-2);
+  padding:7px 10px;background:var(--paper);border-radius:8px;border:1px solid transparent;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.stepper button.detail-item:hover{
+  border-color:var(--gold-line);background:var(--gold-sf);color:var(--gold-dk);cursor:pointer;
+}
+@keyframes stepIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
 /* lencana tanggal — "14 MEI" */
 .datebadge{
   width:44px;flex:none;border:1px solid var(--line);border-radius:9px;text-align:center;

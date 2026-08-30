@@ -1510,11 +1510,13 @@ async function muatDashboardRingkas() {
     const hasil = await Promise.allSettled([
       Api.dashboard(org), Api.permitsDashboard(org),
       Api.casesDashboard(org), Api.projectsDashboard(org),
+      Api.casesTahapSummary(org), Api.permitsStatusSummary(org),
     ]);
     const ambil = (i, k) => hasil[i].status === 'fulfilled' ? hasil[i].value[k] : null;
     DS.data = {
       kontrak: ambil(0, 'dashboard'), izin: ambil(1, 'dashboard'),
       perkara: ambil(2, 'dashboard'), proyek: ambil(3, 'dashboard'),
+      tahapCases: ambil(4, 'tahapan') || [], statusPermits: ambil(5, 'statusSiklus') || [],
     };
     DS.loaded = true;
     gambarDashboard();
@@ -1559,20 +1561,103 @@ function gambarDashboard() {
       <div class="feed">${feed}</div>
     </div>
     <div class="panel">
-      <div class="panelhead"><div class="ttl2"><h3>${esc(t('dashboard.quickTitle'))}</h3></div></div>
-      <div class="feed">
-        ${MODULES.filter((m) => !['dashboard', 'mycases', 'profile', 'masterdata'].includes(m.id)).map((m) => `
-          <button class="it" data-go="${m.id}" style="width:100%;text-align:left">
-            <span class="ic info">${ico({ kontrak:'file', permits:'shield', cases:'scale',
-              projects:'folder', pendampingan:'users', docs:'archive' }[m.id])}</span>
-            <span class="tx"><b>${esc(t(m.crumb))}</b><span>${esc(t(m.desc))}</span></span>
-          </button>`).join('')}
-      </div>
+      <div class="panelhead"><div class="ttl2"><h3>${esc(t('dashboard.stepperTitle'))}</h3></div></div>
+      <div style="padding:14px 18px 18px" id="dashStepper"></div>
     </div>`;
 
   document.querySelectorAll('#dashPanels [data-go]').forEach((b) => {
     b.onclick = () => switchModuleAll(b.dataset.go);
   });
+  renderStepperWidget();
+}
+
+/* ================================================================
+   STEPPER DASHBOARD — pipeline Tahapan Litigasi / Status Perizinan,
+   pengganti panel "Buka Modul" (tautan datar tanpa data). Data
+   hitungannya sudah ikut dimuat bareng DS.data (muatDashboardRingkas)
+   supaya cuma satu putaran fetch; STEPPER di sini cuma state TAMPILAN
+   (toggle modul mana yang dilihat, tahap mana yang sedang dibuka, dan
+   cache daftar perkara/izin — dimuat SEKALI SAJA saat pertama kali
+   sebuah tahap diklik, bukan di depan, supaya tidak menarik seluruh
+   daftar perkara/izin kalau penggunanya tidak pernah membuka detailnya).
+   Murni CSS untuk animasinya (lihat style.css) — bukan library luar.
+   ================================================================ */
+const STEPPER = { modul: 'cases', terbuka: null, casesItems: null, permitsItems: null };
+
+function renderStepperWidget() {
+  const el = $('#dashStepper');
+  if (!el) return;
+  const data = STEPPER.modul === 'cases' ? (DS.data.tahapCases || []) : (DS.data.statusPermits || []);
+  const namaProxy = STEPPER.modul === 'cases' ? TAHAP_NAMA : PERMIT_STATUS_NAMA;
+
+  el.innerHTML = `
+    <div class="seg" style="margin-bottom:16px">
+      <button class="${STEPPER.modul === 'cases' ? 'on' : ''}" data-modul="cases" type="button">${esc(t('dashboard.stepper.litigasi'))}</button>
+      <button class="${STEPPER.modul === 'permits' ? 'on' : ''}" data-modul="permits" type="button">${esc(t('dashboard.stepper.perizinan'))}</button>
+    </div>
+    <div class="stepper">
+      ${data.map((s, i) => {
+        const terbuka = STEPPER.terbuka === s.kode;
+        return `<div class="stage ${s.jumlah > 0 ? 'ada' : ''} ${terbuka ? 'on' : ''}" data-kode="${esc(s.kode)}" style="animation-delay:${i * 55}ms">
+          <div class="dot">${s.jumlah}</div>
+          <div class="lbl"><b>${esc(namaProxy[s.kode])}</b>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+          </div>
+          <div class="detail"><div class="detail-inner">${terbuka ? stepperDetailHTML(s.kode) : ''}</div></div>
+        </div>`;
+      }).join('') || `<p class="hint">${esc(t('dashboard.stepper.kosong'))}</p>`}
+    </div>`;
+
+  // Garis penghubung dianimasikan MASUK sesudah render (bukan langsung
+  // saat innerHTML dipasang) — kalau ".shown" ikut ada di HTML awal,
+  // browser tidak pernah melihat transisi dari 0 (state awal sudah
+  // "penuh" sebelum sempat dirender), jadi tidak ada yang teranimasi.
+  requestAnimationFrame(() => {
+    document.querySelectorAll('#dashStepper .stage').forEach((elStep) => elStep.classList.add('shown'));
+  });
+
+  document.querySelectorAll('#dashStepper [data-modul]').forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      STEPPER.modul = b.dataset.modul; STEPPER.terbuka = null;
+      renderStepperWidget();
+    };
+  });
+  document.querySelectorAll('#dashStepper .stage').forEach((elStep) => {
+    elStep.onclick = () => bukaTutupStepperTahap(elStep.dataset.kode);
+  });
+  document.querySelectorAll('#dashStepper [data-stepgo]').forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); switchModuleAll(b.dataset.stepgo); };
+  });
+}
+
+async function bukaTutupStepperTahap(kode) {
+  if (STEPPER.terbuka === kode) { STEPPER.terbuka = null; renderStepperWidget(); return; }
+  STEPPER.terbuka = kode;
+  renderStepperWidget(); // tampil dulu (skeleton "Memuat…"), baru menyusul isinya
+  const org = S.ws.client_org_id;
+  try {
+    if (STEPPER.modul === 'cases' && !STEPPER.casesItems) STEPPER.casesItems = (await Api.cases(org)).rows;
+    if (STEPPER.modul === 'permits' && !STEPPER.permitsItems) STEPPER.permitsItems = (await Api.permits(org)).rows;
+  } catch (e) { /* non-fatal: detail tetap kosong, angka di lingkaran tetap benar */ }
+  if (STEPPER.terbuka === kode) renderStepperWidget();
+}
+
+function stepperDetailHTML(kode) {
+  if (STEPPER.modul === 'cases') {
+    if (!STEPPER.casesItems) return `<div class="detail-item">${esc(t('common.loading'))}</div>`;
+    const items = STEPPER.casesItems.filter((c) => c.tahap === kode);
+    if (!items.length) return `<div class="detail-item" style="color:var(--muted-2)">${esc(t('dashboard.stepper.tahapKosong'))}</div>`;
+    return items.map((c) => `<button class="detail-item" type="button" data-stepgo="cases">
+      <b style="font-family:var(--mono);font-weight:600">${esc(c.nomor_perkara)}</b>${c.lawan_pihak_teks ? ' — ' + esc(c.lawan_pihak_teks) : ''}
+    </button>`).join('');
+  }
+  if (!STEPPER.permitsItems) return `<div class="detail-item">${esc(t('common.loading'))}</div>`;
+  const items = STEPPER.permitsItems.filter((p) => p.status_siklus === kode);
+  if (!items.length) return `<div class="detail-item" style="color:var(--muted-2)">${esc(t('dashboard.stepper.tahapKosong'))}</div>`;
+  return items.map((p) => `<button class="detail-item" type="button" data-stepgo="permits">
+    ${esc(p.nama_izin)}${p.nomor_izin ? ' · ' + esc(p.nomor_izin) : ''}
+  </button>`).join('');
 }
 
 /* ---------------------------------------------------------------------

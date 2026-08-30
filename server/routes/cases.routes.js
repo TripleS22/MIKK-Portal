@@ -57,6 +57,33 @@ router.get('/dashboard', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/cases/tahap-summary?clientOrgId=  — widget stepper Dashboard.
+// LEFT JOIN dari opsi_master (bukan dari cases langsung) supaya tahap
+// yang belum punya perkara SAMA SEKALI tetap muncul dengan jumlah 0 —
+// stepper harus menampilkan seluruh alur, bukan cuma tahap yang kebetulan
+// sudah terisi. Perkara yang sudah 'dicabut' tidak dihitung (bukan lagi
+// bagian alur aktif), sama seperti definisi perkara_aktif di v_cases_dashboard.
+router.get('/tahap-summary', async (req, res, next) => {
+  try {
+    const { clientOrgId } = req.query;
+    if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
+    const { rows } = await queryAsUser(
+      req.user.id,
+      `select om.kode, om.label_id, om.label_en, om.urutan, coalesce(c.jumlah, 0)::int as jumlah
+         from opsi_master om
+         left join (
+           select tahap, count(*) as jumlah from cases
+            where client_org_id = $1 and status_siklus <> 'dicabut'
+            group by tahap
+         ) c on c.tahap = om.kode
+        where om.kategori = 'cases_tahap' and om.aktif
+        order by om.urutan`,
+      [clientOrgId]
+    );
+    res.json({ tahapan: rows });
+  } catch (err) { next(err); }
+});
+
 // GET /api/cases/reference?clientOrgId=|individualClientId=|clientGroupId=
 // PIC diresolusi dari client_assignments untuk pemilik yang bersangkutan.
 // Daftar tahap/peranKlien/statusSiklus di bawah adalah PRESET saja — sejak

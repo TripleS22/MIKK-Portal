@@ -59,6 +59,31 @@ router.get('/dashboard', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/permits/status-summary?clientOrgId=  — widget stepper Dashboard.
+// Sama pola dengan cases.routes.js GET /tahap-summary: LEFT JOIN dari
+// opsi_master supaya status yang belum punya izin sama sekali tetap
+// muncul dengan jumlah 0.
+router.get('/status-summary', async (req, res, next) => {
+  try {
+    const { clientOrgId } = req.query;
+    if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
+    const { rows } = await queryAsUser(
+      req.user.id,
+      `select om.kode, om.label_id, om.label_en, om.urutan, coalesce(p.jumlah, 0)::int as jumlah
+         from opsi_master om
+         left join (
+           select status_siklus, count(*) as jumlah from permits
+            where client_org_id = $1
+            group by status_siklus
+         ) p on p.status_siklus = om.kode
+        where om.kategori = 'permits_status_siklus' and om.aktif
+        order by om.urutan`,
+      [clientOrgId]
+    );
+    res.json({ statusSiklus: rows });
+  } catch (err) { next(err); }
+});
+
 // GET /api/permits/gap?clientOrgId=
 router.get('/gap', async (req, res, next) => {
   try {
