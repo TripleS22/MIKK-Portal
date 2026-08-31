@@ -593,9 +593,8 @@ const I18N = {
 
     'nav.staffUsers': 'Staf MIKK',
     'staffUsers.desc': 'Kelola akun internal MIKK — Admin dan PIC & Legal.',
-    'nav.klienBaru': 'Klien Baru',
-    'klienBaru.desc': 'Buat organisasi klien baru.',
-    'klienBaru.hint': 'Buat organisasi klien baru. Setelah tersimpan, Anda akan diarahkan ke Akun Klien organisasi ini untuk menambahkan akun pertamanya — detail akun & tautan masuk otomatis dikirim ke email klien.',
+    'klienBaru.tombol': '+ Klien Baru',
+    'klienBaru.hint': 'Buat organisasi klien baru. Setelah tersimpan, Anda akan langsung masuk ke halaman ini untuk organisasi barunya — tambahkan akun pertamanya lewat "+ Tambah Pengguna", detail akun & tautan masuk otomatis dikirim ke email klien.',
     'klienBaru.formTitle': 'Profil Organisasi',
     'klienBaru.namaLegal': 'Nama Legal',
     'klienBaru.namaSingkat': 'Nama Singkat',
@@ -1246,9 +1245,8 @@ const I18N = {
 
     'nav.staffUsers': 'MIKK Staff',
     'staffUsers.desc': 'Manage internal MIKK accounts — Admin and PIC & Legal.',
-    'nav.klienBaru': 'New Client',
-    'klienBaru.desc': 'Create a new client organization.',
-    'klienBaru.hint': 'Create a new client organization. Once saved, you\'ll be taken to that client\'s Client Accounts to add its first account — the account details & login link are emailed to the client automatically.',
+    'klienBaru.tombol': '+ New Client',
+    'klienBaru.hint': 'Create a new client organization. Once saved, you\'ll land right back on this page for the new organization — add its first account via "+ Add User", the account details & login link are emailed to the client automatically.',
     'klienBaru.formTitle': 'Organization Profile',
     'klienBaru.namaLegal': 'Legal Name',
     'klienBaru.namaSingkat': 'Short Name',

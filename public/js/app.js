@@ -312,7 +312,7 @@ async function enterWorkspace(ws) {
   $('#modRatesBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modMasterDataBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modStaffUsersBtn').style.display = bolehTarif ? 'flex' : 'none';
-  $('#modKlienBaruBtn').style.display = bolehTarif ? 'flex' : 'none';
+  $('#addKlienBaruBtn').style.display = bolehTarif ? '' : 'none';
 
   // Sisi klien peran 'viewer' baca-saja sejak db/23 -- sembunyikan
   // tombol "+Tambah"/tab Isi Cepat yang akan ditolak server (RLS tetap
@@ -1109,7 +1109,6 @@ const MODULES = [
   // modul masing-masing.
   { id: 'team',         sec: 'secTeam',         btn: 'modTeamBtn',         crumb: 'nav.team',         desc: 'team.desc' },
   { id: 'staffusers',   sec: 'secStaffUsers',   btn: 'modStaffUsersBtn',  crumb: 'nav.staffUsers',  desc: 'staffUsers.desc' },
-  { id: 'klienbaru',    sec: 'secKlienBaru',    btn: 'modKlienBaruBtn',   crumb: 'nav.klienBaru',   desc: 'klienBaru.desc' },
   // Dua di bawah ini pribadi/lintas klien — dipicu dari menu akun di
   // topbar (#menuMyCasesBtn/#menuProfileBtn), BUKAN sidebar, supaya
   // tidak tercampur dengan modul milik satu workspace klien di atas.
@@ -1155,7 +1154,6 @@ function switchModuleAll(mod) {
   if (mod === 'rates' && !RT.loaded) muatTarifSemua();
   if (mod === 'masterdata' && !MD.loaded) muatMasterDataSemua();
   if (mod === 'staffusers' && !SU.loaded) muatStaffUsersSemua();
-  if (mod === 'klienbaru') resetFormKlienBaru();
   if (mod === 'profile' && !PR.loaded) muatProfilSemua();
   if (mod === 'companyprofile') { KP_PROFIL.mode = 'view'; renderCompanyProfilePage(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2869,38 +2867,71 @@ async function resetSandiStaf(userId, nama) {
 $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
 
 /* ================================================================
-   MODUL KLIEN BARU — buat organisasi client_orgs baru. Sengaja halaman
-   penuh (bukan drawer), sama seperti Profil Perusahaan — field cukup
-   banyak untuk dilihat sekaligus di drawer sempit. Bukan penugasan
-   akun (itu tetap lewat Team & Users, yang SUDAH mengirim email
-   kredensial+link masuk lewat kirimKredensialCustomer) -- setelah
-   organisasi ini tersimpan, pengguna diarahkan LANGSUNG masuk ke
-   workspace-nya lalu ke Team & Users untuk menambah akun pertama,
-   supaya "buat klien" dan "kirim akun ke email" terasa satu alur.
+   KLIEN BARU — buat organisasi client_orgs baru. Bukan halaman/modul
+   terpisah -- tombolnya ada DI HALAMAN AKUN KLIEN (satu tombol lagi,
+   sama seperti "+ Tambah Pengguna"), karena keduanya sama-sama soal
+   "kelola klien organisasi ini": Klien Baru bikin organisasinya,
+   Tambah Pengguna bikin akun login DI DALAM organisasi yang sedang
+   dibuka. Sebelumnya sempat jadi sidebar/halaman sendiri -- digabung
+   ke sini karena dari sudut pandang pengguna dua-duanya memang terasa
+   satu hal, bukan dua area yang berbeda.
+   Bukan penugasan akun (itu tetap lewat "+ Tambah Pengguna" di
+   halaman ini, yang SUDAH mengirim email kredensial+link masuk lewat
+   kirimKredensialCustomer) -- setelah organisasi tersimpan, pengguna
+   diarahkan LANGSUNG masuk ke workspace-nya (masih di halaman Akun
+   Klien yang sama, sekarang untuk organisasi barunya, kosong siap
+   diisi akun pertama).
    ================================================================ */
-function resetFormKlienBaru() {
-  ['kb_namaLegal','kb_namaSingkat','kb_npwp','kb_nib','kb_sektor','kb_alamat','kb_kbli'].forEach((id) => { const el = $('#' + id); if (el) el.value = ''; });
-  $('#kb_statusRetainer').value = 'aktif';
+function klienBaruFormHTML(err) {
+  const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
+  return `
+  <p class="hint" style="margin:0 0 14px">${esc(t('klienBaru.hint'))}</p>
+  <div class="grid2">
+    <div class="f"><label>${t('klienBaru.namaLegal')} <span class="req">*</span></label>
+      <input id="kb_namaLegal" placeholder="mis. PT Contoh Sejahtera Abadi">${e('namaLegal')}</div>
+    <div class="f"><label>${t('klienBaru.namaSingkat')} <span class="req">*</span></label>
+      <input id="kb_namaSingkat" placeholder="mis. CSA">${e('namaSingkat')}</div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="f"><label>${t('companyProfile.npwp')}</label><input id="kb_npwp"></div>
+    <div class="f"><label>${t('companyProfile.nib')}</label><input id="kb_nib"></div>
+  </div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="f"><label>${t('companyProfile.sektorUsaha')}</label><input id="kb_sektor"></div>
+    <div class="f"><label>${t('klienBaru.statusRetainer')}</label>
+      <select id="kb_statusRetainer">
+        <option value="aktif">${t('klienBaru.status.aktif')}</option>
+        <option value="tertunda">${t('klienBaru.status.tertunda')}</option>
+      </select></div>
+  </div>
+  <div class="f" style="margin-top:12px"><label>${t('companyProfile.alamat')}</label><textarea id="kb_alamat" rows="3"></textarea></div>
+  <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
+    <input id="kb_kbli">
+    <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>`;
 }
-$('#kbSaveBtn').onclick = async () => {
+$('#addKlienBaruBtn').onclick = () => {
+  bukaAuxDrawer('klienbaru', t('klienBaru.formTitle'), klienBaruFormHTML(), simpanKlienBaru, t('klienBaru.simpan'));
+};
+async function simpanKlienBaru() {
   const namaLegal = $('#kb_namaLegal').value.trim();
   const namaSingkat = $('#kb_namaSingkat').value.trim();
   if (!namaLegal) return toast(t('klienBaru.err.namaLegal'), 'warning');
   if (!namaSingkat) return toast(t('klienBaru.err.namaSingkat'), 'warning');
   const kbli = $('#kb_kbli').value.split(',').map((s) => s.trim()).filter(Boolean);
-  const btn = $('#kbSaveBtn'); btn.disabled = true; const teksAsli = btn.textContent; btn.innerHTML = '<span class="spin"></span>';
+  const btn = $('#auxDSave'); btn.disabled = true; const teksAsli = btn.textContent; btn.innerHTML = '<span class="spin"></span>';
   try {
     const { id } = await Api.createClientOrg({
       namaLegal, namaSingkat, npwp: $('#kb_npwp').value.trim() || null, nib: $('#kb_nib').value.trim() || null,
       sektorUsaha: $('#kb_sektor').value.trim() || null, alamat: $('#kb_alamat').value.trim() || null,
       kbli, statusRetainer: $('#kb_statusRetainer').value,
     });
+    tutupAuxDrawer();
     toast(t('klienBaru.created', { nama: namaSingkat }), 'success');
     // Masuk ke workspace yang baru dibuat -- reuse enterWorkspace() apa
     // adanya (peran tetap peran staf yang sedang login, cuma organisasinya
-    // yang baru) supaya seluruh gerbang/label topbar ikut benar, lalu
-    // langsung ke Team & Users karena di situlah akun customer dibuat +
-    // emailnya terkirim (bukan diulang di sini).
+    // yang baru) supaya seluruh gerbang/label topbar ikut benar. Sudah di
+    // halaman Akun Klien (itu tempat tombol ini dipicu), jadi tidak perlu
+    // pindah modul lagi -- langsung terlihat kosong, siap "+ Tambah Pengguna".
     const wsBaru = { client_org_id: id, nama_singkat: namaSingkat, nama_legal: namaLegal, peran: S.ws.peran, tipe: 'staf_firma' };
     S.wsList = [...(S.wsList || []), wsBaru];
     await enterWorkspace(wsBaru);
@@ -2909,7 +2940,7 @@ $('#kbSaveBtn').onclick = async () => {
   } catch (e) {
     toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = teksAsli; }
-};
+}
 
 /* ================================================================
    MODUL PERKARA SAYA — dashboard pribadi lintas klien

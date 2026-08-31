@@ -220,10 +220,6 @@
         <svg viewBox="0 0 24 24"><path d="M20 8v6M23 11h-6"/><circle cx="9" cy="8" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg>
         <span data-i18n="nav.staffUsers">Staf MIKK</span>
       </button>
-      <button id="modKlienBaruBtn" style="display:none">
-        <svg viewBox="0 0 24 24"><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M12 3v4"/><path d="M9 12h6"/></svg>
-        <span data-i18n="nav.klienBaru">Klien Baru</span>
-      </button>
     </nav>
 
     <div class="sb-help">
@@ -555,6 +551,7 @@
         <div class="cards" id="teamCards"></div>
         <div class="bar">
           <div style="flex:1"></div>
+          <button class="btn ghost" id="addKlienBaruBtn" style="display:none" data-i18n="klienBaru.tombol">+ Klien Baru</button>
           <button class="btn gold" id="addTeamBtn" data-i18n="team.add">+ Tambah Pengguna</button>
         </div>
         <div class="panel">
@@ -702,40 +699,6 @@
           <div class="empty" id="staffUsersEmpty" style="display:none">
             <h3 data-i18n="staffUsers.empty.title">Belum ada staf tercatat</h3>
             <p data-i18n="staffUsers.empty.desc">Tambahkan staf pertama lewat tombol di atas.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================ KLIEN BARU ============================ -->
-      <div id="secKlienBaru" style="display:none">
-        <p class="hint" style="margin:0 0 14px" data-i18n="klienBaru.hint">Buat organisasi klien baru. Setelah tersimpan, Anda akan diarahkan ke Akun Klien organisasi ini untuk menambahkan akun pertamanya — detail akun &amp; tautan masuk otomatis dikirim ke email klien.</p>
-        <div class="panel">
-          <div class="panelhead"><div class="ttl2"><h3 data-i18n="klienBaru.formTitle">Profil Organisasi</h3></div></div>
-          <div style="padding:18px">
-            <div class="grid2">
-              <div class="f"><label data-i18n="klienBaru.namaLegal">Nama Legal <span class="req">*</span></label><input id="kb_namaLegal" placeholder="mis. PT Contoh Sejahtera Abadi"></div>
-              <div class="f"><label data-i18n="klienBaru.namaSingkat">Nama Singkat <span class="req">*</span></label><input id="kb_namaSingkat" placeholder="mis. CSA"></div>
-            </div>
-            <div class="grid2" style="margin-top:12px">
-              <div class="f"><label data-i18n="companyProfile.npwp">NPWP</label><input id="kb_npwp"></div>
-              <div class="f"><label data-i18n="companyProfile.nib">NIB</label><input id="kb_nib"></div>
-            </div>
-            <div class="grid2" style="margin-top:12px">
-              <div class="f"><label data-i18n="companyProfile.sektorUsaha">Sektor Usaha</label><input id="kb_sektor"></div>
-              <div class="f"><label data-i18n="klienBaru.statusRetainer">Status Retainer</label>
-                <select id="kb_statusRetainer">
-                  <option value="aktif" data-i18n="klienBaru.status.aktif">Aktif</option>
-                  <option value="tertunda" data-i18n="klienBaru.status.tertunda">Tertunda</option>
-                </select>
-              </div>
-            </div>
-            <div class="f" style="margin-top:12px"><label data-i18n="companyProfile.alamat">Alamat</label><textarea id="kb_alamat" rows="3"></textarea></div>
-            <div class="f" style="margin-top:12px"><label data-i18n="companyProfile.kbli">KBLI</label>
-              <input id="kb_kbli">
-              <div class="hint" data-i18n="companyProfile.kbliHint">Pisahkan dengan koma, mis. 49421, 52101</div></div>
-          </div>
-          <div style="padding:0 18px 18px;display:flex;gap:9px">
-            <button class="btn gold" id="kbSaveBtn" data-i18n="klienBaru.simpan">Simpan &amp; Lanjut Tambah Akun</button>
           </div>
         </div>
       </div>
