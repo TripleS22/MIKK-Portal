@@ -424,6 +424,7 @@ async function enterWorkspace(ws) {
   // MIKK, MD/Master Data, PT/jenis izin) sengaja TIDAK direset.
   if (S.ws && S.ws.client_org_id !== ws.client_org_id) {
     [P, CS, PJ, PD, DC, DS, RT, TM].forEach((m) => { m.loaded = false; });
+    AG.rows = null; // agenda ikut org, tidak punya flag .loaded sendiri
   }
   S.ws = ws;
   ingatWorkspace(ws.client_org_id);
@@ -1582,6 +1583,14 @@ async function bukaNotifikasi(it) {
       switchModuleAll('projects');
       const { row } = await Api.getProject(it.entityId);
       bukaProjectDrawerView(row);
+    } else if (it.modul === 'pendampingan' && it.entityId) {
+      // Dipakai oleh Agenda (bel notifikasi belum pernah mengirim
+      // pendampingan, tapi jalurnya sama supaya klik "buka baris" cuma
+      // punya SATU implementasi, bukan dua yang bisa berbeda).
+      if (!PD.loaded) await muatPendampinganSemua();
+      switchModuleAll('pendampingan');
+      const row = PD.rows.find((r) => r.id === it.entityId);
+      if (row) bukaPendampinganDrawerView(row);
     } else {
       // Tidak ada baris nyata untuk di-View (mis. permitgap -- izin wajib
       // yang belum dimiliki sama sekali) -- pindah modulnya saja.
@@ -2373,12 +2382,113 @@ function gambarDashboard() {
   // tempat untuk ini karena selalu ada di semua halaman (bukan cuma
   // Dashboard) dan klik-nya langsung membuka baris terkait, bukan cuma
   // pindah modul.
+  // Agenda ditaruh PALING ATAS: "apa yang akan datang" adalah pertanyaan
+  // pertama yang dibawa siapa pun saat membuka dashboard, dan sebelum ini
+  // jawabannya tersebar di kolom tanggal lima modul yang berbeda.
   $('#dashPanels').innerHTML = `
+    <div class="panel" style="margin-bottom:18px">
+      <div class="panelhead"><div class="ttl2">
+        <h3>${esc(t('agenda.title'))}</h3><p>${esc(t('agenda.desc'))}</p>
+      </div></div>
+      <div id="dashAgenda"><p class="hint" style="padding:14px 18px;margin:0">${esc(t('common.loading'))}</p></div>
+    </div>
     <div class="panel">
       <div class="panelhead"><div class="ttl2"><h3>${esc(t('dashboard.stepperTitle'))}</h3></div></div>
       <div style="padding:14px 18px 18px" id="dashStepper"></div>
     </div>`;
   renderStepperWidget();
+  muatAgenda();
+}
+
+/* ================================================================
+   AGENDA — "apa yang akan datang", satu deret waktu dari kelima modul.
+   Sumbernya satu endpoint (server/routes/agenda.routes.js); di sini
+   cuma pengelompokan per tanggal dan penggambarannya.
+   ================================================================ */
+const AG = { rows: null, memuat: false };
+
+async function muatAgenda() {
+  const el = $('#dashAgenda');
+  if (!el || AG.memuat) return;
+  AG.memuat = true;
+  try {
+    AG.rows = (await Api.agenda(S.ws.client_org_id, 90)).rows;
+    renderAgenda();
+  } catch (e) {
+    // Non-fatal: dashboard lain tetap tampil, panel ini saja yang bilang gagal.
+    el.innerHTML = `<p class="hint" style="padding:14px 18px;margin:0">${esc(e.message || t('agenda.gagal'))}</p>`;
+  } finally { AG.memuat = false; }
+}
+
+/* Selisih hari kalender (bukan selisih jam dibagi 24) — "besok" harus
+   tetap 1 hari walau sekarang jam 23.00. */
+function selisihHari(iso) {
+  const a = new Date(); a.setHours(0, 0, 0, 0);
+  const b = new Date(iso); b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+}
+function labelRelatif(n) {
+  if (n <= 0) return t('agenda.hariIni');
+  if (n === 1) return t('agenda.besok');
+  return t('common.daysLeft', { n }) + ' ' + t('agenda.lagi');
+}
+
+const AGENDA_IKON = {
+  sidang: '<path d="M12 3v18M8 21h8"/><path d="m4 7 4-2 4 2M4 7l-2 5h8L8 7"/><path d="m12 7 4-2 4 2m0 0-2 5h8l-2-5"/>',
+  pendampingan: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+  kontrak: '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>',
+  izin: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  proyek: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+};
+
+function renderAgenda() {
+  const el = $('#dashAgenda');
+  if (!el) return;
+  const rows = AG.rows || [];
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty" style="border:0"><h3>${esc(t('agenda.kosong.title'))}</h3>
+      <p>${esc(t('agenda.kosong.desc'))}</p></div>`;
+    return;
+  }
+  // Dikelompokkan per tanggal supaya tanggalnya ditulis sekali, bukan
+  // diulang di tiap baris — itu yang membuat daftar panjang tetap
+  // terbaca sebagai kalender, bukan sebagai tabel tanpa garis.
+  const hari = [];
+  rows.forEach((r) => {
+    const kunci = String(r.tanggal).slice(0, 10);
+    const akhir = hari[hari.length - 1];
+    if (akhir && akhir.kunci === kunci) akhir.items.push(r);
+    else hari.push({ kunci, items: [r] });
+  });
+
+  el.innerHTML = `<div class="agenda">` + hari.map((h) => {
+    const n = selisihHari(h.kunci);
+    const d = new Date(h.kunci);
+    const bulan = d.toLocaleDateString(LANG === 'en' ? 'en-GB' : 'id-ID', { month: 'short' });
+    return `<div class="ag-day ${n <= 0 ? 'kini' : ''}">
+      <div class="ag-date">
+        <b>${String(d.getDate()).padStart(2, '0')}</b><span>${esc(bulan)}</span>
+        <em>${esc(labelRelatif(n))}</em>
+      </div>
+      <div class="ag-items">${h.items.map((r) => {
+        // Pendampingan mengirim KODE jenisnya sebagai judul (lihat
+        // agenda.routes.js) — labelnya diterjemahkan di sini.
+        const judul = r.jenis === 'pendampingan' ? (JENIS_PD_NAMA[r.judul] || r.judul) : r.judul;
+        return `<button class="ag-item" data-modul="${esc(r.modul)}" data-id="${esc(r.entity_id)}">
+          <span class="ag-ico j-${esc(r.jenis)}"><svg viewBox="0 0 24 24">${AGENDA_IKON[r.jenis] || ''}</svg></span>
+          <span class="ag-txt">
+            <b>${esc(judul || '—')}</b>
+            <span>${esc([t('agenda.jenis.' + r.jenis), r.jam ? String(r.jam).slice(0, 5) : '', r.keterangan]
+              .filter(Boolean).join(' · '))}</span>
+          </span>
+        </button>`;
+      }).join('')}</div>
+    </div>`;
+  }).join('') + `</div>`;
+
+  document.querySelectorAll('#dashAgenda .ag-item').forEach((b) => {
+    b.onclick = () => bukaNotifikasi({ modul: b.dataset.modul, entityId: b.dataset.id });
+  });
 }
 
 /* ================================================================

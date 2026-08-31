@@ -211,6 +211,10 @@ const Api = (() => {
 
     /* ---- Notifikasi bel topbar ---- */
     notifications: (clientOrgId) => call('/notifications', { qs: { clientOrgId } }),
+    // Agenda = "apa yang akan datang" (semua yang berjadwal, horizon panjang);
+    // beda peran dengan notifications = "ada yang hampir telat" -- lihat
+    // komentar di server/routes/agenda.routes.js.
+    agenda: (clientOrgId, hari) => call('/agenda', { qs: { clientOrgId, hari } }),
 
     /* ---- Hak akses per pengguna (admin/super admin), lihat db/25 ---- */
     myPermissionOverrides: () => call('/permission-overrides/me'),

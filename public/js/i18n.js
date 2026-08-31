@@ -49,6 +49,22 @@ const I18N = {
     'journey.tanpaTarget': 'Target selesai belum ditetapkan',
     'journey.kegiatanPada': 'Kegiatan pada {tgl}',
     'journey.kegiatanSelesai': 'Kegiatan sudah selesai',
+
+    /* Agenda dashboard — "apa yang akan datang" (lihat
+       server/routes/agenda.routes.js untuk beda perannya dengan bel). */
+    'agenda.title': 'Jadwal Terdekat',
+    'agenda.desc': 'Sidang, kegiatan, dan tenggat 90 hari ke depan — dari semua modul, urut waktu.',
+    'agenda.hariIni': 'Hari ini',
+    'agenda.besok': 'Besok',
+    'agenda.lagi': 'lagi',
+    'agenda.gagal': 'Jadwal gagal dimuat.',
+    'agenda.kosong.title': 'Tidak ada jadwal 90 hari ke depan',
+    'agenda.kosong.desc': 'Sidang, kegiatan pendampingan, dan tenggat kontrak/izin akan muncul di sini.',
+    'agenda.jenis.sidang': 'Sidang',
+    'agenda.jenis.pendampingan': 'Pendampingan',
+    'agenda.jenis.kontrak': 'Kontrak berakhir',
+    'agenda.jenis.izin': 'Izin berakhir',
+    'agenda.jenis.proyek': 'Target proyek',
     'common.customOption': 'Lainnya… (isi sendiri)',
     'common.customOptionPh': 'Ketik nilai Anda sendiri',
 
@@ -748,6 +764,20 @@ const I18N = {
     'journey.tanpaTarget': 'Target date not set yet',
     'journey.kegiatanPada': 'Activity on {tgl}',
     'journey.kegiatanSelesai': 'Activity completed',
+
+    'agenda.title': 'Upcoming Schedule',
+    'agenda.desc': 'Hearings, activities, and deadlines for the next 90 days — across all modules, in time order.',
+    'agenda.hariIni': 'Today',
+    'agenda.besok': 'Tomorrow',
+    'agenda.lagi': 'to go',
+    'agenda.gagal': 'Failed to load the schedule.',
+    'agenda.kosong.title': 'Nothing scheduled in the next 90 days',
+    'agenda.kosong.desc': 'Hearings, assistance activities, and contract/permit deadlines will appear here.',
+    'agenda.jenis.sidang': 'Hearing',
+    'agenda.jenis.pendampingan': 'Assistance',
+    'agenda.jenis.kontrak': 'Contract ends',
+    'agenda.jenis.izin': 'Permit expires',
+    'agenda.jenis.proyek': 'Project target',
     'common.customOption': 'Other… (type your own)',
     'common.customOptionPh': 'Type your own value',
 

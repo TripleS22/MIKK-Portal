@@ -25,6 +25,7 @@ const myRoutes = require('./routes/my.routes');
 const profileRoutes = require('./routes/profile.routes');
 const masterDataRoutes = require('./routes/master-data.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
+const agendaRoutes = require('./routes/agenda.routes');
 const permissionOverridesRoutes = require('./routes/permission-overrides.routes');
 
 const app = express();
@@ -74,6 +75,7 @@ app.use('/api/my', myRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/master-data', masterDataRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/agenda', agendaRoutes);
 app.use('/api/permission-overrides', permissionOverridesRoutes);
 
 // Di Cloudflare Workers, frontend statis (public/) disajikan langsung

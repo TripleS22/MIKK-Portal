@@ -453,6 +453,46 @@ tbody tr:last-child td{border-bottom:none}
 .dstage .jlbl{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.2;hyphens:auto}
 
 /* =====================================================================
+   AGENDA — daftar "apa yang akan datang", dikelompokkan per tanggal
+
+   Tanggalnya ditulis SEKALI di kolom kiri untuk semua acara di hari itu,
+   bukan diulang tiap baris — itu yang membuat daftar panjang terbaca
+   sebagai kalender alih-alih tabel tanpa garis.
+   ===================================================================== */
+.agenda{display:flex;flex-direction:column}
+.ag-day{display:flex;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.ag-day:last-child{border-bottom:0}
+.ag-day.kini{background:var(--gold-sf)}
+.ag-date{
+  flex:none;width:62px;text-align:center;display:flex;flex-direction:column;align-items:center;
+  padding-top:2px;line-height:1.05;
+}
+.ag-date b{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--ink)}
+.ag-date span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:2px}
+.ag-date em{font-size:9.5px;font-style:normal;color:var(--muted-2);margin-top:5px;line-height:1.2}
+.ag-day.kini .ag-date em{color:var(--gold-dk);font-weight:600}
+.ag-items{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.ag-item{
+  display:flex;align-items:center;gap:10px;text-align:left;width:100%;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px;
+  cursor:pointer;font-family:inherit;transition:border-color .12s,box-shadow .12s;
+}
+.ag-item:hover{border-color:var(--gold-line);box-shadow:var(--shadow)}
+.ag-ico{width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;background:var(--idle-sf);color:var(--muted)}
+.ag-ico svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+/* Warna per jenis acara memakai token yang sudah dipakai modulnya
+   masing-masing di seluruh aplikasi, bukan warna baru — supaya "biru =
+   perkara" tetap berarti sama di mana pun. */
+.ag-ico.j-sidang{background:var(--repl-sf,var(--info-sf));color:var(--repl,var(--info))}
+.ag-ico.j-pendampingan{background:var(--info-sf);color:var(--info)}
+.ag-ico.j-kontrak{background:var(--warn-sf);color:var(--warn)}
+.ag-ico.j-izin{background:var(--ok-sf);color:var(--ok)}
+.ag-ico.j-proyek{background:var(--gold-sf);color:var(--gold-dk)}
+.ag-txt{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.ag-txt b{font-size:12.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ag-txt span{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* =====================================================================
    DONUT + LEGENDA
    ===================================================================== */
 .donutwrap{display:flex;align-items:center;gap:18px;padding:16px 18px;flex-wrap:wrap}
@@ -809,6 +849,9 @@ tbody tr:last-child td{border-bottom:none}
   .jsteps{overflow-x:auto;padding-bottom:2px}
   .jstep{min-width:34px}
   .jc-next{font-size:11.5px}
+  .ag-day{padding:12px;gap:10px}
+  .ag-date{width:44px}
+  .ag-date b{font-size:18px}
 }
 /* Sengaja TIDAK ada aturan .cards{grid-template-columns:1fr} di sini:
    kartu statistik itu pendek (satu angka + satu keterangan), satu kolom
