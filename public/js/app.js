@@ -1185,7 +1185,15 @@ function gambarKepalaHalaman() {
   $('#phDesc').textContent = t(m.desc);
   $('#phStamp').textContent = t('pagehead.lastLogin', { when: stempelWaktu() });
   if (S.ws) {
-    $('#phOrg').textContent = S.ws.nama_legal || S.ws.nama_singkat || '—';
+    // "Perkara Saya" & "Profil Saya" SENGAJA lintas klien (lihat deskripsi
+    // di layarnya sendiri) -- judul besar di sini sebelumnya SELALU
+    // menampilkan nama organisasi workspace yang sedang dibuka (mis.
+    // "NHC"), walau isi tabelnya bisa saja perkara klien LAIN (mis. KAL)
+    // yang PIC-nya juga staf ini. Terlihat seperti data salah organisasi,
+    // padahal cuma judulnya yang salah konteks -- tampilkan nama staf
+    // yang login untuk kedua modul ini, bukan nama organisasi mana pun.
+    const lintasKlien = m.id === 'mycases' || m.id === 'profile';
+    $('#phOrg').textContent = lintasKlien ? (S.user?.nama || '—') : (S.ws.nama_legal || S.ws.nama_singkat || '—');
     $('#phBadge').textContent = PERAN_LABEL[S.ws.peran] || S.ws.peran || '';
     $('#orgName').textContent = S.ws.nama_singkat || S.ws.nama_legal || '—';
   }
@@ -2757,14 +2765,18 @@ function staffFormHTML(err) {
   const opsiJabatan = JABATAN_PER_PERAN_SU[d.peran].map((v) =>
     `<option value="${v}" ${d.jabatan === v ? 'selected' : ''}>${esc(JABATAN_NAMA[v])}</option>`).join('');
 
-  // Sama seperti timFormHTML (Akun Klien): kartu identitas SELALU tampil
-  // di mode edit, bukan cuma dropdown peran tanpa konteks siapa yang
-  // sedang diubah.
+  // Sama seperti timFormHTML (Akun Klien), tapi namanya TETAP bisa diedit
+  // di sini (admin boleh membetulkan nama staf yang salah ketik/berganti
+  // nama) -- emailnya sendiri tetap tampilan saja (itu identitas login di
+  // Supabase Auth, gantinya lewat alur lain, bukan field biasa).
   const identitas = d.userId ? `
-  <div style="display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r)">
-    <div class="av" style="width:38px;height:38px;font-size:12.5px">${esc(initials(d.nama))}</div>
-    <div><div style="font-weight:600;font-size:13px">${esc(d.nama)}</div>
-      <div class="hint" style="margin-top:1px">${esc(d.email)}</div></div>
+  <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r)">
+    <div class="av" style="width:38px;height:38px;font-size:12.5px;margin-top:2px">${esc(initials(d.nama))}</div>
+    <div style="flex:1">
+      <div class="f"><label>${t('staffUsers.f.nama')} <span class="req">*</span></label>
+        <input id="su_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
+      <div class="hint" style="margin-top:6px">${esc(d.email)}</div>
+    </div>
   </div>` : `
   <div class="f"><label>${t('staffUsers.f.nama')} <span class="req">*</span></label>
     <input id="su_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
@@ -2830,9 +2842,10 @@ async function simpanStaff() {
   const g = (id) => { const el = $('#' + id); return el ? el.value.trim() : ''; };
   const err = {};
 
+  d.nama = g('su_nama');
+  if (!d.nama) err.nama = t('staffUsers.err.nama');
   if (!d.userId) {
-    d.nama = g('su_nama'); d.email = g('su_email'); d.noHp = g('su_hp');
-    if (!d.nama) err.nama = t('staffUsers.err.nama');
+    d.email = g('su_email'); d.noHp = g('su_hp');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) err.email = t('staffUsers.err.email');
   }
   const aktifSebelum = d.aktif;
@@ -2850,7 +2863,7 @@ async function simpanStaff() {
   const btn = $('#auxDSave'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
   try {
     if (d.userId) {
-      await Api.updateStaffUser(d.userId, { jabatan: d.jabatan, gelar: d.gelar || null, aktif: d.aktif });
+      await Api.updateStaffUser(d.userId, { nama: d.nama, jabatan: d.jabatan, gelar: d.gelar || null, aktif: d.aktif });
       tutupAuxDrawer();
       toast(t('common.saved'), 'success');
     } else {
@@ -2896,57 +2909,96 @@ $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
    Klien yang sama, sekarang untuk organisasi barunya, kosong siap
    diisi akun pertama).
    ================================================================ */
+// Tidak semua klien firma ini perusahaan -- ada juga perorangan (individu
+// tanpa badan hukum, mis. seseorang yang minta didampingi perkara
+// pribadi). Klien perorangan TIDAK punya workspace/akun login sendiri
+// (beda dari client_orgs) -- selama ini cuma bisa dicatat lewat "Perkara
+// Saya" (KP.individuals, lihat bukaKlienIndivDrawer). Toggle di bawah
+// memilih jalur mana yang dipakai tombol Simpan; field & endpoint-nya
+// jalur perorangan SAMA PERSIS dengan bukaKlienIndivDrawer, cuma
+// dipintu-masukkan lagi di sini supaya "+ Klien Baru" tidak berasumsi
+// setiap klien baru itu perusahaan.
 function klienBaruFormHTML(err) {
   const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
   const opsiPeran = ['admin_klien', 'legal_manager', 'viewer'].map((v) =>
     `<option value="${v}" ${v === 'admin_klien' ? 'selected' : ''}>${esc(PERAN_LABEL[v])}</option>`).join('');
   return `
-  <p class="hint" style="margin:0 0 14px">${esc(t('klienBaru.hint'))}</p>
-  <div class="grid2">
-    <div class="f"><label>${t('klienBaru.namaLegal')} <span class="req">*</span></label>
-      <input id="kb_namaLegal" placeholder="mis. PT Contoh Sejahtera Abadi">${e('namaLegal')}</div>
-    <div class="f"><label>${t('klienBaru.namaSingkat')} <span class="req">*</span></label>
-      <input id="kb_namaSingkat" placeholder="mis. CSA">${e('namaSingkat')}</div>
+  <div class="langseg" id="kb_tipeToggle" style="width:fit-content;margin-bottom:16px">
+    <button type="button" data-tipe="perusahaan" class="on">${esc(t('klienBaru.tipe.perusahaan'))}</button>
+    <button type="button" data-tipe="perorangan">${esc(t('klienBaru.tipe.perorangan'))}</button>
   </div>
-  <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>${t('companyProfile.npwp')}</label><input id="kb_npwp"></div>
-    <div class="f"><label>${t('companyProfile.nib')}</label><input id="kb_nib"></div>
-  </div>
-  <div class="grid2" style="margin-top:12px">
-    <div class="f"><label>${t('companyProfile.sektorUsaha')}</label><input id="kb_sektor"></div>
-    <div class="f"><label>${t('klienBaru.statusRetainer')}</label>
-      <select id="kb_statusRetainer">
-        <option value="aktif">${t('klienBaru.status.aktif')}</option>
-        <option value="tertunda">${t('klienBaru.status.tertunda')}</option>
-      </select></div>
-  </div>
-  <div class="f" style="margin-top:12px"><label>${t('companyProfile.alamat')}</label><textarea id="kb_alamat" rows="3"></textarea></div>
-  <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
-    <input id="kb_kbli">
-    <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>
 
-  <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
-    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 4px">${esc(t('klienBaru.userTitle'))}</h4>
-    <p class="hint" style="margin:0 0 12px">${esc(t('klienBaru.userHint'))}</p>
-    <div class="f"><label>${t('team.f.nama')} <span class="req">*</span></label>
-      <input id="kb_userNama">${e('userNama')}</div>
-    <div class="f" style="margin-top:12px"><label>${t('team.f.email')} <span class="req">*</span></label>
-      <input id="kb_userEmail" type="email">
-      <div class="hint">${esc(t('team.f.emailHint'))}</div>${e('userEmail')}</div>
-    <div class="f" style="margin-top:12px"><label>${t('team.f.noHp')}</label>
-      <input id="kb_userHp" inputmode="tel"></div>
-    <div class="f" style="margin-top:12px"><label>${t('team.f.peran')} <span class="req">*</span></label>
-      <select id="kb_userPeran">${opsiPeran}</select></div>
-    <div class="warnbox wb-info" id="kb_userPeranDesc" style="margin-top:8px">
-      <span class="ic">ⓘ</span><div>${esc(t(ROLE_DESC_KLIEN.admin_klien))}</div>
+  <div id="kb_secPerusahaan">
+    <p class="hint" style="margin:0 0 14px">${esc(t('klienBaru.hint'))}</p>
+    <div class="grid2">
+      <div class="f"><label>${t('klienBaru.namaLegal')} <span class="req">*</span></label>
+        <input id="kb_namaLegal" placeholder="mis. PT Contoh Sejahtera Abadi">${e('namaLegal')}</div>
+      <div class="f"><label>${t('klienBaru.namaSingkat')} <span class="req">*</span></label>
+        <input id="kb_namaSingkat" placeholder="mis. CSA">${e('namaSingkat')}</div>
     </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="f"><label>${t('companyProfile.npwp')}</label><input id="kb_npwp"></div>
+      <div class="f"><label>${t('companyProfile.nib')}</label><input id="kb_nib"></div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="f"><label>${t('companyProfile.sektorUsaha')}</label><input id="kb_sektor"></div>
+      <div class="f"><label>${t('klienBaru.statusRetainer')}</label>
+        <select id="kb_statusRetainer">
+          <option value="aktif">${t('klienBaru.status.aktif')}</option>
+          <option value="tertunda">${t('klienBaru.status.tertunda')}</option>
+        </select></div>
+    </div>
+    <div class="f" style="margin-top:12px"><label>${t('companyProfile.alamat')}</label><textarea id="kb_alamat" rows="3"></textarea></div>
+    <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
+      <input id="kb_kbli">
+      <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+      <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 4px">${esc(t('klienBaru.userTitle'))}</h4>
+      <p class="hint" style="margin:0 0 12px">${esc(t('klienBaru.userHint'))}</p>
+      <div class="f"><label>${t('team.f.nama')} <span class="req">*</span></label>
+        <input id="kb_userNama">${e('userNama')}</div>
+      <div class="f" style="margin-top:12px"><label>${t('team.f.email')} <span class="req">*</span></label>
+        <input id="kb_userEmail" type="email">
+        <div class="hint">${esc(t('team.f.emailHint'))}</div>${e('userEmail')}</div>
+      <div class="f" style="margin-top:12px"><label>${t('team.f.noHp')}</label>
+        <input id="kb_userHp" inputmode="tel"></div>
+      <div class="f" style="margin-top:12px"><label>${t('team.f.peran')} <span class="req">*</span></label>
+        <select id="kb_userPeran">${opsiPeran}</select></div>
+      <div class="warnbox wb-info" id="kb_userPeranDesc" style="margin-top:8px">
+        <span class="ic">ⓘ</span><div>${esc(t(ROLE_DESC_KLIEN.admin_klien))}</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="kb_secPerorangan" style="display:none">
+    <p class="hint" style="margin:0 0 14px">${esc(t('klienBaru.hintPerorangan'))}</p>
+    <div class="f"><label>${t('mycases.f.nama')} <span class="req">*</span></label>
+      <input id="kb_indivNama">${e('indivNama')}</div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="f"><label>${t('mycases.f.nik')}</label><input id="kb_indivNik"></div>
+      <div class="f"><label>${t('mycases.f.noHp')}</label><input id="kb_indivHp"></div>
+    </div>
+    <div class="f" style="margin-top:12px"><label>${t('mycases.f.alamat')}</label><textarea id="kb_indivAlamat" rows="2"></textarea></div>
   </div>`;
 }
 $('#addKlienBaruBtn').onclick = () => {
   bukaAuxDrawer('klienbaru', t('klienBaru.formTitle'), klienBaruFormHTML(), simpanKlienBaru, t('klienBaru.simpan'));
   pasangPeranDescLive('kb_userPeran', 'kb_userPeranDesc', ROLE_DESC_KLIEN);
+  document.querySelectorAll('#kb_tipeToggle [data-tipe]').forEach((b) => {
+    b.onclick = () => {
+      document.querySelectorAll('#kb_tipeToggle [data-tipe]').forEach((x) => x.classList.toggle('on', x === b));
+      $('#kb_secPerusahaan').style.display = b.dataset.tipe === 'perusahaan' ? '' : 'none';
+      $('#kb_secPerorangan').style.display = b.dataset.tipe === 'perorangan' ? '' : 'none';
+    };
+  });
 };
+function tipeKlienBaruAktif() {
+  const on = document.querySelector('#kb_tipeToggle [data-tipe].on');
+  return on ? on.dataset.tipe : 'perusahaan';
+}
 async function simpanKlienBaru() {
+  if (tipeKlienBaruAktif() === 'perorangan') return simpanKlienBaruPerorangan();
   const namaLegal = $('#kb_namaLegal').value.trim();
   const namaSingkat = $('#kb_namaSingkat').value.trim();
   const userNama = $('#kb_userNama').value.trim();
@@ -2994,6 +3046,32 @@ async function simpanKlienBaru() {
     await enterWorkspace(wsBaru);
     switchModuleAll('team');
     if (akun.kataSandiAwal) tampilkanKredensial(userNama, userEmail, akun.kataSandiAwal, 'teamNewCred', { emailTerkirim: akun.emailTerkirim });
+  } catch (e) {
+    toast(e.message || t('common.saveFailed'), 'error');
+  } finally { btn.disabled = false; btn.textContent = teksAsli; }
+}
+
+// Klien perorangan TIDAK punya workspace/akun login (lihat komentar
+// klienBaruFormHTML) -- jadi bukan buat organisasi+akun seperti di atas,
+// cukup satu baris individual_clients (endpoint SAMA dipakai
+// bukaKlienIndivDrawer di "Perkara Saya"). Ditutup lalu diarahkan ke
+// "Perkara Saya" karena di sanalah klien perorangan sungguhan
+// terdaftar/terlihat -- kalau tetap di Akun Klien (halaman ini) dia
+// tidak akan pernah muncul, itu daftar akun PORTAL, bukan daftar klien.
+async function simpanKlienBaruPerorangan() {
+  const nama = $('#kb_indivNama').value.trim();
+  if (!nama) return toast(t('mycases.err.nama'), 'warning');
+  const btn = $('#auxDSave'); btn.disabled = true; const teksAsli = btn.textContent; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    await Api.createIndividualClient({
+      nama, nik: $('#kb_indivNik').value.trim() || null,
+      noHp: $('#kb_indivHp').value.trim() || null, alamat: $('#kb_indivAlamat').value.trim() || null,
+    });
+    tutupAuxDrawer();
+    await muatKlienKhususSemua();
+    switchModuleAll('mycases');
+    renderKlienKhususPanel();
+    toast(t('klienBaru.createdIndividual', { nama }), 'success');
   } catch (e) {
     toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = teksAsli; }

@@ -107,17 +107,35 @@ router.patch('/:userId', async (req, res, next) => {
     if (b.jabatan !== undefined && !SEMUA_JABATAN.includes(b.jabatan)) {
       return res.status(400).json({ error: 'Jabatan tidak valid.' });
     }
+    // nama ada di tabel users, sisanya (jabatan/gelar/aktif) di
+    // mikk_staff -- dua UPDATE, satu transaksi (withUser), supaya tidak
+    // ada perubahan setengah jalan kalau salah satunya gagal.
+    let namaBaru;
+    if (Object.prototype.hasOwnProperty.call(b, 'nama')) {
+      namaBaru = String(b.nama || '').trim();
+      if (!namaBaru) return res.status(400).json({ error: 'Nama tidak boleh kosong.' });
+    }
     const set = [], val = [req.params.userId];
     const taruh = (k, v) => { val.push(v); set.push(`${k} = $${val.length}`); };
     if (Object.prototype.hasOwnProperty.call(b, 'jabatan')) taruh('jabatan', b.jabatan);
     if (Object.prototype.hasOwnProperty.call(b, 'gelar')) taruh('gelar', b.gelar || null);
     if (Object.prototype.hasOwnProperty.call(b, 'aktif')) taruh('aktif', !!b.aktif);
-    if (!set.length) return res.status(400).json({ error: 'Tidak ada perubahan yang dikirim.' });
+    if (!set.length && namaBaru === undefined) return res.status(400).json({ error: 'Tidak ada perubahan yang dikirim.' });
 
-    const { rows } = await queryAsUser(req.user.id,
-      `update mikk_staff set ${set.join(', ')} where user_id = $1 returning user_id`, val);
-    if (!rows.length) return res.status(404).json({ error: 'Staf tidak ditemukan.' });
-    res.json({ userId: rows[0].user_id });
+    const userId = await withUser(req.user.id, async (client) => {
+      if (set.length) {
+        const { rows } = await client.query(
+          `update mikk_staff set ${set.join(', ')} where user_id = $1 returning user_id`, val);
+        if (!rows.length) throw Object.assign(new Error('Staf tidak ditemukan.'), { status: 404 });
+      }
+      if (namaBaru !== undefined) {
+        const { rows } = await client.query(
+          'update users set nama = $1 where id = $2 returning id', [namaBaru, req.params.userId]);
+        if (!rows.length) throw Object.assign(new Error('Staf tidak ditemukan.'), { status: 404 });
+      }
+      return req.params.userId;
+    });
+    res.json({ userId });
   } catch (err) { next(err); }
 });
 
