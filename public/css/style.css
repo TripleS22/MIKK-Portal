@@ -489,6 +489,7 @@ tbody tr:last-child td{border-bottom:none}
 .wb-crit{background:var(--crit-sf);color:#8c1030;border:1px solid #f4c2ce}
 .wb-warn{background:var(--warn-sf);color:#7c3d06;border:1px solid #f0dcb6}
 .wb-ok{background:var(--ok-sf);color:#14532d;border:1px solid #bfe3cc}
+.wb-info{background:var(--info-sf);color:#1e3a72;border:1px solid #c7d9f7}
 .warnbox .ic{font-size:15px;line-height:1.2}
 
 /* =====================================================================

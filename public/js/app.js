@@ -141,6 +141,12 @@ const S = {
   reference: null, ledger: [], list: { rows: [], total: 0 },
   editing: null, draft: null, err: null,
   quickQueue: [], quickIdx: 0,
+  // Sisi klien peran 'viewer' baca-saja (RLS, lihat db/23_viewer_readonly_
+  // enforcement.sql) -- dihitung sekali di enterWorkspace(), dipakai
+  // banyak modul untuk menyembunyikan tombol "+Tambah"/"Edit" yang
+  // memang akan ditolak server. Selalu true untuk staf MIKK (nilai
+  // peran staf tidak pernah 'viewer').
+  bolehTulisKlien: true,
 };
 
 /* ----------------------------------------------------------------
@@ -307,6 +313,15 @@ async function enterWorkspace(ws) {
   $('#modMasterDataBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modStaffUsersBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#modKlienBaruBtn').style.display = bolehTarif ? 'flex' : 'none';
+
+  // Sisi klien peran 'viewer' baca-saja sejak db/23 -- sembunyikan
+  // tombol "+Tambah"/tab Isi Cepat yang akan ditolak server (RLS tetap
+  // penegakan sesungguhnya, ini sekadar tidak menawarkan pintu terkunci,
+  // sama pola dengan bolehTarif di atas).
+  S.bolehTulisKlien = ws.peran !== 'viewer';
+  ['addPermitBtn', 'addCaseBtn', 'addProjectBtn', 'addPendampinganBtn', 'docUploadBtn', 'vQuick'].forEach((id) => {
+    const el = $('#' + id); if (el) el.style.display = S.bolehTulisKlien ? '' : 'none';
+  });
   // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
   // Sekarang diakses lewat menu akun di topbar, bukan sidebar (lihat
@@ -595,6 +610,7 @@ function bukaDrawer(row) {
   // View, tombolnya sempat dipakai untuk "Edit" (lihat bukaDrawerView).
   $('#dSave').textContent = t('common.save');
   $('#dSave').onclick = simpanDrawer;
+  $('#dSave').style.display = '';
   gambarDrawer();
   $('#veil').classList.add('on'); $('#drawer').classList.add('on');
   if (S.draft.lawanPihakNama) {
@@ -656,6 +672,7 @@ function bukaDrawerView(row) {
   renderLampiranPanel('lampiran_kontrak', 'contract', row.id, { clientOrgId: S.ws.client_org_id });
   $('#dSave').textContent = t('common.edit');
   $('#dSave').onclick = () => bukaDrawer(row);
+  $('#dSave').style.display = S.bolehTulisKlien ? '' : 'none';
   $('#veil').classList.add('on'); $('#drawer').classList.add('on');
 }
 
@@ -997,6 +1014,7 @@ function bukaPermitDrawer(row) {
   // View, tombolnya sempat dipakai untuk "Edit" (lihat bukaPermitDrawerView).
   $('#permitDSave').textContent = t('common.save');
   $('#permitDSave').onclick = simpanPermit;
+  $('#permitDSave').style.display = '';
   gambarPermitDrawer();
   $('#veil').classList.add('on'); $('#permitDrawer').classList.add('on');
   setTimeout(() => { const el = $('#p_nama'); if (el) el.focus(); }, 60);
@@ -1040,6 +1058,7 @@ function bukaPermitDrawerView(row) {
   renderLampiranPanel('lampiran_izin', 'permit', row.id, { clientOrgId: S.ws.client_org_id });
   $('#permitDSave').textContent = t('common.edit');
   $('#permitDSave').onclick = () => bukaPermitDrawer(row);
+  $('#permitDSave').style.display = S.bolehTulisKlien ? '' : 'none';
   $('#veil').classList.add('on'); $('#permitDrawer').classList.add('on');
 }
 
@@ -1300,6 +1319,11 @@ function bukaAuxDrawer(kind, judul, bodyHtml, onSave, saveLabel) {
   $('#auxDBody').innerHTML = bodyHtml;
   $('#auxDSave').onclick = onSave;
   $('#auxDSave').textContent = saveLabel || t('common.save');
+  // Default selalu terlihat -- pemanggil drawer View (yang tombolnya
+  // dipakai untuk "Edit", bukan "Simpan") yang menyembunyikannya sendiri
+  // SETELAH memanggil ini kalau memang tidak boleh (lihat pola RT.bolehUbah
+  // / S.bolehTulisKlien di masing-masing bukaXDrawerView).
+  $('#auxDSave').style.display = '';
   $('#veil').classList.add('on'); $('#auxDrawer').classList.add('on');
 }
 function tutupAuxDrawer() {
@@ -1436,7 +1460,8 @@ async function bukaCaseDrawerView(id) {
       <div id="lampiran_perkara"></div>
     </div>`;
   bukaAuxDrawer('case-view', t('cases.drawerTitle'), html,
-    () => { tutupAuxDrawer(); bukaCaseDrawer(id); }, t('common.edit'));
+    S.bolehTulisKlien ? () => { tutupAuxDrawer(); bukaCaseDrawer(id); } : null, t('common.edit'));
+  $('#auxDSave').style.display = S.bolehTulisKlien ? '' : 'none';
   renderLampiranPanel('lampiran_perkara', 'case', id, { clientOrgId: S.ws.client_org_id });
 }
 function caseFormHTML(row, hearings, minutes) {
@@ -1629,7 +1654,8 @@ function bukaProjectDrawerView(row) {
       <div id="lampiran_proyek"></div>
     </div>`;
   bukaAuxDrawer('project-view', t('projects.drawerTitle'), html,
-    () => { tutupAuxDrawer(); bukaProjectDrawer(row); }, t('common.edit'));
+    S.bolehTulisKlien ? () => { tutupAuxDrawer(); bukaProjectDrawer(row); } : null, t('common.edit'));
+  $('#auxDSave').style.display = S.bolehTulisKlien ? '' : 'none';
   renderLampiranPanel('lampiran_proyek', 'project', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function projectFormHTML(row) {
@@ -1735,7 +1761,8 @@ function bukaPendampinganDrawerView(row) {
       <div id="lampiran_pendampingan"></div>
     </div>`;
   bukaAuxDrawer('pendampingan-view', t('pendampingan.drawerTitle'), html,
-    () => { tutupAuxDrawer(); bukaPendampinganDrawer(row); }, t('common.edit'));
+    S.bolehTulisKlien ? () => { tutupAuxDrawer(); bukaPendampinganDrawer(row); } : null, t('common.edit'));
+  $('#auxDSave').style.display = S.bolehTulisKlien ? '' : 'none';
   renderLampiranPanel('lampiran_pendampingan', 'pendampingan', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function pendampinganFormHTML(row) {
@@ -2516,33 +2543,66 @@ function tampilkanKredensial(nama, email, sandi, targetId, opts) {
   $('#tutupCred_' + targetId).onclick = () => { $('#' + targetId).innerHTML = ''; };
 }
 
+// Deskripsi tiap peran klien -- ditampilkan di bawah dropdown supaya
+// admin tahu APA yang sebenarnya diberikan, bukan cuma nama peran yang
+// ambigu ("Legal Manager" vs "Viewer" tidak jelas bedanya tanpa ini).
+// Sama seperti pola umum SaaS lain (role matrix/description box), lihat
+// referensi: https://www.saasui.design/blog/saas-permissions-roles-ux-patterns
+const ROLE_DESC_KLIEN = {
+  admin_klien: 'roleDesc.admin_klien',
+  legal_manager: 'roleDesc.legal_manager',
+  viewer: 'roleDesc.viewer',
+};
+
 function timFormHTML(err) {
   const d = TM.draft;
   const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
   const opsiPeran = ['admin_klien', 'legal_manager', 'viewer'].map((v) =>
     `<option value="${v}" ${d.peran === v ? 'selected' : ''}>${esc(PERAN_LABEL[v])}</option>`).join('');
 
-  return `
-  ${d.membershipId ? '' : `
+  // Mengedit akun yang sudah ada TAPI drawer-nya sebelumnya tidak
+  // menunjukkan sama sekali siapa yang sedang diedit (nama/email cuma
+  // ditampilkan saat BUAT akun baru) -- kartu identitas ini SELALU
+  // tampil di mode edit supaya jelas "ini akun siapa", bukan cuma
+  // dropdown peran yang mengambang tanpa konteks.
+  const identitas = d.membershipId ? `
+  <div style="display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r)">
+    <div class="av" style="width:38px;height:38px;font-size:12.5px">${esc(initials(d.nama))}</div>
+    <div><div style="font-weight:600;font-size:13px">${esc(d.nama)}</div>
+      <div class="hint" style="margin-top:1px">${esc(d.email)}</div></div>
+  </div>` : `
   <div class="f"><label>${t('team.f.nama')} <span class="req">*</span></label>
     <input id="tm_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
   <div class="f" style="margin-top:12px"><label>${t('team.f.email')} <span class="req">*</span></label>
     <input id="tm_email" type="email" value="${esc(d.email || '')}">
     <div class="hint">${esc(t('team.f.emailHint'))}</div>${e('email')}</div>
   <div class="f" style="margin-top:12px"><label>${t('team.f.noHp')}</label>
-    <input id="tm_hp" inputmode="tel" value="${esc(d.noHp || '')}"></div>`}
+    <input id="tm_hp" inputmode="tel" value="${esc(d.noHp || '')}"></div>`;
 
-  <div class="f" style="margin-top:12px"><label>${t('team.f.peran')} <span class="req">*</span></label>
-    <select id="tm_peran">${opsiPeran}</select>
-    <div class="hint">${esc(t('team.f.peranHint'))}</div></div>
+  return `
+  ${identitas}
+
+  <div class="f" style="margin-top:16px"><label>${t('team.f.peran')} <span class="req">*</span></label>
+    <select id="tm_peran">${opsiPeran}</select></div>
+  <div class="warnbox wb-info" id="tm_peranDesc" style="margin-top:8px">
+    <span class="ic">ⓘ</span><div>${esc(t(ROLE_DESC_KLIEN[d.peran]))}</div>
+  </div>
 
   ${d.membershipId ? `
-  <label class="chk" style="margin-top:6px"><input type="checkbox" id="tm_aktif" ${d.aktif !== false ? 'checked' : ''}>
+  <label class="chk" style="margin-top:16px"><input type="checkbox" id="tm_aktif" ${d.aktif !== false ? 'checked' : ''}>
     <span><b>${t('team.f.aktif')}</b>${t('team.f.aktifDesc')}</span></label>` : `
   <div class="warnbox wb-warn" style="margin:14px 0 0">
     <span class="ic">🔑</span>
     <div><b>${esc(t('team.f.sandiTitle'))}</b>${esc(t('team.f.sandiDesc'))}</div>
   </div>`}`;
+}
+
+// Deskripsi peran ikut berganti live saat dropdown-nya diganti, tanpa
+// perlu render ulang seluruh form (field lain yang sedang diisi jangan
+// sampai ikut ter-reset).
+function pasangPeranDescLive(selectId, descId, kamus) {
+  const sel = $('#' + selectId);
+  if (sel) sel.onchange = () => { $('#' + descId).querySelector('div').textContent = t(kamus[sel.value]); };
 }
 
 function bukaTimDrawer(row) {
@@ -2552,11 +2612,13 @@ function bukaTimDrawer(row) {
   } : { membershipId: null, nama: '', email: '', noHp: '', peran: 'legal_manager' };
   bukaAuxDrawer('team', row ? t('team.drawerTitle') : t('team.drawerTitleNew'),
     timFormHTML(), simpanTim);
+  pasangPeranDescLive('tm_peran', 'tm_peranDesc', ROLE_DESC_KLIEN);
 }
 
 function gambarTimDrawer(err) {
   const body = $('#auxDBody');
   if (body) body.innerHTML = timFormHTML(err);
+  pasangPeranDescLive('tm_peran', 'tm_peranDesc', ROLE_DESC_KLIEN);
 }
 
 async function simpanTim() {
@@ -2674,28 +2736,43 @@ function renderStaffUsersTable() {
   });
 }
 
+// Deskripsi peran staf -- sama alasannya dengan ROLE_DESC_KLIEN di atas.
+const ROLE_DESC_STAFF = { admin: 'roleDesc.staff_admin', pic_legal: 'roleDesc.staff_pic_legal' };
+
 function staffFormHTML(err) {
   const d = SU.draft;
   const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
   const opsiJabatan = JABATAN_PER_PERAN_SU[d.peran].map((v) =>
     `<option value="${v}" ${d.jabatan === v ? 'selected' : ''}>${esc(JABATAN_NAMA[v])}</option>`).join('');
 
-  return `
-  ${d.userId ? '' : `
+  // Sama seperti timFormHTML (Akun Klien): kartu identitas SELALU tampil
+  // di mode edit, bukan cuma dropdown peran tanpa konteks siapa yang
+  // sedang diubah.
+  const identitas = d.userId ? `
+  <div style="display:flex;gap:12px;align-items:center;padding:12px 14px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r)">
+    <div class="av" style="width:38px;height:38px;font-size:12.5px">${esc(initials(d.nama))}</div>
+    <div><div style="font-weight:600;font-size:13px">${esc(d.nama)}</div>
+      <div class="hint" style="margin-top:1px">${esc(d.email)}</div></div>
+  </div>` : `
   <div class="f"><label>${t('staffUsers.f.nama')} <span class="req">*</span></label>
     <input id="su_nama" value="${esc(d.nama || '')}">${e('nama')}</div>
   <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.email')} <span class="req">*</span></label>
     <input id="su_email" type="email" value="${esc(d.email || '')}">
     <div class="hint">${esc(t('staffUsers.f.emailHint'))}</div>${e('email')}</div>
   <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.noHp')}</label>
-    <input id="su_hp" inputmode="tel" value="${esc(d.noHp || '')}"></div>`}
+    <input id="su_hp" inputmode="tel" value="${esc(d.noHp || '')}"></div>`;
 
-  <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.peran')} <span class="req">*</span></label>
+  return `
+  ${identitas}
+
+  <div class="f" style="margin-top:16px"><label>${t('staffUsers.f.peran')} <span class="req">*</span></label>
     <select id="su_peran">
       <option value="admin" ${d.peran === 'admin' ? 'selected' : ''}>${esc(t('staffUsers.peran.admin'))}</option>
       <option value="pic_legal" ${d.peran === 'pic_legal' ? 'selected' : ''}>${esc(t('staffUsers.peran.pic_legal'))}</option>
-    </select>
-    <div class="hint">${esc(t('staffUsers.f.peranHint'))}</div></div>
+    </select></div>
+  <div class="warnbox wb-info" style="margin-top:8px">
+    <span class="ic">ⓘ</span><div>${esc(t(ROLE_DESC_STAFF[d.peran]))}</div>
+  </div>
   <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.jabatan')} <span class="req">*</span></label>
     <select id="su_jabatan">${opsiJabatan}</select></div>
   <div class="f" style="margin-top:12px"><label>${t('staffUsers.f.gelar')}</label>

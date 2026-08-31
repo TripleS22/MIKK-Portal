@@ -42,6 +42,7 @@ const ORDER = [
   '20_document_links_pendampingan.sql',
   '21_permit_types_master_data.sql',
   '22_client_org_custom_fields.sql',
+  '23_viewer_readonly_enforcement.sql',
 ];
 
 async function main() {
