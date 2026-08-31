@@ -593,7 +593,13 @@ tbody tr:last-child td{border-bottom:none}
    LOGIN — layar terbelah seperti rancangan referensi
    ===================================================================== */
 .screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--paper)}
-#screenLogin{padding:0;align-items:stretch}
+/* Layar dua-panel penuh (login, daftar calon klien) — TANPA padding
+   parent, supaya .authsplit (yang sendiri sudah min-height:100vh) tidak
+   ikut kena tambahan 24px+24px dari .screen di atasnya. Sebelumnya
+   cuma #screenLogin yang dapat override ini -- #screenRegister
+   terlewat, jadi terlihat "tidak fit" (ada bingkai abu-abu di sekeliling
+   panelnya, halamannya jadi 48px lebih tinggi dari viewport). */
+.screen-split{padding:0;align-items:stretch}
 .authsplit{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);width:100%;min-height:100vh}
 @media (max-width:860px){.authsplit{grid-template-columns:1fr}.authbrand{display:none}}
 .authbrand{
