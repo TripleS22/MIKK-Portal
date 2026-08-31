@@ -43,6 +43,7 @@ const ORDER = [
   '21_permit_types_master_data.sql',
   '22_client_org_custom_fields.sql',
   '23_viewer_readonly_enforcement.sql',
+  '24_detail_staf.sql',
 ];
 
 async function main() {

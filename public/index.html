@@ -703,6 +703,71 @@
         </div>
       </div>
 
+      <!-- ============================ DETAIL STAF ============================ -->
+      <div id="secStaffDetail" style="display:none">
+        <div class="panel" style="margin-bottom:18px">
+          <div style="padding:20px;display:flex;gap:18px;align-items:center;flex-wrap:wrap">
+            <div style="position:relative;flex:none">
+              <div class="av" id="sdFotoWrap" style="width:64px;height:64px;font-size:20px;overflow:hidden">—</div>
+              <label class="iconbtn" style="position:absolute;bottom:-4px;right:-4px;background:var(--surface);border:1px solid var(--line);cursor:pointer" title="Ganti foto">
+                <input type="file" id="sdFotoInput" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </label>
+            </div>
+            <div style="flex:1;min-width:180px">
+              <h2 id="sdNama" style="font-family:var(--serif);font-size:20px;margin:0 0 3px">—</h2>
+              <div class="hint" id="sdSub">—</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn ghost" id="sdEditBtn" data-i18n="staffDetail.edit">Edit</button>
+              <button class="btn ghost" id="sdResetBtn" data-i18n="team.resetPass">Terbitkan kata sandi baru</button>
+            </div>
+          </div>
+          <div id="sdNewCred"></div>
+        </div>
+
+        <div class="panel" style="margin-bottom:18px">
+          <div class="panelhead"><div class="ttl2">
+            <h3 data-i18n="staffDetail.casesTitle">Perkara yang Ditangani</h3>
+            <p data-i18n="staffDetail.casesDesc">Lintas semua klien firma — perusahaan, perorangan, maupun kelompok.</p>
+          </div></div>
+          <div class="tscroll"><table style="min-width:760px">
+            <thead><tr>
+              <th style="width:34px">#</th>
+              <th data-i18n="staffDetail.th.nomor">Nomor Perkara</th>
+              <th data-i18n="staffDetail.th.klien">Klien</th>
+              <th data-i18n="cases.th.tahap">Tahap</th>
+              <th data-i18n="cases.th.status">Status</th>
+              <th data-i18n="cases.th.sidang">Sidang Terdekat</th>
+            </tr></thead>
+            <tbody id="sdCasesBody"></tbody>
+          </table></div>
+          <div class="empty" id="sdCasesEmpty" style="display:none">
+            <h3 data-i18n="staffDetail.casesEmpty.title">Belum ada perkara</h3>
+            <p data-i18n="staffDetail.casesEmpty.desc">Staf ini belum menjadi PIC perkara mana pun.</p>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:18px">
+          <div class="panelhead"><div class="ttl2"><h3 data-i18n="lampiran.title">Dokumen Terkait</h3></div></div>
+          <div style="padding:18px" id="sdDocs"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panelhead"><div class="ttl2">
+            <h3 data-i18n="staffDetail.notesTitle">Riwayat</h3>
+            <p data-i18n="staffDetail.notesDesc">Catatan bertanggal — mis. promosi, pelatihan, evaluasi. Cuma bisa ditambah, bukan diedit/dihapus.</p>
+          </div></div>
+          <div style="padding:18px">
+            <div style="display:flex;gap:9px;margin-bottom:16px">
+              <input id="sdNoteInput" style="flex:1" data-i18n-ph="staffDetail.notePh" placeholder="Tulis catatan baru...">
+              <button class="btn gold" id="sdNoteAddBtn" data-i18n="staffDetail.noteAdd">Tambah</button>
+            </div>
+            <div id="sdNotesList"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ============================ ARSIP DOKUMEN ============================ -->
       <div id="secDocs" style="display:none">
         <div class="cards" id="docCards"></div>

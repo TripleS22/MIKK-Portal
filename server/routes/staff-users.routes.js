@@ -164,4 +164,101 @@ router.post('/:userId/reset-password', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ---------------------------------------------------------------------
+// GET /api/staff-users/:userId/cases — perkara yang PIC-nya staf ini,
+// LINTAS jenis klien (perusahaan/perorangan/kelompok) dan lintas SEMUA
+// klien firma (bukan cuma satu workspace) -- ini yang dilihat admin di
+// halaman Detail Staf untuk memantau beban kerja/proses staf tsb.
+// req.user.id di sini SELALU admin (seluruh router wajibAdminMikk),
+// jadi is_mikk_admin() di RLS cases_baca (db/24) meloloskan semuanya
+// terlepas siapa pic_legal_id-nya -- filter pic_legal_id=$1 di WHERE
+// inilah yang benar-benar mempersempit ke staf yang dilihat.
+// ---------------------------------------------------------------------
+router.get('/:userId/cases', async (req, res, next) => {
+  try {
+    const { rows } = await queryAsUser(req.user.id,
+      `select v.id, v.nomor_perkara, v.jenis_perkara, v.tahap, v.status_siklus,
+              coalesce(o.nama_singkat, ic.nama, cg.nama_kelompok) as klien_nama,
+              case when v.client_org_id is not null then 'perusahaan'
+                   when v.individual_client_id is not null then 'perorangan'
+                   else 'kelompok' end as klien_tipe,
+              v.sidang_terdekat_tanggal, v.hari_ke_sidang
+         from v_cases_display v
+         left join client_orgs o on o.id = v.client_org_id
+         left join individual_clients ic on ic.id = v.individual_client_id
+         left join client_groups cg on cg.id = v.client_group_id
+        where v.pic_legal_id = $1
+        order by v.sidang_terdekat_tanggal nulls last, v.status_siklus`,
+      [req.params.userId]);
+    res.json({ rows });
+  } catch (err) { next(err); }
+});
+
+// ---------------------------------------------------------------------
+// Riwayat staf — catatan bertanggal, cuma bisa DITAMBAH (bukan
+// diedit/dihapus, lihat db/24_detail_staf.sql).
+// ---------------------------------------------------------------------
+router.get('/:userId/notes', async (req, res, next) => {
+  try {
+    const { rows } = await queryAsUser(req.user.id,
+      `select n.id, n.isi, n.created_at, u.nama as created_by_nama
+         from staff_notes n left join users u on u.id = n.created_by
+        where n.user_id = $1 order by n.created_at desc`,
+      [req.params.userId]);
+    res.json({ rows });
+  } catch (err) { next(err); }
+});
+
+router.post('/:userId/notes', async (req, res, next) => {
+  const isi = String((req.body || {}).isi || '').trim();
+  if (!isi) return res.status(400).json({ error: 'Isi catatan wajib diisi.' });
+  try {
+    const { rows } = await queryAsUser(req.user.id,
+      `insert into staff_notes (user_id, isi, created_by) values ($1,$2,$3) returning id`,
+      [req.params.userId, isi, req.user.id]);
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { next(err); }
+});
+
+// ---------------------------------------------------------------------
+// Foto profil — SATU file terkini per staf (bukan arsip dokumen, lihat
+// catatan db/24_detail_staf.sql), disimpan lewat storage.js yang sama
+// dipakai dokumen biasa, jalur terpisah (foto/{userId}.{ext}) supaya
+// gampang ditimpa tiap diganti (bukan menumpuk versi lama).
+// ---------------------------------------------------------------------
+const multer = require('multer');
+const path = require('path');
+const uploadFoto = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const MIME_PER_EKSTENSI = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+
+router.post('/:userId/photo', uploadFoto.single('file'), async (req, res, next) => {
+  if (!req.file) return res.status(400).json({ error: 'Berkas foto wajib diunggah.' });
+  const ext = (path.extname(req.file.originalname) || '.jpg').toLowerCase();
+  if (!MIME_PER_EKSTENSI[ext]) return res.status(400).json({ error: 'Format foto tidak didukung — pakai JPG, PNG, WEBP, atau GIF.' });
+  try {
+    const { putFile } = require('../lib/storage');
+    const fotoPath = `foto/${req.params.userId}${ext}`;
+    const { rows } = await queryAsUser(req.user.id,
+      'update users set foto_path = $1 where id = $2 returning id', [fotoPath, req.params.userId]);
+    if (!rows.length) return res.status(404).json({ error: 'Staf tidak ditemukan.' });
+    await putFile(fotoPath, req.file.buffer);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.get('/:userId/photo', async (req, res, next) => {
+  try {
+    const { rows } = await queryAsUser(req.user.id,
+      'select foto_path from users where id = $1', [req.params.userId]);
+    if (!rows.length || !rows[0].foto_path) return res.status(404).json({ error: 'Belum ada foto.' });
+    const { getFileBuffer } = require('../lib/storage');
+    const buf = await getFileBuffer(rows[0].foto_path);
+    if (!buf) return res.status(404).json({ error: 'Berkas foto tidak ditemukan di penyimpanan.' });
+    const ext = path.extname(rows[0].foto_path).toLowerCase();
+    res.setHeader('Content-Type', MIME_PER_EKSTENSI[ext] || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.send(buf);
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

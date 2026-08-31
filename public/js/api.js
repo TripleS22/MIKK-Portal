@@ -92,6 +92,24 @@ const Api = (() => {
     createStaffUser: (body) => call('/staff-users', { method: 'POST', body }),
     updateStaffUser: (userId, body) => call(`/staff-users/${userId}`, { method: 'PATCH', body }),
     resetStaffPassword: (userId) => call(`/staff-users/${userId}/reset-password`, { method: 'POST' }),
+    staffCases: (userId) => call(`/staff-users/${userId}/cases`),
+    staffNotes: (userId) => call(`/staff-users/${userId}/notes`),
+    addStaffNote: (userId, isi) => call(`/staff-users/${userId}/notes`, { method: 'POST', body: { isi } }),
+    uploadStaffPhoto: async (userId, file) => {
+      const fd = new FormData(); fd.append('file', file);
+      const headers = {}; if (token()) headers.Authorization = 'Bearer ' + token();
+      const res = await fetch(BASE + `/staff-users/${userId}/photo`, { method: 'POST', headers, body: fd });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((data && data.error) || 'Gagal mengunggah foto.');
+      return data;
+    },
+    // null kalau memang belum ada foto (404) -- bukan error, cukup jatuh ke inisial.
+    staffPhotoBlob: async (userId) => {
+      const headers = {}; if (token()) headers.Authorization = 'Bearer ' + token();
+      const res = await fetch(BASE + `/staff-users/${userId}/photo`, { headers });
+      if (!res.ok) return null;
+      return res.blob();
+    },
 
     permits: (clientOrgId) => call('/permits', { qs: { clientOrgId } }),
     permitsDashboard: (clientOrgId) => call('/permits/dashboard', { qs: { clientOrgId } }),

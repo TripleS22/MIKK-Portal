@@ -110,24 +110,27 @@ router.post('/:id/preview-link', async (req, res, next) => {
 });
 
 // GET /api/documents?clientOrgId=&entityType=&entityId=
-// atau  ?individualClientId=...   atau  ?clientGroupId=...
+// atau  ?individualClientId=...   atau  ?clientGroupId=...   atau  ?staffUserId=...
+// (staffUserId: dokumen milik STAF, bukan klien -- lihat db/24_detail_staf.sql
+// dan halaman Detail Staf, admin-only lewat RLS documents_baca/tulis)
 router.get('/', async (req, res, next) => {
   try {
-    const { clientOrgId, individualClientId, clientGroupId, entityType, entityId } = req.query;
-    const terisi = [clientOrgId, individualClientId, clientGroupId].filter(Boolean);
+    const { clientOrgId, individualClientId, clientGroupId, staffUserId, entityType, entityId } = req.query;
+    const terisi = [clientOrgId, individualClientId, clientGroupId, staffUserId].filter(Boolean);
     if (terisi.length !== 1) {
-      return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+      return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, clientGroupId, atau staffUserId.' });
     }
 
     const where = [
       'd.client_org_id is not distinct from $1',
       'd.individual_client_id is not distinct from $2',
       'd.client_group_id is not distinct from $3',
+      'd.staff_user_id is not distinct from $4',
     ];
-    const params = [clientOrgId || null, individualClientId || null, clientGroupId || null];
+    const params = [clientOrgId || null, individualClientId || null, clientGroupId || null, staffUserId || null];
     if (entityType && entityId) {
       where.push(`exists (select 1 from document_links l
-                            where l.document_id = d.id and l.entity_type = $4 and l.entity_id = $5)`);
+                            where l.document_id = d.id and l.entity_type = $5 and l.entity_id = $6)`);
       params.push(entityType, entityId);
     }
     const { rows } = await queryAsUser(
@@ -143,16 +146,19 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/documents  (multipart/form-data: file, clientOrgId|individualClientId|clientGroupId,
+// POST /api/documents  (multipart/form-data: file, clientOrgId|individualClientId|clientGroupId|staffUserId,
 //                        kategoriArsip, entityType?, entityId?)
 router.post('/', upload.single('file'), async (req, res, next) => {
   const b = req.body || {};
   if (!req.file) return res.status(400).json({ error: 'Berkas wajib diunggah.' });
 
-  const pemilik = { clientOrgId: b.clientOrgId || null, individualClientId: b.individualClientId || null, clientGroupId: b.clientGroupId || null };
+  const pemilik = {
+    clientOrgId: b.clientOrgId || null, individualClientId: b.individualClientId || null,
+    clientGroupId: b.clientGroupId || null, staffUserId: b.staffUserId || null,
+  };
   const terisi = Object.values(pemilik).filter(Boolean);
   if (terisi.length !== 1) {
-    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, atau clientGroupId.' });
+    return res.status(400).json({ error: 'Sertakan persis satu dari clientOrgId, individualClientId, clientGroupId, atau staffUserId.' });
   }
   const pemilikId = terisi[0];
 
@@ -173,12 +179,12 @@ router.post('/', upload.single('file'), async (req, res, next) => {
     const result = await withUser(req.user.id, async (client) => {
       const { rows } = await client.query(
         `insert into documents
-           (client_org_id, individual_client_id, client_group_id,
+           (client_org_id, individual_client_id, client_group_id, staff_user_id,
             storage_path, nama_file, mime_type, ukuran_byte, sha256,
             kategori_arsip, tahun_arsip, rahasia, uploaded_by)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12)
          returning id`,
-        [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId,
+        [pemilik.clientOrgId, pemilik.individualClientId, pemilik.clientGroupId, pemilik.staffUserId,
          storagePath, req.file.originalname, req.file.mimetype, req.file.size,
          sha256, b.kategoriArsip || null, new Date().getFullYear(), req.user.id]
       );

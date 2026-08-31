@@ -1132,6 +1132,9 @@ const MODULES = [
   // ada tombol sidebar/topbar sendiri (btn: null, switchModuleAll aman
   // terhadap ini, lihat gambarKepalaHalaman/MODULES.forEach di bawah).
   { id: 'companyprofile', sec: 'secCompanyProfile', btn: null, crumb: 'companyProfile.viewTitle', desc: 'companyProfile.pageDesc' },
+  // Dipicu dari klik baris di tabel Staf MIKK -- sama pola dengan
+  // companyprofile di atas (btn: null, tidak ada tombol sidebar sendiri).
+  { id: 'staffdetail', sec: 'secStaffDetail', btn: null, crumb: 'staffDetail.crumb', desc: 'staffDetail.desc' },
 ];
 let modAktif = 'dashboard';
 
@@ -2731,7 +2734,7 @@ function renderStaffUsersTable() {
   $('#staffUsersEmpty').style.display = SU.rows.length ? 'none' : 'block';
   $('#staffUsersBody').innerHTML = SU.rows.map((r, i) => {
     const nonaktif = !r.staff_aktif || !r.user_aktif;
-    return `<tr>
+    return `<tr data-id="${r.user_id}" style="cursor:pointer">
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
       <td>${whoMini(r.nama, null)}</td>
       <td><span class="doc">${esc(r.email)}</span></td>
@@ -2748,6 +2751,13 @@ function renderStaffUsersTable() {
     </tr>`;
   }).join('');
 
+  // Klik pada baris (bukan salah satu ikon aksi-nya) membuka halaman
+  // Detail Staf -- lihat komentar bukaStaffDetail di bawah. Ikon Edit/
+  // Reset Sandi TETAP jalan pintas langsung seperti sebelumnya (tidak
+  // usah lewat Detail Staf dulu kalau cuma mau ganti jabatan/sandi).
+  document.querySelectorAll('#staffUsersBody tr[data-id]').forEach((tr) => {
+    tr.onclick = (e) => { if (!e.target.closest('.rowact')) bukaStaffDetail(tr.dataset.id); };
+  });
   document.querySelectorAll('#staffUsersBody [data-edit]').forEach((b) => {
     b.onclick = () => bukaStaffDrawer(SU.rows.find((r) => r.user_id === b.dataset.edit));
   });
@@ -2881,17 +2891,107 @@ async function simpanStaff() {
   } finally { btn.disabled = false; btn.textContent = t('common.save'); }
 }
 
-async function resetSandiStaf(userId, nama) {
+async function resetSandiStaf(userId, nama, targetId) {
   if (!(await confirmDialog(t('staffUsers.resetConfirm', { nama }), { okText: t('staffUsers.resetPw') }))) return;
   try {
     const { kataSandiAwal } = await Api.resetStaffPassword(userId);
     const baris = SU.rows.find((r) => r.user_id === userId);
-    tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal, 'staffNewCred');
+    tampilkanKredensial(nama, baris ? baris.email : '', kataSandiAwal, targetId || 'staffNewCred');
     toast(t('staffUsers.resetDone'), 'success');
   } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 
 $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
+
+/* ================================================================
+   DETAIL STAF — dipicu klik baris di tabel Staf MIKK. Halaman penuh
+   (bukan drawer, sama pola dengan Profil Perusahaan) karena isinya
+   banyak: identitas+foto, perkara yang ditangani (lintas SEMUA klien
+   firma -- bukan cuma satu workspace, beda dari modul Litigasi &
+   Sidang biasa yang org-only), dokumen (CV/KTP/sertifikat dst, lewat
+   renderLampiranPanel yang sama dipakai modul lain -- owner staffUserId
+   baru, lihat db/24_detail_staf.sql), dan riwayat (catatan bertanggal,
+   cuma bisa ditambah).
+   ================================================================ */
+async function bukaStaffDetail(userId) {
+  switchModuleAll('staffdetail');
+  // gen DIAMBIL SETELAH switchModuleAll, bukan sebelum -- switchModuleAll
+  // sendiri memanggil tutupDrawer()/tutupPermitDrawer()/tutupAuxDrawer()
+  // di awal, yang MENAIKKAN navGen sebagai efek samping. Kalau diambil
+  // sebelumnya, gen langsung tidak pernah sama dengan navGen begitu
+  // await pertama selesai -- guard-nya jadi selalu membatalkan diri.
+  const gen = navGen;
+  const row = SU.rows.find((r) => r.user_id === userId);
+  if (!row) { toast(t('staffDetail.notFound'), 'error'); return; }
+
+  $('#sdNama').textContent = row.nama;
+  $('#sdSub').textContent = `${JABATAN_NAMA[row.jabatan] || row.jabatan}${row.gelar ? ', ' + row.gelar : ''} · ${row.email}`;
+  $('#sdFotoWrap').textContent = initials(row.nama);
+
+  $('#sdEditBtn').onclick = () => bukaStaffDrawer(row);
+  $('#sdResetBtn').onclick = () => resetSandiStaf(userId, row.nama, 'sdNewCred');
+  $('#sdFotoInput').onchange = async () => {
+    const file = $('#sdFotoInput').files[0]; if (!file) return;
+    try { await Api.uploadStaffPhoto(userId, file); await muatFotoStaf(userId); toast(t('common.saved'), 'success'); }
+    catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+    finally { $('#sdFotoInput').value = ''; }
+  };
+  $('#sdNoteAddBtn').onclick = async () => {
+    const isi = $('#sdNoteInput').value.trim();
+    if (!isi) return toast(t('staffDetail.err.note'), 'warning');
+    try {
+      await Api.addStaffNote(userId, isi); $('#sdNoteInput').value = '';
+      const { rows } = await Api.staffNotes(userId);
+      renderStaffNotesList(rows);
+    }
+    catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+  };
+
+  await muatFotoStaf(userId);
+  renderLampiranPanel('sdDocs', '', userId, { staffUserId: userId });
+  const [cases, notes] = await Promise.all([
+    Api.staffCases(userId).catch(() => ({ rows: [] })),
+    Api.staffNotes(userId).catch(() => ({ rows: [] })),
+  ]);
+  if (gen !== navGen) return; // pengguna sudah pindah sebelum fetch ini selesai
+  renderStaffCasesTable(cases.rows);
+  renderStaffNotesList(notes.rows);
+}
+async function muatFotoStaf(userId) {
+  const wrap = $('#sdFotoWrap');
+  wrap.style.backgroundImage = ''; wrap.textContent = initials(SU.rows.find((r) => r.user_id === userId)?.nama);
+  try {
+    const blob = await Api.staffPhotoBlob(userId);
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      wrap.style.backgroundImage = `url(${url})`; wrap.style.backgroundSize = 'cover'; wrap.style.backgroundPosition = 'center';
+      wrap.textContent = '';
+    }
+  } catch (e) { /* non-fatal: jatuh ke inisial */ }
+}
+function renderStaffCasesTable(rows) {
+  $('#sdCasesEmpty').style.display = rows.length ? 'none' : 'block';
+  $('#sdCasesBody').innerHTML = rows.map((c, i) => {
+    const sidang = c.sidang_terdekat_tanggal
+      ? `${esc(tglTampil(c.sidang_terdekat_tanggal))}${c.hari_ke_sidang != null ? ` <span class="days ${c.hari_ke_sidang <= 7 ? 'soon' : ''}">(${t('common.daysLeft', { n: c.hari_ke_sidang })})</span>` : ''}`
+      : `<span style="color:var(--muted-2)">${esc(t('cases.belumDijadwalkan'))}</span>`;
+    return `<tr>
+      <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
+      <td><div class="ttl">${esc(c.nomor_perkara)}</div>${c.jenis_perkara ? `<div class="sub">${esc(c.jenis_perkara)}</div>` : ''}</td>
+      <td>${esc(c.klien_nama || '—')}<div class="sub">${esc(t('staffDetail.klienTipe.' + c.klien_tipe))}</div></td>
+      <td><span class="tag">${esc(TAHAP_NAMA[c.tahap] || c.tahap)}</span></td>
+      <td><span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span></td>
+      <td>${sidang}</td>
+    </tr>`;
+  }).join('');
+}
+function renderStaffNotesList(rows) {
+  $('#sdNotesList').innerHTML = rows.length ? rows.map((n) => `
+    <div style="padding:10px 0;border-top:1px solid var(--line)">
+      <div class="hint">${esc(tglTampil(n.created_at.slice(0,10)))} · ${esc(n.created_by_nama || '—')}</div>
+      <div style="margin-top:3px">${esc(n.isi)}</div>
+    </div>`).join('') : `<p class="hint">${esc(t('staffDetail.notesKosong'))}</p>`;
+}
 
 /* ================================================================
    KLIEN BARU — buat organisasi client_orgs baru. Bukan halaman/modul
