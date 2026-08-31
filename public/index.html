@@ -597,10 +597,19 @@
         <div id="teamNewCred"></div>
         <div class="cards" id="teamCards"></div>
         <div class="bar">
+          <div class="seg">
+            <button id="teamVCards" data-i18n="kontrak.view.cards">Kartu</button>
+            <button id="teamVTable" data-i18n="kontrak.view.table">Tabel</button>
+          </div>
           <div style="flex:1"></div>
           <button class="btn ghost" id="addKlienBaruBtn" style="display:none" data-i18n="klienBaru.tombol">+ Klien Baru</button>
           <button class="btn gold" id="addTeamBtn" data-i18n="team.add">+ Tambah Pengguna</button>
         </div>
+        <div id="teamViewCards" style="display:none">
+          <div class="kcard-grid" id="teamKcardGrid"></div>
+          <div class="empty" id="teamKcardEmpty" style="display:none"></div>
+        </div>
+        <div id="teamViewTable" style="display:none">
         <div class="panel">
           <div class="tscroll"><table style="min-width:820px">
             <thead><tr>
@@ -618,6 +627,7 @@
             <h3 data-i18n="team.empty.title">Belum ada pengguna</h3>
             <p data-i18n="team.empty.desc">Tambahkan pengguna pertama lewat tombol di atas.</p>
           </div>
+        </div>
         </div>
       </div>
 
@@ -835,6 +845,17 @@
             <div class="hint" id="docUploadHint" style="margin-top:6px;font-size:11px;color:var(--muted-2)"></div>
           </div>
         </div>
+        <div class="bar">
+          <div class="seg">
+            <button id="docVCards" data-i18n="kontrak.view.cards">Kartu</button>
+            <button id="docVTable" data-i18n="kontrak.view.table">Tabel</button>
+          </div>
+        </div>
+        <div id="docViewCards" style="display:none">
+          <div class="kcard-grid" id="docKcardGrid"></div>
+          <div class="empty" id="docKcardEmpty" style="display:none"></div>
+        </div>
+        <div id="docViewTable" style="display:none">
         <div class="panel">
           <div class="tscroll"><table style="min-width:760px">
             <thead><tr>
@@ -846,6 +867,7 @@
           <div class="empty" id="docEmpty" style="display:none">
             <h3 data-i18n="docs.empty.title">Belum ada dokumen diunggah</h3><p data-i18n="docs.empty.desc">Unggah berkas pertama lewat formulir di atas.</p>
           </div>
+        </div>
         </div>
       </div>
 

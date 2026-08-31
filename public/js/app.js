@@ -356,7 +356,7 @@ async function enterWorkspace(ws) {
   // keduanya tetap bisa saling pindah lewat toggle Kartu/Tabel di atas,
   // ini cuma titik AWAL yang beda per audiens.
   S.view = adalahStafMikk(ws.tipe) ? 'table' : 'cards';
-  P.view = S.view; CS.view = S.view; PJ.view = S.view; PD.view = S.view;
+  P.view = S.view; CS.view = S.view; PJ.view = S.view; PD.view = S.view; DC.view = S.view; TM.view = S.view;
   // Tarif hanya relevan bagi Managing Partner. Menyembunyikan tombolnya
   // bukan pengamanan — RLS yang menahan penulisan; ini sekadar tidak
   // menawarkan pintu yang memang terkunci.
@@ -2073,7 +2073,7 @@ $('#addPendampinganBtn').onclick = () => bukaPendampinganDrawer(null);
 /* ================================================================
    MODUL ARSIP DOKUMEN
    ================================================================ */
-const DC = { rows: [], loaded: false };
+const DC = { rows: [], loaded: false, view: 'table' };
 function fmtUkuran(bytes) {
   bytes = Number(bytes);
   if (bytes < 1024) return bytes + ' B';
@@ -2085,7 +2085,7 @@ async function muatDocsSemua() {
   try {
     const list = await Api.documents(S.ws.client_org_id);
     DC.rows = list.rows; DC.loaded = true;
-    renderDocCards(); renderDocTable();
+    renderDocCards(); renderDocView();
   } catch (err) { showApiErr(err.message || t('docs.loadError')); }
 }
 function renderDocCards() {
@@ -2119,6 +2119,45 @@ function renderDocTable() {
     btn.onclick = () => bukaPreviewDokumen(btn.dataset.preview, btn.dataset.mime, btn.dataset.fn);
   });
 }
+function renderDocView() {
+  $('#docViewCards').style.display = DC.view === 'cards' ? 'block' : 'none';
+  $('#docViewTable').style.display = DC.view === 'table' ? 'block' : 'none';
+  $('#docVCards').classList.toggle('on', DC.view === 'cards');
+  $('#docVTable').classList.toggle('on', DC.view === 'table');
+  if (DC.view === 'cards') renderDocKcards(); else renderDocTable();
+}
+// Beda dari kcard modul lain (kontrak/permits/dst): dokumen tidak punya
+// drawer View untuk diklik -- aksinya langsung Pratinjau/Unduh, sama
+// seperti kolom Aksi di tabel. Jadi bukan <button class="kcard"> yang
+// utuh bisa diklik (nested <button> juga tidak valid HTML), tapi <div>
+// biasa berisi dua tombol aksi, cursor default (bukan pointer).
+function renderDocKcards() {
+  $('#docKcardEmpty').style.display = DC.rows.length ? 'none' : 'block';
+  $('#docKcardEmpty').innerHTML = `<h3>${esc(t('docs.empty.title'))}</h3><p>${esc(t('docs.empty.desc'))}</p>`;
+  $('#docKcardGrid').innerHTML = DC.rows.map((d) => `<div class="kcard" style="cursor:default">
+      <div class="kcard-top">
+        ${d.kategori_arsip ? `<span class="tag">${esc(d.kategori_arsip)}</span>` : '<span></span>'}
+        <span class="sub">${fmtUkuran(d.ukuran_byte)}</span>
+      </div>
+      <h4>${esc(d.nama_file)}</h4>
+      <div class="kcard-dates">${esc(tglTampil(d.uploaded_at.slice(0,10)))} · ${esc(d.uploaded_by_nama || '—')}</div>
+      <div style="display:flex;gap:8px;margin-top:2px">
+        <button class="btn ghost" data-preview="${d.id}" data-mime="${esc(d.mime_type || '')}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${t('docs.preview')}</button>
+        <button class="btn ghost" data-dl="${d.id}" data-fn="${esc(d.nama_file)}" style="padding:5px 8px;font-size:11px">${t('docs.download')}</button>
+      </div>
+    </div>`).join('');
+  document.querySelectorAll('#docKcardGrid button[data-dl]').forEach((btn) => {
+    btn.onclick = async () => {
+      try { await Api.downloadDocument(btn.dataset.dl, btn.dataset.fn); }
+      catch (e) { toast(e.message || t('docs.downloadFail'), 'error'); }
+    };
+  });
+  document.querySelectorAll('#docKcardGrid button[data-preview]').forEach((btn) => {
+    btn.onclick = () => bukaPreviewDokumen(btn.dataset.preview, btn.dataset.mime, btn.dataset.fn);
+  });
+}
+$('#docVCards').onclick = () => { DC.view = 'cards'; renderDocView(); };
+$('#docVTable').onclick = () => { DC.view = 'table'; renderDocView(); };
 $('#docUploadBtn').onclick = async () => {
   const fileEl = $('#docFile'), hint = $('#docUploadHint');
   if (!fileEl.files.length) { hint.textContent = t('docs.uploadHint.pilih'); return; }
@@ -2732,21 +2771,20 @@ $('#addRateBtn').onclick = () => bukaTarifDrawer(null);
    tempat di antarmuka ini yang bisa menampilkannya lagi — kalau hilang,
    jalannya adalah menerbitkan yang baru.
    ================================================================ */
-const TM = { rows: [], loaded: false, bolehKelola: false, draft: null };
+const TM = { rows: [], loaded: false, bolehKelola: false, draft: null, view: 'table' };
 
 async function muatTimSemua() {
   showApiErr('');
   try {
     const { rows, bolehKelola } = await Api.clientUsers(S.ws.client_org_id);
     TM.rows = rows; TM.bolehKelola = bolehKelola; TM.loaded = true;
-    renderTimTable();
+    renderTimView();
   } catch (err) { showApiErr(err.message || t('team.loadError')); }
 }
 
-function renderTimTable() {
+function renderTimView() {
   $('#addTeamBtn').style.display = TM.bolehKelola ? 'inline-flex' : 'none';
   $('#teamNote').style.display = TM.bolehKelola ? 'none' : 'flex';
-  $('#teamEmpty').style.display = TM.rows.length ? 'none' : 'block';
 
   const n = (p) => TM.rows.filter((r) => r.peran === p).length;
   $('#teamCards').innerHTML = [
@@ -2756,16 +2794,66 @@ function renderTimTable() {
       'acc-ok', t('team.card.aktif.note'), 'check'),
   ].join('');
 
-  $('#teamBody').innerHTML = TM.rows.map((r, i) => {
-    const nonaktif = !r.membership_aktif || !r.user_aktif;
-    const aksi = TM.bolehKelola ? `<div class="rowact">
+  $('#teamViewCards').style.display = TM.view === 'cards' ? 'block' : 'none';
+  $('#teamViewTable').style.display = TM.view === 'table' ? 'block' : 'none';
+  $('#teamVCards').classList.toggle('on', TM.view === 'cards');
+  $('#teamVTable').classList.toggle('on', TM.view === 'table');
+  if (TM.view === 'cards') renderTimKcards(); else renderTimTable();
+}
+function renderTimAksiHTML(r) {
+  return TM.bolehKelola ? `<div class="rowact">
       <button class="iconbtn" data-edit="${r.membership_id}" title="${esc(t('team.editRole'))}">
         <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
       <button class="iconbtn" data-akses="${r.user_id}" data-nama="${esc(r.nama)}" data-tulis-default="${r.peran !== 'viewer'}" title="${esc(t('kelolaAkses.tombol'))}">
         <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 15v3"/></svg></button>
       <button class="iconbtn" data-reset="${r.user_id}" data-nama="${esc(r.nama)}" title="${esc(t('team.resetPass'))}">
         <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
-    </div>` : '<span style="color:var(--muted-2)">—</span>';
+    </div>` : '';
+}
+function pasangAksiTimHandler(scopeSel) {
+  document.querySelectorAll(scopeSel + ' [data-edit]').forEach((b) => {
+    b.onclick = () => bukaTimDrawer(TM.rows.find((r) => r.membership_id === b.dataset.edit));
+  });
+  document.querySelectorAll(scopeSel + ' [data-akses]').forEach((b) => {
+    b.onclick = () => bukaKelolaAksesDrawer(b.dataset.akses, b.dataset.nama, b.dataset.tulisDefault === 'true');
+  });
+  document.querySelectorAll(scopeSel + ' [data-reset]').forEach((b) => {
+    b.onclick = () => resetSandi(b.dataset.reset, b.dataset.nama);
+  });
+}
+function renderTimKcards() {
+  $('#teamKcardEmpty').style.display = TM.rows.length ? 'none' : 'block';
+  $('#teamKcardEmpty').innerHTML = `<h3>${esc(t('team.empty.title'))}</h3><p>${esc(t('team.empty.desc'))}</p>`;
+  $('#teamKcardGrid').innerHTML = TM.rows.map((r) => {
+    const nonaktif = !r.membership_aktif || !r.user_aktif;
+    return `<div class="kcard" style="cursor:default">
+      <div class="kcard-top">
+        <span class="tag">${esc(PERAN_LABEL[r.peran] || r.peran)}</span>
+        <span class="pill ${nonaktif ? 'p-tidak_dipantau' : 'p-aman'}">${esc(nonaktif ? t('team.nonaktif') : t('team.aktif'))}</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="av" style="width:34px;height:34px;font-size:11.5px;flex:none">${esc(initials(r.nama))}</div>
+        <div style="min-width:0">
+          <h4 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.nama)}</h4>
+          <div class="sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.email)}</div>
+        </div>
+      </div>
+      <div class="kcard-meta">${r.punya_sandi
+        ? `<span class="pill p-aman">${esc(t('team.sandiAda'))}</span>`
+        : `<span class="pill p-peringatan">${esc(t('team.sandiBelum'))}</span>`}</div>
+      ${renderTimAksiHTML(r)}
+    </div>`;
+  }).join('');
+  pasangAksiTimHandler('#teamKcardGrid');
+}
+$('#teamVCards').onclick = () => { TM.view = 'cards'; renderTimView(); };
+$('#teamVTable').onclick = () => { TM.view = 'table'; renderTimView(); };
+
+function renderTimTable() {
+  $('#teamEmpty').style.display = TM.rows.length ? 'none' : 'block';
+  $('#teamBody').innerHTML = TM.rows.map((r, i) => {
+    const nonaktif = !r.membership_aktif || !r.user_aktif;
+    const aksi = renderTimAksiHTML(r) || '<span style="color:var(--muted-2)">—</span>';
     return `<tr>
       <td style="color:var(--muted-2);font-family:var(--mono);font-size:11px">${i + 1}</td>
       <td>${whoMini(r.nama, null)}</td>
@@ -2779,16 +2867,7 @@ function renderTimTable() {
       <td>${aksi}</td>
     </tr>`;
   }).join('');
-
-  document.querySelectorAll('#teamBody [data-edit]').forEach((b) => {
-    b.onclick = () => bukaTimDrawer(TM.rows.find((r) => r.membership_id === b.dataset.edit));
-  });
-  document.querySelectorAll('#teamBody [data-akses]').forEach((b) => {
-    b.onclick = () => bukaKelolaAksesDrawer(b.dataset.akses, b.dataset.nama, b.dataset.tulisDefault === 'true');
-  });
-  document.querySelectorAll('#teamBody [data-reset]').forEach((b) => {
-    b.onclick = () => resetSandi(b.dataset.reset, b.dataset.nama);
-  });
+  pasangAksiTimHandler('#teamBody');
 }
 
 /* Menampilkan kredensial sekali, dengan peringatan bahwa ini satu-satunya
