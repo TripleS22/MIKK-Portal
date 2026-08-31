@@ -369,6 +369,90 @@ tbody tr:last-child td{border-bottom:none}
 .kcard-flag{display:flex;gap:6px;align-items:flex-start;font-size:11px;color:var(--warn);background:var(--warn-sf);padding:6px 8px;border-radius:7px}
 
 /* =====================================================================
+   KARTU PERJALANAN — tampilan sisi klien (lihat jcardHTML di app.js)
+
+   Bedanya dengan .kcard di atas bukan sekadar gaya: .kcard menampilkan
+   field yang sama dengan tabel, .jcard menampilkan POSISI dan LANGKAH
+   BERIKUTNYA. Urutan isinya tetap sama di semua modul (judul → langkah
+   → persen → berikutnya) supaya pindah modul tidak perlu belajar tata
+   letak baru.
+   ===================================================================== */
+.jcard-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;padding:2px 2px 14px}
+.jcard{
+  text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 18px 0;display:flex;flex-direction:column;gap:12px;cursor:pointer;font-family:inherit;
+  transition:box-shadow .12s,border-color .12s;
+}
+.jcard:hover{box-shadow:var(--shadow);border-color:var(--gold-line)}
+.jc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.jc-ttl{min-width:0;flex:1}
+.jcard h4{font-family:var(--serif);font-size:15px;font-weight:600;margin:0;line-height:1.35;color:var(--ink)}
+.jc-sub{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.45}
+
+/* Penunjuk langkah. Garis penyambungnya dibuat dari ::before tiap
+   langkah (bukan elemen terpisah) supaya jumlah langkah bebas ikut
+   Master Data tanpa markup tambahan. */
+.jsteps{display:flex;align-items:flex-start;gap:0;min-width:0}
+.jstep{flex:1;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
+.jstep::before{
+  content:"";position:absolute;top:7px;right:50%;left:-50%;height:2px;background:var(--line);
+}
+.jstep:first-child::before{display:none}
+.jstep.done::before,.jstep.now::before{background:var(--ok)}
+.jdot{
+  position:relative;z-index:1;width:16px;height:16px;border-radius:50%;flex:none;
+  background:var(--surface);border:2px solid var(--line);
+  display:grid;place-items:center;font-size:9px;line-height:1;color:#fff;font-weight:700;
+}
+.jstep.done .jdot{background:var(--ok);border-color:var(--ok)}
+.jstep.now .jdot{background:var(--gold);border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-sf)}
+.jlbl{
+  font-size:10px;line-height:1.25;color:var(--muted-2);text-align:center;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.jstep.now .jlbl{color:var(--gold-dk);font-weight:600}
+.jstep.done .jlbl{color:var(--muted)}
+/* Versi ringkas (di kartu): titik saja, tanpa label sama sekali.
+   Sembilan tahap perkara dibagi selebar kartu menyisakan ~35px per
+   langkah — label apa pun jadi terpotong ("Medi…", "Persi…"), yang
+   lebih buruk daripada tidak ada label. Nama tahap yang sedang
+   berjalan sudah disebut utuh di .jc-now sebelah persen, dan nama
+   tahap lain tetap muncul lewat atribut title. */
+.jsteps.ringkas .jlbl{display:none}
+.jsteps.ringkas .jstep{gap:0}
+.jsteps.off{padding:2px 0}
+.joff{font-size:11.5px;color:var(--muted-2);font-style:italic}
+
+.jc-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.jc-bar .prog{flex:1;min-width:120px}
+.jc-now{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* Baris "berikutnya" — satu-satunya kalimat di kartu, sengaja diberi
+   latar sendiri dan menempel di dasar kartu supaya jadi hal terakhir
+   yang dibaca dan paling gampang dipindai antar kartu. */
+.jc-next{
+  display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);
+  margin:0 -18px;padding:10px 18px;border-top:1px solid var(--line);background:var(--paper);
+  border-radius:0 0 var(--r) var(--r);
+}
+.jc-next svg{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round}
+.jc-next span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jc-next.segera{color:var(--warn);background:var(--warn-sf);border-top-color:var(--warn-line,var(--line))}
+.jc-next.lewat{color:var(--crit);background:var(--crit-sf);border-top-color:var(--crit-line,var(--line))}
+
+/* Penunjuk langkah versi drawer — semua langkah berlabel (ruangnya
+   cukup di sini, tidak seperti di kartu), diberi latar sendiri supaya
+   terbaca sebagai "posisi", bukan sebagai salah satu field di bawahnya. */
+.dstage{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:16px 14px 12px;margin-bottom:16px}
+.dstage .jsteps{overflow-x:auto}
+/* Di drawer labelnya boleh membungkus dua baris, bukan dipotong
+   ellipsis: "Persidangan"/"Pembuktian" kalau dipotong jadi
+   "Persidan…"/"Pembukt…" yang tidak bisa dibedakan sekilas. Kalau
+   sembilan langkah tetap tidak muat, .jsteps di atas yang menggesernya. */
+.dstage .jstep{min-width:58px}
+.dstage .jlbl{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.2;hyphens:auto}
+
+/* =====================================================================
    DONUT + LEGENDA
    ===================================================================== */
 .donutwrap{display:flex;align-items:center;gap:18px;padding:16px 18px;flex-wrap:wrap}
@@ -673,6 +757,70 @@ tbody tr:last-child td{border-bottom:none}
   .orgpick{padding:7px 9px}
   .wrap{padding:18px 16px 60px}
   .pagehead h2{font-size:25px}
+}
+
+/* Di bawah ~700px sebelumnya tidak ada aturan sama sekali: sidebar yang
+   sudah jadi bar atas tetap memaksa satu baris tombol, kartu statistik
+   masih minta 212px per kolom, drawer masih 520px, dan baris filter
+   (.bar) menaruh pencarian + tiga dropdown + tombol dalam satu baris —
+   semuanya melebar melewati layar sehingga halaman bisa digeser ke
+   samping. Blok ini menutup itu: apa pun yang tadinya berdampingan
+   ditumpuk, apa pun yang lebar dibuat ikut lebar layar. */
+@media (max-width:700px){
+  .wrap{padding:14px 12px 56px}
+  .topbar{height:auto;padding:8px 12px;flex-wrap:wrap;gap:8px}
+  /* Aturan ≤1000px membuat sidebar jadi baris; di layar ponsel merek +
+     nav tidak muat sebaris, jadi nav-nya membungkus dan berubah jadi
+     kolom tinggi — satu layar penuh menu sebelum isi halaman kelihatan.
+     Di sini merek ditaruh sendiri di atas, dan nav jadi satu strip yang
+     digeser mendatar: tinggi tetap satu baris, berapa pun modulnya. */
+  .sidebar{flex-direction:column;align-items:stretch;padding:10px 0 0;gap:8px}
+  .sb-brand{padding:0 12px}
+  .sb-nav{
+    flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:0 12px 8px;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  }
+  .sb-nav::-webkit-scrollbar{display:none}
+  .sb-nav button{flex:none;white-space:nowrap;padding:6px 10px;font-size:11.5px}
+  .sb-nav button svg{display:none}
+  .pagehead{gap:10px;margin-bottom:14px}
+  .pagehead h2{font-size:21px}
+  /* Dua kolom kartu statistik, bukan satu -- kartunya pendek, satu
+     kolom cuma memaksa menggulir lebih jauh tanpa jadi lebih terbaca. */
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
+  .card{padding:13px}
+  .jcard-grid,.kcard-grid{grid-template-columns:1fr;gap:10px}
+  /* Baris alat: kolom penuh, tombol/segment melebar -- sasaran sentuh
+     yang layak, dan tidak ada lagi yang menyembul keluar layar. */
+  .bar{flex-direction:column;align-items:stretch;gap:7px}
+  .bar>*{width:100%}
+  .bar .seg{justify-content:stretch}
+  .bar .seg button{flex:1}
+  .bar input,.bar select{width:100%;min-width:0}
+  .panelhead{padding:12px 14px}
+  .foot{padding:10px 12px}
+  .drawer{width:100%;box-shadow:none}
+  .dbody{padding:16px 14px}
+  .dhead,.dfoot{padding:12px 14px}
+  .grid2{grid-template-columns:1fr}
+  /* Sembilan tahap perkara tidak muat di layar ponsel sebagai satu
+     baris titik; dibuat bisa digeser mendatar di dalam kartunya sendiri
+     supaya kartunya tetap tidak melebar. */
+  .jsteps{overflow-x:auto;padding-bottom:2px}
+  .jstep{min-width:34px}
+  .jc-next{font-size:11.5px}
+}
+/* Sengaja TIDAK ada aturan .cards{grid-template-columns:1fr} di sini:
+   kartu statistik itu pendek (satu angka + satu keterangan), satu kolom
+   cuma menaruh empat angka bertumpuk setinggi layar penuh sehingga isi
+   halaman baru muncul setelah menggulir jauh. Dua kolom tetap terbaca
+   sampai lebar 320px. */
+@media (max-width:420px){
+  .card{padding:11px;gap:8px}
+  .card .k{font-size:10.5px}
+  .card .v{font-size:24px}
+  .card .ico{width:32px;height:32px;border-radius:9px}
+  .card .ico svg{width:16px;height:16px}
 }
 
 /* =====================================================================

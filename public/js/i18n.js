@@ -31,6 +31,24 @@ const I18N = {
     'common.noNumberYet': 'belum ada nomor',
     'common.daysAgo': '{n} hari lalu',
     'common.daysLeft': '{n} hari',
+    'common.tahapSaatIni': 'Tahap saat ini: {nama}',
+
+    /* Kartu perjalanan sisi klien (lihat jcardHTML di app.js). Baris
+       "berikutnya" sengaja satu kalimat utuh, bukan potongan label +
+       nilai — supaya terbaca sebagai keterangan, bukan sebagai field. */
+    'journey.tanpaJadwal': 'Belum ada jadwal berikutnya',
+    'journey.tanpaTanggal': 'Tanggal belum ditetapkan',
+    'journey.tanpaBatas': 'Berlaku tanpa batas waktu',
+    'journey.sidangBerikut': 'Sidang berikutnya {tgl} · {sisa} lagi',
+    'journey.perkaraSelesai': 'Perkara sudah selesai',
+    'journey.berlakuSampai': 'Berlaku sampai {tgl} · {sisa}',
+    'journey.kelengkapan': 'Kelengkapan berkas',
+    'journey.masaBerlaku': 'Masa berlaku terpakai',
+    'journey.targetSelesai': 'Target selesai {tgl}',
+    'journey.proyekSelesai': 'Proyek sudah selesai',
+    'journey.tanpaTarget': 'Target selesai belum ditetapkan',
+    'journey.kegiatanPada': 'Kegiatan pada {tgl}',
+    'journey.kegiatanSelesai': 'Kegiatan sudah selesai',
     'common.customOption': 'Lainnya… (isi sendiri)',
     'common.customOptionPh': 'Ketik nilai Anda sendiri',
 
@@ -715,6 +733,21 @@ const I18N = {
     'common.noNumberYet': 'no number yet',
     'common.daysAgo': '{n} days ago',
     'common.daysLeft': '{n} days',
+    'common.tahapSaatIni': 'Current stage: {nama}',
+
+    'journey.tanpaJadwal': 'No next date scheduled yet',
+    'journey.tanpaTanggal': 'Date not set yet',
+    'journey.tanpaBatas': 'Valid indefinitely',
+    'journey.sidangBerikut': 'Next hearing {tgl} · in {sisa}',
+    'journey.perkaraSelesai': 'Case is closed',
+    'journey.berlakuSampai': 'Valid until {tgl} · {sisa}',
+    'journey.kelengkapan': 'Document completeness',
+    'journey.masaBerlaku': 'Validity elapsed',
+    'journey.targetSelesai': 'Target completion {tgl}',
+    'journey.proyekSelesai': 'Project completed',
+    'journey.tanpaTarget': 'Target date not set yet',
+    'journey.kegiatanPada': 'Activity on {tgl}',
+    'journey.kegiatanSelesai': 'Activity completed',
     'common.customOption': 'Other… (type your own)',
     'common.customOptionPh': 'Type your own value',
 
@@ -1393,11 +1426,25 @@ function onLangChange(fn) { LANG_CHANGE_LISTENERS.push(fn); }
 // "kategori:kode" supaya kolom yang namanya sama di tabel berbeda
 // (mis. status_siklus di kontrak vs izin) tidak tercampur.
 let MASTER_DATA_LABELS = {};
+// Urutan kode PER kategori (mis. tahapan perkara) -- dipakai penunjuk
+// progres bergaya "tahapan" (lihat stageTrackerHTML di app.js), supaya
+// urutannya ikut Master Data yang bisa diatur admin, bukan angka
+// tetap di kode. Cuma opsi yang masih aktif yang masuk.
+let MASTER_DATA_URUTAN = {};
 function setMasterDataLabels(rows) {
   MASTER_DATA_LABELS = {};
+  MASTER_DATA_URUTAN = {};
   (rows || []).forEach((r) => {
     MASTER_DATA_LABELS[r.kategori + ':' + r.kode] = { id: r.label_id, en: r.label_en };
+    if (r.aktif) {
+      (MASTER_DATA_URUTAN[r.kategori] = MASTER_DATA_URUTAN[r.kategori] || []).push({ kode: r.kode, urutan: r.urutan });
+    }
   });
+  Object.values(MASTER_DATA_URUTAN).forEach((arr) => arr.sort((a, b) => a.urutan - b.urutan));
+}
+// Daftar kode terurut untuk satu kategori, atau [] kalau belum dimuat.
+function urutanMasterData(kategori) {
+  return (MASTER_DATA_URUTAN[kategori] || []).map((x) => x.kode);
 }
 
 // Proxy yang membuat objek peta label (mis. STATUS_NAMA[kode]) selalu

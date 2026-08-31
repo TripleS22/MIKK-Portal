@@ -108,6 +108,94 @@ function progHTML(pct, state) {
     <span class="pc">${p}%</span></div>`;
 }
 
+/* ================================================================
+   KARTU PERJALANAN — bentuk baku tampilan SISI KLIEN
+
+   Klien bukan sedang mengelola basis data; dia ingin tahu "sudah
+   sampai mana, dan apa berikutnya". Karena itu di portal klien satu
+   baris data TIDAK ditampilkan sebagai baris tabel maupun sebagai
+   kotak berisi field yang sama persis dengan tabel (itu cuma tabel
+   yang dibungkus kotak — tidak menambah apa pun), melainkan sebagai
+   kartu perjalanan dengan tiga hal saja:
+     1. langkah-langkah bertitik: sudah / sedang / belum,
+     2. satu angka persen — seberapa jauh perjalanannya,
+     3. SATU baris "berikutnya" — tanggal/tindakan terdekat.
+   Detail lengkapnya tetap ada, tapi baru muncul saat kartunya diklik
+   (drawer View yang sama dengan sisi staf) — bukan ditumpuk di muka.
+
+   Urutan langkah DIAMBIL DARI Master Data (urutanMasterData(), lihat
+   i18n.js) supaya ikut kalau admin mengubah urutan/namanya — bukan
+   daftar tetap di sini. `keluar` memangkas kode yang bukan langkah
+   maju (mis. 'dibatalkan'/'dicabut' — itu jalan keluar dari alur,
+   bukan tahap berikutnya). Kalau barisnya justru sedang berada di
+   kode semacam itu, penunjuk langkah diganti keterangan singkat:
+   menggambar batang progres untuk perkara yang dibatalkan hanya akan
+   menyesatkan.
+   ================================================================ */
+
+/* Jalur maju satu kategori = urutan Master Data dikurangi kode keluar. */
+function jalurTahap(kategori, keluar) {
+  const buang = new Set(keluar || []);
+  return urutanMasterData(kategori).filter((k) => !buang.has(k));
+}
+
+/* Posisi satu baris pada jalurnya. offJalur = kodenya bukan langkah maju
+   (dibatalkan/dicabut/…) atau tidak dikenal sama sekali. */
+function posisiTahap(kategori, kode, keluar) {
+  const jalur = jalurTahap(kategori, keluar);
+  const idx = jalur.indexOf(kode);
+  if (idx === -1) return { jalur, idx: -1, pct: 0, offJalur: true };
+  return { jalur, idx, pct: Math.round(((idx + 1) / jalur.length) * 100), offJalur: false };
+}
+
+/* Penunjuk langkah bertitik. `ringkas` = versi kartu (titik saja, label
+   hanya untuk langkah yang sedang berjalan); tanpa itu = versi drawer
+   (semua langkah berlabel). */
+function langkahHTML(kategori, kode, namaProxy, opt) {
+  const o = opt || {};
+  const { jalur, idx, offJalur } = posisiTahap(kategori, kode, o.keluar);
+  if (!jalur.length) return '';
+  if (offJalur) {
+    return `<div class="jsteps off"><span class="joff">${esc(namaProxy[kode] || kode || '—')}</span></div>`;
+  }
+  return `<div class="jsteps ${o.ringkas ? 'ringkas' : ''}">` + jalur.map((k, i) => {
+    const done = i < idx, now = i === idx;
+    return `<div class="jstep ${done ? 'done' : ''} ${now ? 'now' : ''}" title="${esc(namaProxy[k] || k)}">
+      <span class="jdot">${done ? '✓' : ''}</span>
+      <span class="jlbl">${esc(namaProxy[k] || k)}</span>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+/* Kartu perjalanan — SATU bentuk dipakai semua modul sisi klien, supaya
+   berpindah modul tidak berarti belajar tata letak baru lagi.
+   o: {id, judul, sub, pill, steps, pct, state, nowLabel, next, nextKuat} */
+function jcardHTML(o) {
+  return `<button class="jcard" data-id="${esc(o.id)}">
+    <div class="jc-head">
+      <div class="jc-ttl">
+        <h4>${esc(o.judul)}</h4>
+        ${o.sub ? `<div class="jc-sub">${esc(o.sub)}</div>` : ''}
+      </div>
+      ${o.pill || ''}
+    </div>
+    ${o.steps || ''}
+    <div class="jc-bar">
+      ${progHTML(o.pct, o.state)}
+      ${o.nowLabel ? `<span class="jc-now">${esc(o.nowLabel)}</span>` : ''}
+    </div>
+    <div class="jc-next ${o.nextKuat || ''}">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <span>${esc(o.next || t('journey.tanpaJadwal'))}</span>
+    </div>
+  </button>`;
+}
+
+/* Pasang handler klik pada satu grid kartu perjalanan. */
+function pasangKlikJcard(sel, fn) {
+  document.querySelectorAll(sel + ' .jcard[data-id]').forEach((b) => { b.onclick = () => fn(b.dataset.id); });
+}
+
 /* Inisial nama untuk avatar. */
 const initials = (nama) => String(nama || '—').trim().split(/\s+/).map((x) => x[0] || '')
   .slice(0, 2).join('').toUpperCase() || '—';
@@ -350,13 +438,21 @@ async function enterWorkspace(ws) {
   $('#whoRole').textContent = PERAN_LABEL[ws.peran] || ws.peran;
   $('#avInit').textContent = initials(S.user.nama);
   $('#sbLabel').textContent = t(adalahStafMikk(ws.tipe) ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
-  // CRM Kontrak: staf tetap default ke tampilan Tabel (alat kerja
-  // sehari-hari, sudah pas). Sisi klien default ke Kartu -- ringkasan
-  // per baris, bukan tabel banyak kolom (lihat renderKontrakCards) --
-  // keduanya tetap bisa saling pindah lewat toggle Kartu/Tabel di atas,
-  // ini cuma titik AWAL yang beda per audiens.
-  S.view = adalahStafMikk(ws.tipe) ? 'table' : 'cards';
+  // Dua audiens, dua cara kerja -- bukan dua tema warna dari data yang
+  // sama:
+  // - Staf MIKK: tabel. Mereka memang mengelola banyak baris sekaligus,
+  //   membandingkan kolom, menyaring, mengurutkan. Tabel itu alat yang
+  //   tepat, dan tetap ada tombol Kartu kalau sesekali perlu.
+  // - Klien: HANYA tampilan perjalanan. Togglenya sengaja tidak
+  //   ditawarkan sama sekali (lihat #viewSegs di bawah) -- selama tabel
+  //   masih bisa dibuka, portal klien hanya jadi panel admin dengan
+  //   kulit lain, dan kartunya cuma jadi tabel yang dibungkus kotak.
+  //   Klien tidak sedang mengelola basis data; yang dia perlukan
+  //   "sampai mana" dan "apa berikutnya" (lihat jcardHTML).
+  S.klienMode = !adalahStafMikk(ws.tipe);
+  S.view = S.klienMode ? 'cards' : 'table';
   P.view = S.view; CS.view = S.view; PJ.view = S.view; PD.view = S.view; DC.view = S.view; TM.view = S.view;
+  document.querySelectorAll('.viewseg').forEach((el) => { el.style.display = S.klienMode ? 'none' : ''; });
   // Tarif hanya relevan bagi Managing Partner. Menyembunyikan tombolnya
   // bukan pengamanan — RLS yang menahan penulisan; ini sekadar tidak
   // menawarkan pintu yang memang terkunci.
@@ -388,6 +484,14 @@ async function enterWorkspace(ws) {
     const sb = $('#' + cfg.sidebarBtn); if (sb) sb.style.display = bLihat ? '' : 'none';
     cfg.tulisBtns.forEach((id) => { const el = $('#' + id); if (el) el.style.display = bTulis ? '' : 'none'; });
   });
+  // "Akun Klien" itu layar administrasi (undang pengguna, reset sandi,
+  // atur akses). Di sisi klien hanya admin_klien yang memang mengurus
+  // itu; legal_manager/viewer tidak, dan menampilkannya pada mereka
+  // membuat portal terasa seperti panel admin padahal semua tombolnya
+  // memang tidak berlaku bagi mereka. Menyembunyikan tombol BUKAN
+  // pengamanan — RLS yang menahan (lihat db/25); ini sekadar tidak
+  // menawarkan pintu yang memang terkunci.
+  $('#modTeamBtn').style.display = (!S.klienMode || ws.peran === 'admin_klien') ? '' : 'none';
   // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
   // Sekarang diakses lewat menu akun di topbar, bukan sidebar (lihat
@@ -865,36 +969,44 @@ function render() {
 async function terapkanFilterLaluRender() {
   await muatDaftar(); render();
 }
-/* Tampilan kartu -- default utk portal klien (lihat enterWorkspace),
-   opsional juga utk staf lewat toggle "Kartu" yang sama. Ringkasan per
-   kartu, bukan tabel banyak kolom; klik kartu = View yang SAMA persis
-   dengan klik baris tabel (bukaDrawerView), tidak ada logika baru di situ. */
+/* Tampilan perjalanan — inilah SATU-SATUNYA tampilan sisi klien
+   (togglenya disembunyikan di enterWorkspace); staf tetap bisa
+   memakainya lewat toggle. Klik kartu = View yang SAMA persis dengan
+   klik baris tabel (bukaDrawerView), tidak ada logika baru di situ.
+
+   Kontrak punya dua hal yang bergerak dan keduanya penting bagi klien:
+   posisinya di siklus (draf → review → aktif → selesai) dan
+   KELENGKAPAN berkasnya. Langkah bertitik memakai yang pertama,
+   batang persen memakai yang kedua — karena kelengkapan itulah yang
+   bisa klien kerjakan sendiri ("berkas apa lagi yang kurang"),
+   sedangkan posisi siklus lebih ditentukan tim legal. */
+const KONTRAK_SIKLUS_KELUAR = ['dibatalkan', 'diputus', 'digantikan'];
 function renderKontrakCards() {
   const { rows, total } = S.list;
   $('#kcardEmpty').style.display = rows.length ? 'none' : 'block';
   $('#kcardEmpty').innerHTML = `<h3>${esc(t('kontrak.empty.title'))}</h3><p>${esc(t('kontrak.empty.desc'))}</p>`;
   $('#kcardGrid').innerHTML = rows.map((c) => {
     const sw = c.status_waktu, d = c.sisa_hari;
-    const sisa = (sw === 'tanpa_batas' || d == null) ? '' : `<span class="days ${d < 0 ? 'neg' : d <= 90 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
-    return `<button class="kcard" data-id="${c.id}">
-      <div class="kcard-top">
-        <span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>
-        ${sisa}
-      </div>
-      <h4>${esc(c.judul)}</h4>
-      <div class="sub">${c.lawan_pihak ? esc(c.lawan_pihak) : esc(t('kontrak.belumDiisi'))}</div>
-      <div class="kcard-meta">
-        ${c.kategori_nama ? `<span class="tag">${esc(c.kategori_nama)}</span>` : ''}
-        ${c.nomor_dokumen ? `<span>${esc(c.nomor_dokumen)}</span>` : ''}
-      </div>
-      <div class="kcard-dates">${c.tanggal_mulai ? esc(tglTampil(c.tanggal_mulai)) : '—'} – ${
-        c.tanggal_berakhir ? esc(tglTampil(c.tanggal_berakhir)) : (c.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—')}</div>
-      ${c.catatan_migrasi ? `<div class="kcard-flag"><span>⚑</span><span>${esc(c.catatan_migrasi)}</span></div>` : ''}
-    </button>`;
+    const lengkap = Math.round((c.skor_kelengkapan || 0) * 100);
+    const next = (sw === 'tanpa_batas' || c.tanpa_batas_waktu)
+      ? t('journey.tanpaBatas')
+      : (c.tanggal_berakhir
+        ? t('journey.berlakuSampai', { tgl: tglTampil(c.tanggal_berakhir), sisa: d != null ? sisaTeks(d) : '' }).trim()
+        : t('journey.tanpaTanggal'));
+    return jcardHTML({
+      id: c.id,
+      judul: c.judul,
+      sub: [c.lawan_pihak || t('kontrak.belumDiisi'), c.kategori_nama].filter(Boolean).join(' · '),
+      pill: `<span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>`,
+      steps: langkahHTML('contracts_status_siklus', c.status_siklus, SIKLUS_NAMA, { ringkas: true, keluar: KONTRAK_SIKLUS_KELUAR }),
+      pct: lengkap,
+      state: lengkap >= 100 ? 'done' : '',
+      nowLabel: t('journey.kelengkapan'),
+      next,
+      nextKuat: d != null && d < 0 ? 'lewat' : d != null && d <= 90 ? 'segera' : '',
+    });
   }).join('');
-  document.querySelectorAll('#kcardGrid [data-id]').forEach((b) => {
-    b.onclick = () => bukaDrawerView(S.list.rows.find((r) => r.id === b.dataset.id));
-  });
+  pasangKlikJcard('#kcardGrid', (id) => bukaDrawerView(S.list.rows.find((r) => r.id === id)));
   const a = (S.page - 1) * S.per;
   $('#kcardCount').textContent = total ? t('kontrak.count', { a: a + 1, b: Math.min(a + S.per, total), total }) : '';
   $('#kcardPg').innerHTML = paginasiHTML(total);
@@ -1055,31 +1167,46 @@ function renderPermitView() {
   $('#permitVTable').classList.toggle('on', P.view === 'table');
   if (P.view === 'cards') renderPermitKcards(); else renderPermitTable();
 }
+/* Izin TIDAK punya jalur tahap yang linear (permits_status_siklus itu
+   keadaan, bukan urutan: aktif / dalam pengurusan / dicabut), jadi
+   kartunya sengaja tanpa penunjuk langkah. Yang benar-benar bergerak
+   di sebuah izin adalah MASA BERLAKUNYA — itulah yang jadi batang
+   persennya: berapa bagian masa berlaku yang sudah terpakai, dengan
+   tanggal kedaluwarsa sebagai "berikutnya". Persen ini dihitung dari
+   tanggal terbit–kedaluwarsa; kalau salah satunya kosong (atau izin
+   tanpa batas waktu) batangnya tidak berarti apa-apa, jadi diisi 0
+   dan barisnya cukup bicara lewat teks "berikutnya". */
+function persenMasaBerlaku(terbit, kedaluwarsa) {
+  if (!terbit || !kedaluwarsa) return null;
+  const a = new Date(terbit).getTime(), b = new Date(kedaluwarsa).getTime();
+  if (!(b > a)) return null;
+  return Math.max(0, Math.min(100, Math.round(((Date.now() - a) / (b - a)) * 100)));
+}
 function renderPermitKcards() {
   $('#permitKcardEmpty').style.display = P.rows.length ? 'none' : 'block';
   $('#permitKcardEmpty').innerHTML = `<h3>${esc(t('permits.empty.title'))}</h3><p>${esc(t('permits.empty.desc'))}</p>`;
   $('#permitKcardGrid').innerHTML = P.rows.map((p) => {
     const sw = p.status_waktu, d = p.sisa_hari;
-    const sisa = (sw === 'tanpa_batas' || d == null) ? '' : `<span class="days ${d < 0 ? 'neg' : d <= 60 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
-    const pic = P.ref?.pic.find((x) => x.id === p.pic_id);
-    return `<button class="kcard" data-id="${p.id}">
-      <div class="kcard-top">
-        <span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>
-        ${sisa}
-      </div>
-      <h4>${esc(p.nama_izin)}</h4>
-      <div class="sub">${esc(p.instansi_penerbit || '—')}</div>
-      <div class="kcard-meta">
-        ${p.nomor_izin ? `<span>${esc(p.nomor_izin)}</span>` : ''}
-        ${pic ? `<span>${esc(pic.nama)}</span>` : ''}
-      </div>
-      <div class="kcard-dates">${p.tanggal_terbit ? esc(tglTampil(p.tanggal_terbit)) : '—'} – ${
-        p.tanggal_kedaluwarsa ? esc(tglTampil(p.tanggal_kedaluwarsa)) : (p.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—')}</div>
-    </button>`;
+    const pakai = persenMasaBerlaku(p.tanggal_terbit, p.tanggal_kedaluwarsa);
+    const next = (sw === 'tanpa_batas' || p.tanpa_batas_waktu)
+      ? t('journey.tanpaBatas')
+      : (p.tanggal_kedaluwarsa
+        ? t('journey.berlakuSampai', { tgl: tglTampil(p.tanggal_kedaluwarsa), sisa: d != null ? sisaTeks(d) : '' }).trim()
+        : t('journey.tanpaTanggal'));
+    return jcardHTML({
+      id: p.id,
+      judul: p.nama_izin,
+      sub: [p.instansi_penerbit, p.nomor_izin].filter(Boolean).join(' · '),
+      pill: `<span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>`,
+      steps: '',
+      pct: pakai == null ? 0 : pakai,
+      state: d != null && d < 0 ? 'late' : '',
+      nowLabel: pakai == null ? '' : t('journey.masaBerlaku'),
+      next,
+      nextKuat: d != null && d < 0 ? 'lewat' : d != null && d <= 60 ? 'segera' : '',
+    });
   }).join('');
-  document.querySelectorAll('#permitKcardGrid [data-id]').forEach((b) => {
-    b.onclick = () => bukaPermitDrawerView(P.rows.find((p) => p.id === b.dataset.id));
-  });
+  pasangKlikJcard('#permitKcardGrid', (id) => bukaPermitDrawerView(P.rows.find((p) => p.id === id)));
 }
 $('#permitVCards').onclick = () => { P.view = 'cards'; renderPermitView(); };
 $('#permitVTable').onclick = () => { P.view = 'table'; renderPermitView(); };
@@ -1590,31 +1717,37 @@ function renderCaseView() {
   $('#caseVTable').classList.toggle('on', CS.view === 'table');
   if (CS.view === 'cards') renderCaseKcards(); else renderCaseTable();
 }
+/* Perkara punya jalur tahap yang benar-benar linear (pendaftaran →
+   … → selesai), jadi inilah modul yang paling terasa sebagai
+   "perjalanan": langkah + persen + sidang berikutnya. 'dicabut' bukan
+   tahap, itu jalan keluar — lihat komentar jalurTahap(). */
+const CASES_TAHAP_KELUAR = ['dicabut'];
 function renderCaseKcards() {
   $('#caseKcardEmpty').style.display = CS.rows.length ? 'none' : 'block';
   $('#caseKcardEmpty').innerHTML = `<h3>${esc(t('cases.empty.title'))}</h3><p>${esc(t('cases.empty.desc'))}</p>`;
   $('#caseKcardGrid').innerHTML = CS.rows.map((c) => {
-    const pic = CS.ref?.pic.find((x) => x.id === c.pic_legal_id);
-    const sidang = c.sidang_terdekat_tanggal
-      ? `<span class="days ${c.hari_ke_sidang != null && c.hari_ke_sidang <= 7 ? 'soon' : ''}">${esc(tglTampil(c.sidang_terdekat_tanggal))}</span>`
-      : '';
-    return `<button class="kcard" data-id="${c.id}">
-      <div class="kcard-top">
-        <span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span>
-        ${sidang}
-      </div>
-      <h4>${esc(c.nomor_perkara)}</h4>
-      <div class="sub">${c.lawan_pihak_teks ? 'vs ' + esc(c.lawan_pihak_teks) : esc(c.jenis_perkara || '—')}</div>
-      <div class="kcard-meta">
-        <span class="tag">${esc(TAHAP_NAMA[c.tahap] || c.tahap)}</span>
-        ${c.pengadilan ? `<span>${esc(c.pengadilan)}</span>` : ''}
-      </div>
-      ${pic ? `<div class="kcard-dates">${esc(t('cases.f.pic'))}: ${esc(pic.nama)}</div>` : ''}
-    </button>`;
+    const pos = posisiTahap('cases_tahap', c.tahap, CASES_TAHAP_KELUAR);
+    const selesai = c.tahap === 'selesai' || c.status_siklus === 'selesai';
+    const next = c.sidang_terdekat_tanggal
+      ? t('journey.sidangBerikut', {
+          tgl: tglTampil(c.sidang_terdekat_tanggal),
+          sisa: c.hari_ke_sidang != null ? t('common.daysLeft', { n: c.hari_ke_sidang }) : '',
+        }).trim()
+      : (selesai ? t('journey.perkaraSelesai') : t('journey.tanpaJadwal'));
+    return jcardHTML({
+      id: c.id,
+      judul: c.nomor_perkara,
+      sub: [c.lawan_pihak_teks ? 'vs ' + c.lawan_pihak_teks : c.jenis_perkara, c.pengadilan].filter(Boolean).join(' · '),
+      pill: `<span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span>`,
+      steps: langkahHTML('cases_tahap', c.tahap, TAHAP_NAMA, { ringkas: true, keluar: CASES_TAHAP_KELUAR }),
+      pct: selesai ? 100 : pos.pct,
+      state: selesai ? 'done' : '',
+      nowLabel: pos.offJalur ? '' : TAHAP_NAMA[c.tahap] || c.tahap,
+      next,
+      nextKuat: c.hari_ke_sidang != null && c.hari_ke_sidang <= 7 ? 'segera' : '',
+    });
   }).join('');
-  document.querySelectorAll('#caseKcardGrid [data-id]').forEach((b) => {
-    b.onclick = () => bukaCaseDrawerView(b.dataset.id);
-  });
+  pasangKlikJcard('#caseKcardGrid', (id) => bukaCaseDrawerView(id));
 }
 $('#caseVCards').onclick = () => { CS.view = 'cards'; renderCaseView(); };
 $('#caseVTable').onclick = () => { CS.view = 'table'; renderCaseView(); };
@@ -1631,6 +1764,7 @@ async function bukaCaseDrawerView(id) {
   if (gen !== navGen) return; // pengguna sudah pindah modul sebelum fetch ini selesai
   const pic = CS.ref?.pic.find((p) => p.id === row.pic_legal_id);
   const html = `
+    <div class="dstage">${langkahHTML('cases_tahap', row.tahap, TAHAP_NAMA, { keluar: CASES_TAHAP_KELUAR })}</div>
     <div class="grid2">
       ${fieldRowRoHTML(t('cases.f.nomor'), row.nomor_perkara)}
       ${fieldRowRoHTML(t('cases.f.pengadilan'), row.pengadilan)}
@@ -1846,24 +1980,32 @@ function renderProjectView() {
   $('#projectVTable').classList.toggle('on', PJ.view === 'table');
   if (PJ.view === 'cards') renderProjectKcards(); else renderProjectTable();
 }
+/* Proyek legal sudah punya progres yang diisi tim (progress_persen) —
+   itu dipakai apa adanya sebagai batangnya, bukan diturunkan dari
+   status. Statusnya sendiri bukan urutan (berjalan/tertunda/selesai),
+   jadi tanpa penunjuk langkah, sama alasannya dengan izin. */
 function renderProjectKcards() {
   $('#projectKcardEmpty').style.display = PJ.rows.length ? 'none' : 'block';
   $('#projectKcardEmpty').innerHTML = `<h3>${esc(t('projects.empty.title'))}</h3><p>${esc(t('projects.empty.desc'))}</p>`;
   $('#projectKcardGrid').innerHTML = PJ.rows.map((p) => {
     const pic = PJ.ref?.pic.find((x) => x.id === p.pic_legal_id);
-    return `<button class="kcard" data-id="${p.id}">
-      <div class="kcard-top">
-        <span class="pill p-${p.status_waktu === 'terlambat' ? 'kritis' : p.status_waktu === 'segera_selesai' ? 'peringatan' : p.status === 'selesai' ? 'aman' : 'pantau'}">${esc(PROJECT_SW_NAMA[p.status_waktu] || PROJECT_STATUS_NAMA[p.status])}</span>
-        ${p.target_selesai ? `<span class="days">${esc(tglTampil(p.target_selesai))}</span>` : ''}
-      </div>
-      <h4>${esc(p.nama_proyek)}</h4>
-      <div class="sub">${p.kategori ? esc(p.kategori) : '—'}${pic ? ' · ' + esc(pic.nama) : ''}</div>
-      ${progHTML(p.progress_persen, p.status === 'selesai' ? 'done' : p.status_waktu === 'terlambat' ? 'late' : '')}
-    </button>`;
+    const next = p.status === 'selesai' ? t('journey.proyekSelesai')
+      : p.target_selesai ? t('journey.targetSelesai', { tgl: tglTampil(p.target_selesai) })
+      : t('journey.tanpaTarget');
+    return jcardHTML({
+      id: p.id,
+      judul: p.nama_proyek,
+      sub: [p.kategori, pic?.nama].filter(Boolean).join(' · '),
+      pill: `<span class="pill p-${p.status_waktu === 'terlambat' ? 'kritis' : p.status_waktu === 'segera_selesai' ? 'peringatan' : p.status === 'selesai' ? 'aman' : 'pantau'}">${esc(PROJECT_SW_NAMA[p.status_waktu] || PROJECT_STATUS_NAMA[p.status])}</span>`,
+      steps: '',
+      pct: p.progress_persen,
+      state: p.status === 'selesai' ? 'done' : p.status_waktu === 'terlambat' ? 'late' : '',
+      nowLabel: PROJECT_STATUS_NAMA[p.status] || p.status,
+      next,
+      nextKuat: p.status_waktu === 'terlambat' ? 'lewat' : p.status_waktu === 'segera_selesai' ? 'segera' : '',
+    });
   }).join('');
-  document.querySelectorAll('#projectKcardGrid [data-id]').forEach((b) => {
-    b.onclick = () => bukaProjectDrawerView(PJ.rows.find((p) => p.id === b.dataset.id));
-  });
+  pasangKlikJcard('#projectKcardGrid', (id) => bukaProjectDrawerView(PJ.rows.find((p) => p.id === id)));
 }
 $('#projectVCards').onclick = () => { PJ.view = 'cards'; renderProjectView(); };
 $('#projectVTable').onclick = () => { PJ.view = 'table'; renderProjectView(); };
@@ -1984,24 +2126,31 @@ function renderPendampinganView() {
   $('#pendampinganVTable').classList.toggle('on', PD.view === 'table');
   if (PD.view === 'cards') renderPendampinganKcards(); else renderPendampinganTable();
 }
+/* menunggu → diproses → selesai itu urutan sungguhan; 'dibatalkan'
+   bukan langkah berikutnya, jadi dikeluarkan dari jalur. */
+const PENDAMPINGAN_KELUAR = ['dibatalkan'];
 function renderPendampinganKcards() {
   $('#pendampinganKcardEmpty').style.display = PD.rows.length ? 'none' : 'block';
   $('#pendampinganKcardEmpty').innerHTML = `<h3>${esc(t('pendampingan.empty.title'))}</h3><p>${esc(t('pendampingan.empty.desc'))}</p>`;
-  $('#pendampinganKcardGrid').innerHTML = PD.rows.map((r) => `<button class="kcard" data-id="${r.id}">
-      <div class="kcard-top">
-        <span class="pill ${r.status === 'selesai' ? 'p-aman' : r.status === 'menunggu' ? 'p-peringatan' : r.status === 'dibatalkan' ? 'p-tidak_dipantau' : 'p-pantau'}">${esc(STATUS_PD_NAMA[r.status])}</span>
-        ${r.tanggal_kegiatan ? `<span class="days">${esc(tglTampil(r.tanggal_kegiatan))}</span>` : ''}
-      </div>
-      <h4>${esc(JENIS_PD_NAMA[r.jenis] || r.jenis)}</h4>
-      <div class="sub">${esc(r.lokasi || '—')}</div>
-      <div class="kcard-meta">
-        ${r.pihak_terlibat ? `<span>${esc(r.pihak_terlibat)}</span>` : ''}
-        ${r.pic_nama ? `<span>${esc(r.pic_nama)}</span>` : ''}
-      </div>
-    </button>`).join('');
-  document.querySelectorAll('#pendampinganKcardGrid [data-id]').forEach((b) => {
-    b.onclick = () => bukaPendampinganDrawerView(PD.rows.find((r) => r.id === b.dataset.id));
-  });
+  $('#pendampinganKcardGrid').innerHTML = PD.rows.map((r) => {
+    const pos = posisiTahap('pendampingan_status', r.status, PENDAMPINGAN_KELUAR);
+    const selesai = r.status === 'selesai';
+    const next = r.tanggal_kegiatan
+      ? t('journey.kegiatanPada', { tgl: tglTampil(r.tanggal_kegiatan) })
+      : (selesai ? t('journey.kegiatanSelesai') : t('journey.tanpaJadwal'));
+    return jcardHTML({
+      id: r.id,
+      judul: JENIS_PD_NAMA[r.jenis] || r.jenis,
+      sub: [r.lokasi, r.pihak_terlibat, r.pic_nama].filter(Boolean).join(' · '),
+      pill: `<span class="pill ${selesai ? 'p-aman' : r.status === 'menunggu' ? 'p-peringatan' : r.status === 'dibatalkan' ? 'p-tidak_dipantau' : 'p-pantau'}">${esc(STATUS_PD_NAMA[r.status])}</span>`,
+      steps: langkahHTML('pendampingan_status', r.status, STATUS_PD_NAMA, { ringkas: true, keluar: PENDAMPINGAN_KELUAR }),
+      pct: selesai ? 100 : pos.pct,
+      state: selesai ? 'done' : '',
+      nowLabel: pos.offJalur ? '' : STATUS_PD_NAMA[r.status] || r.status,
+      next,
+    });
+  }).join('');
+  pasangKlikJcard('#pendampinganKcardGrid', (id) => bukaPendampinganDrawerView(PD.rows.find((r) => r.id === id)));
 }
 $('#pendampinganVCards').onclick = () => { PD.view = 'cards'; renderPendampinganView(); };
 $('#pendampinganVTable').onclick = () => { PD.view = 'table'; renderPendampinganView(); };
