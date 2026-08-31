@@ -1300,6 +1300,16 @@ async function bukaNotifikasi(it) {
     } else if (it.modul === 'cases' && it.entityId) {
       switchModuleAll('cases');
       bukaCaseDrawerView(it.entityId);
+    } else if (it.modul === 'mycases' && it.entityId) {
+      // Perkara yang PIC-nya SAYA, lintas klien -- lihat komentar
+      // notifications.routes.js. MC.rows sumbernya SAMA PERSIS dengan
+      // notifikasi ini (my-cases-query.js), jadi cukup dicari dari situ
+      // (tidak perlu endpoint /one/:id terpisah -- daftarnya memang
+      // selalu lengkap punya SAYA, tidak dipaging).
+      if (!MC.loaded) await muatMyCasesSemua();
+      switchModuleAll('mycases');
+      const row = MC.rows.find((r) => r.id === it.entityId);
+      if (row) bukaMyCaseDrawerView(row);
     } else if (it.modul === 'projects' && it.entityId) {
       if (!PJ.loaded) await muatProjectsSemua();
       switchModuleAll('projects');

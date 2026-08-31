@@ -23,6 +23,7 @@
 const express = require('express');
 const { queryAsUser } = require('../lib/db');
 const { authenticate } = require('../middleware/authenticate');
+const { CASES_MILIK_SAYA_SQL } = require('../lib/my-cases-query');
 
 const router = express.Router();
 router.use(authenticate);
@@ -40,7 +41,7 @@ router.get('/', async (req, res, next) => {
     const { clientOrgId } = req.query;
     if (!clientOrgId) return res.status(400).json({ error: 'clientOrgId wajib disertakan.' });
 
-    const [kontrak, izin, gap, sidang, proyek] = await Promise.all([
+    const [kontrak, izin, gap, sidang, proyek, sidangSaya] = await Promise.all([
       queryAsUser(req.user.id, `
         select id, nomor_dokumen, judul, tanggal_berakhir, status_waktu
           from v_contracts_display
@@ -63,6 +64,16 @@ router.get('/', async (req, res, next) => {
         select id, nama_proyek, target_selesai
           from v_legal_projects_display
          where client_org_id = $1 and status_waktu = 'terlambat'`, [clientOrgId]),
+      // "Perkara Saya" -- perkara yang PIC-nya SAYA (pic_legal_id, atau
+      // lewat client_assignments), LINTAS SEMUA klien firma, bukan cuma
+      // workspace yang sedang dibuka (beda dari `sidang` di atas, yang
+      // org-only). Sumbernya SAMA PERSIS dengan modul Perkara Saya
+      // (server/lib/my-cases-query.js) supaya tidak ada dua definisi
+      // "perkara saya" yang bisa berbeda hasilnya.
+      queryAsUser(req.user.id, `
+        select id, nomor_perkara, klien_nama, sidang_terdekat_tanggal, hari_ke_sidang
+          from (${CASES_MILIK_SAYA_SQL}) x
+         where hari_ke_sidang between 0 and 7`, []),
     ]);
 
     // entityId (beda dari id komposit di atas) -- id baris ASLI-nya, dipakai
@@ -95,14 +106,37 @@ router.get('/', async (req, res, next) => {
         judul: r.nama, teks: 'Izin wajib belum dimiliki', tanggal: null,
       });
     }
+    // Sidang -- digabung dari DUA sumber, dideduplikasi lewat id perkara
+    // (satu perkara = SATU notifikasi, walau lolos kedua sumber):
+    //  1. sidangSaya: perkara yang PIC-nya SAYA, lintas SEMUA klien firma
+    //     ("Perkara Saya") -- didahulukan (teksnya menyebut nama klien,
+    //     penting karena perkaranya bisa saja BUKAN klien yang sedang
+    //     dibuka), diarahkan ke modul 'mycases' saat diklik.
+    //  2. sidang: perkara APA PUN di workspace yang SEDANG dibuka
+    //     (bukan cuma milik saya -- staf lain bisa jadi PIC-nya, tetap
+    //     relevan buat yang sedang melihat dashboard klien itu),
+    //     diarahkan ke modul 'cases'. Cuma ditambah kalau perkaranya
+    //     BELUM masuk lewat sidangSaya di atas.
+    const sidangTerpakai = new Map();
+    for (const r of sidangSaya.rows) {
+      sidangTerpakai.set(r.id, {
+        id: `case:${r.id}`, entityId: r.id, modul: 'mycases', tingkat: r.hari_ke_sidang <= 1 ? 'crit' : 'info',
+        judul: r.nomor_perkara,
+        teks: r.hari_ke_sidang === 0
+          ? `Sidang hari ini (${r.klien_nama})` : `Sidang dalam ${r.hari_ke_sidang} hari — ${r.klien_nama} (${fmtTgl(r.sidang_terdekat_tanggal)})`,
+        tanggal: r.sidang_terdekat_tanggal,
+      });
+    }
     for (const r of sidang.rows) {
-      items.push({
+      if (sidangTerpakai.has(r.id)) continue;
+      sidangTerpakai.set(r.id, {
         id: `case:${r.id}`, entityId: r.id, modul: 'cases', tingkat: r.hari_ke_sidang <= 1 ? 'crit' : 'info',
         judul: r.nomor_perkara,
         teks: r.hari_ke_sidang === 0 ? 'Sidang hari ini' : `Sidang dalam ${r.hari_ke_sidang} hari (${fmtTgl(r.sidang_terdekat_tanggal)})`,
         tanggal: r.sidang_terdekat_tanggal,
       });
     }
+    items.push(...sidangTerpakai.values());
     for (const r of proyek.rows) {
       items.push({
         id: `project:${r.id}`, entityId: r.id, modul: 'projects', tingkat: 'warn',
