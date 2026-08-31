@@ -225,10 +225,22 @@ function lupakanWorkspaceTerakhir() {
   try { localStorage.removeItem(WS_REMEMBER_KEY); } catch (e) { /* non-fatal */ }
 }
 
+// Workspace staf MIKK ada DUA tipe dari server/routes/auth.routes.js
+// GET /workspaces: 'staf_firma' (managing_partner/admin_staf -- akses ke
+// SEMUA klien firma) dan 'staf_klien' (senior_associate/associate yang
+// ditugaskan ke klien TERTENTU lewat client_assignments -- peran-nya di
+// sini WARISAN dari peran penugasan itu sendiri, pic_utama/pendukung/
+// supervisi, BUKAN jabatan mikk_staff-nya). Keduanya SAMA-SAMA staf
+// MIKK (bukan klien) -- ditemukan lewat pengujian: kode yang cuma
+// memeriksa tipe==='staf_firma' salah menyembunyikan "Perkara Saya" dan
+// salah menampilkan label "RETAINER CLIENT PORTAL" untuk staf non-admin
+// seperti PIC pendukung/utama biasa.
+function adalahStafMikk(tipe) { return tipe === 'staf_firma' || tipe === 'staf_klien'; }
+
 /* Kartu pemilih workspace — ikonnya mengikuti tipe workspace, seperti
    rancangan referensi (klien retainer vs ruang kerja advokat). */
 function wsCardHTML(w, i) {
-  const staf = w.tipe === 'staf_firma';
+  const staf = adalahStafMikk(w.tipe);
   return `<button class="wscard" data-i="${i}">
     <div class="wsico">${ico(staf ? 'scale' : 'bank')}</div>
     <div class="role">${esc(PERAN_LABEL[w.peran] || w.peran)}</div>
@@ -318,7 +330,7 @@ async function enterWorkspace(ws) {
   $('#whoName').textContent = S.user.nama;
   $('#whoRole').textContent = PERAN_LABEL[ws.peran] || ws.peran;
   $('#avInit').textContent = initials(S.user.nama);
-  $('#sbLabel').textContent = t(ws.tipe === 'staf_firma' ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
+  $('#sbLabel').textContent = t(adalahStafMikk(ws.tipe) ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
   // Tarif hanya relevan bagi Managing Partner. Menyembunyikan tombolnya
   // bukan pengamanan — RLS yang menahan penulisan; ini sekadar tidak
   // menawarkan pintu yang memang terkunci.
@@ -340,7 +352,7 @@ async function enterWorkspace(ws) {
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
   // Sekarang diakses lewat menu akun di topbar, bukan sidebar (lihat
   // Bagian 2: navigasi pribadi vs workspace klien di rencana migrasi).
-  $('#menuMyCasesBtn').style.display = ws.tipe === 'staf_firma' ? 'flex' : 'none';
+  $('#menuMyCasesBtn').style.display = adalahStafMikk(ws.tipe) ? 'flex' : 'none';
   S.masukPada = new Date();
   gambarKepalaHalaman();
 
@@ -2241,7 +2253,7 @@ onLangChange(() => {
   tandaiBahasaAktif();
   applyStaticI18n();
   if (!S.ws) return;
-  $('#sbLabel').textContent = t(S.ws.tipe === 'staf_firma' ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
+  $('#sbLabel').textContent = t(adalahStafMikk(S.ws.tipe) ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
   $('#whoRole').textContent = PERAN_LABEL[S.ws.peran] || S.ws.peran;
   gambarKepalaHalaman();
   isiSelectReferensi();
