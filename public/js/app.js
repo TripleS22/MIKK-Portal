@@ -292,6 +292,20 @@ async function goWorkspacePicker() {
 }
 
 async function enterWorkspace(ws) {
+  // Ganti workspace ke organisasi klien LAIN (baik lewat "Ganti workspace"
+  // maupun langsung setelah "+ Klien Baru") tanpa refresh halaman penuh --
+  // modul-modul di bawah Dashboard menandai datanya sendiri "sudah dimuat"
+  // (P.loaded/CS.loaded/dst.) supaya tidak fetch ulang tiap kali tabnya
+  // dibuka. Tanpa direset di sini, pindah ke organisasi lain lalu buka
+  // modul yang PERNAH dibuka di organisasi sebelumnya akan menampilkan
+  // data organisasi LAMA (bukan salah render, cuma belum sempat fetch
+  // ulang karena flag-nya masih true) -- baru ketahuan lewat pengujian
+  // "+ Klien Baru": organisasi baru sempat menampilkan pengguna KAL.
+  // Modul firma-lebar yang datanya SAMA di semua organisasi (SU/Staf
+  // MIKK, MD/Master Data, PT/jenis izin) sengaja TIDAK direset.
+  if (S.ws && S.ws.client_org_id !== ws.client_org_id) {
+    [P, CS, PJ, PD, DC, DS, RT, TM].forEach((m) => { m.loaded = false; });
+  }
   S.ws = ws;
   ingatWorkspace(ws.client_org_id);
   $('#screenLogin').style.display = 'none';
@@ -2884,6 +2898,8 @@ $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
    ================================================================ */
 function klienBaruFormHTML(err) {
   const e = (k) => (err && err[k]) ? `<div class="err">${esc(err[k])}</div>` : '';
+  const opsiPeran = ['admin_klien', 'legal_manager', 'viewer'].map((v) =>
+    `<option value="${v}" ${v === 'admin_klien' ? 'selected' : ''}>${esc(PERAN_LABEL[v])}</option>`).join('');
   return `
   <p class="hint" style="margin:0 0 14px">${esc(t('klienBaru.hint'))}</p>
   <div class="grid2">
@@ -2907,16 +2923,38 @@ function klienBaruFormHTML(err) {
   <div class="f" style="margin-top:12px"><label>${t('companyProfile.alamat')}</label><textarea id="kb_alamat" rows="3"></textarea></div>
   <div class="f" style="margin-top:12px"><label>${t('companyProfile.kbli')}</label>
     <input id="kb_kbli">
-    <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>`;
+    <div class="hint">${esc(t('companyProfile.kbliHint'))}</div></div>
+
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 4px">${esc(t('klienBaru.userTitle'))}</h4>
+    <p class="hint" style="margin:0 0 12px">${esc(t('klienBaru.userHint'))}</p>
+    <div class="f"><label>${t('team.f.nama')} <span class="req">*</span></label>
+      <input id="kb_userNama">${e('userNama')}</div>
+    <div class="f" style="margin-top:12px"><label>${t('team.f.email')} <span class="req">*</span></label>
+      <input id="kb_userEmail" type="email">
+      <div class="hint">${esc(t('team.f.emailHint'))}</div>${e('userEmail')}</div>
+    <div class="f" style="margin-top:12px"><label>${t('team.f.noHp')}</label>
+      <input id="kb_userHp" inputmode="tel"></div>
+    <div class="f" style="margin-top:12px"><label>${t('team.f.peran')} <span class="req">*</span></label>
+      <select id="kb_userPeran">${opsiPeran}</select></div>
+    <div class="warnbox wb-info" id="kb_userPeranDesc" style="margin-top:8px">
+      <span class="ic">ⓘ</span><div>${esc(t(ROLE_DESC_KLIEN.admin_klien))}</div>
+    </div>
+  </div>`;
 }
 $('#addKlienBaruBtn').onclick = () => {
   bukaAuxDrawer('klienbaru', t('klienBaru.formTitle'), klienBaruFormHTML(), simpanKlienBaru, t('klienBaru.simpan'));
+  pasangPeranDescLive('kb_userPeran', 'kb_userPeranDesc', ROLE_DESC_KLIEN);
 };
 async function simpanKlienBaru() {
   const namaLegal = $('#kb_namaLegal').value.trim();
   const namaSingkat = $('#kb_namaSingkat').value.trim();
+  const userNama = $('#kb_userNama').value.trim();
+  const userEmail = $('#kb_userEmail').value.trim();
   if (!namaLegal) return toast(t('klienBaru.err.namaLegal'), 'warning');
   if (!namaSingkat) return toast(t('klienBaru.err.namaSingkat'), 'warning');
+  if (!userNama) return toast(t('klienBaru.err.userNama'), 'warning');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(userEmail)) return toast(t('klienBaru.err.userEmail'), 'warning');
   const kbli = $('#kb_kbli').value.split(',').map((s) => s.trim()).filter(Boolean);
   const btn = $('#auxDSave'); btn.disabled = true; const teksAsli = btn.textContent; btn.innerHTML = '<span class="spin"></span>';
   try {
@@ -2925,18 +2963,37 @@ async function simpanKlienBaru() {
       sektorUsaha: $('#kb_sektor').value.trim() || null, alamat: $('#kb_alamat').value.trim() || null,
       kbli, statusRetainer: $('#kb_statusRetainer').value,
     });
+    // Organisasi sudah tersimpan di titik ini. Akun pertamanya dibuat
+    // LANGSUNG SESUDAHNYA di sini juga (bukan langkah terpisah lagi lewat
+    // "+ Tambah Pengguna") -- reuse endpoint yang sama dipakai "+ Tambah
+    // Pengguna" (createClientUser), jadi email kredensial+link masuk
+    // tetap terkirim lewat kirimKredensialCustomer yang sudah ada, cuma
+    // sekarang satu langkah, bukan dua.
+    let akun;
+    try {
+      akun = await Api.createClientUser({
+        clientOrgId: id, nama: userNama, email: userEmail,
+        noHp: $('#kb_userHp').value.trim() || null, peran: $('#kb_userPeran').value,
+      });
+    } catch (eAkun) {
+      // Organisasinya tetap tersimpan walau akunnya gagal (mis. email
+      // dobel) -- jangan hilang begitu saja, tetap masuk ke workspace-nya
+      // supaya bisa dicoba lagi lewat "+ Tambah Pengguna" di halaman ini.
+      tutupAuxDrawer();
+      toast(t('klienBaru.createdUserFailed', { nama: namaSingkat, pesan: eAkun.message || '' }), 'warning');
+      const wsBaru = { client_org_id: id, nama_singkat: namaSingkat, nama_legal: namaLegal, peran: S.ws.peran, tipe: 'staf_firma' };
+      S.wsList = [...(S.wsList || []), wsBaru];
+      await enterWorkspace(wsBaru);
+      switchModuleAll('team');
+      return;
+    }
     tutupAuxDrawer();
-    toast(t('klienBaru.created', { nama: namaSingkat }), 'success');
-    // Masuk ke workspace yang baru dibuat -- reuse enterWorkspace() apa
-    // adanya (peran tetap peran staf yang sedang login, cuma organisasinya
-    // yang baru) supaya seluruh gerbang/label topbar ikut benar. Sudah di
-    // halaman Akun Klien (itu tempat tombol ini dipicu), jadi tidak perlu
-    // pindah modul lagi -- langsung terlihat kosong, siap "+ Tambah Pengguna".
+    toast(t('klienBaru.createdWithUser', { nama: namaSingkat }), 'success');
     const wsBaru = { client_org_id: id, nama_singkat: namaSingkat, nama_legal: namaLegal, peran: S.ws.peran, tipe: 'staf_firma' };
     S.wsList = [...(S.wsList || []), wsBaru];
     await enterWorkspace(wsBaru);
     switchModuleAll('team');
-    toast(t('klienBaru.lanjutTambahAkun'), 'info');
+    if (akun.kataSandiAwal) tampilkanKredensial(userNama, userEmail, akun.kataSandiAwal, 'teamNewCred', { emailTerkirim: akun.emailTerkirim });
   } catch (e) {
     toast(e.message || t('common.saveFailed'), 'error');
   } finally { btn.disabled = false; btn.textContent = teksAsli; }
