@@ -148,9 +148,29 @@ function posisiTahap(kategori, kode, keluar) {
   return { jalur, idx, pct: Math.round(((idx + 1) / jalur.length) * 100), offJalur: false };
 }
 
-/* Penunjuk langkah bertitik. `ringkas` = versi kartu (titik saja, label
-   hanya untuk langkah yang sedang berjalan); tanpa itu = versi drawer
-   (semua langkah berlabel). */
+/* Badge tahap — dipakai di KARTU.
+
+   Sebelumnya di sini ada deretan titik bertahap seperti stepper. Itu
+   dicabut setelah dilaporkan langsung: di lebar kartu, titik-titiknya
+   tidak muat diberi label, dan titik tanpa label tidak mengatakan
+   apa-apa — pembacanya hanya melihat "tiga bulatan hijau, satu emas"
+   tanpa tahu bulatan mana artinya apa. Satu badge bertuliskan nama
+   tahapnya + "langkah ke berapa dari berapa" menyampaikan hal yang
+   sama persis dengan lebih sedikit ruang dan tanpa perlu ditebak.
+   Stepper bertitik tetap dipakai di drawer (langkahHTML), di sana
+   ruangnya cukup untuk memberi label tiap langkah. */
+function badgeTahapHTML(kategori, kode, namaProxy, opt) {
+  const o = opt || {};
+  const { jalur, idx, offJalur } = posisiTahap(kategori, kode, o.keluar);
+  if (!jalur.length || !kode) return '';
+  const nama = namaProxy[kode] || kode;
+  if (offJalur) return `<div><span class="jbadge off">${esc(nama)}</span></div>`;
+  return `<div><span class="jbadge">${esc(nama)}
+    <em>${esc(t('journey.langkah', { i: idx + 1, n: jalur.length }))}</em></span></div>`;
+}
+
+/* Penunjuk langkah bertitik — versi DRAWER: semua langkah berlabel,
+   ruangnya memang cukup di sana (lihat .dstage di style.css). */
 function langkahHTML(kategori, kode, namaProxy, opt) {
   const o = opt || {};
   const { jalur, idx, offJalur } = posisiTahap(kategori, kode, o.keluar);
@@ -158,9 +178,9 @@ function langkahHTML(kategori, kode, namaProxy, opt) {
   if (offJalur) {
     return `<div class="jsteps off"><span class="joff">${esc(namaProxy[kode] || kode || '—')}</span></div>`;
   }
-  return `<div class="jsteps ${o.ringkas ? 'ringkas' : ''}">` + jalur.map((k, i) => {
+  return `<div class="jsteps">` + jalur.map((k, i) => {
     const done = i < idx, now = i === idx;
-    return `<div class="jstep ${done ? 'done' : ''} ${now ? 'now' : ''}" title="${esc(namaProxy[k] || k)}">
+    return `<div class="jstep ${done ? 'done' : ''} ${now ? 'now' : ''}">
       <span class="jdot">${done ? '✓' : ''}</span>
       <span class="jlbl">${esc(namaProxy[k] || k)}</span>
     </div>`;
@@ -999,7 +1019,7 @@ function renderKontrakCards() {
       judul: c.judul,
       sub: [c.lawan_pihak || t('kontrak.belumDiisi'), c.kategori_nama].filter(Boolean).join(' · '),
       pill: `<span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>`,
-      steps: langkahHTML('contracts_status_siklus', c.status_siklus, SIKLUS_NAMA, { ringkas: true, keluar: KONTRAK_SIKLUS_KELUAR }),
+      steps: badgeTahapHTML('contracts_status_siklus', c.status_siklus, SIKLUS_NAMA, { keluar: KONTRAK_SIKLUS_KELUAR }),
       pct: lengkap,
       state: lengkap >= 100 ? 'done' : '',
       nowLabel: t('journey.kelengkapan'),
@@ -1748,10 +1768,10 @@ function renderCaseKcards() {
       judul: c.nomor_perkara,
       sub: [c.lawan_pihak_teks ? 'vs ' + c.lawan_pihak_teks : c.jenis_perkara, c.pengadilan].filter(Boolean).join(' · '),
       pill: `<span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span>`,
-      steps: langkahHTML('cases_tahap', c.tahap, TAHAP_NAMA, { ringkas: true, keluar: CASES_TAHAP_KELUAR }),
+      steps: badgeTahapHTML('cases_tahap', c.tahap, TAHAP_NAMA, { keluar: CASES_TAHAP_KELUAR }),
       pct: selesai ? 100 : pos.pct,
       state: selesai ? 'done' : '',
-      nowLabel: pos.offJalur ? '' : TAHAP_NAMA[c.tahap] || c.tahap,
+      nowLabel: pos.offJalur ? '' : t('journey.tahapanProses'),
       next,
       nextKuat: c.hari_ke_sidang != null && c.hari_ke_sidang <= 7 ? 'segera' : '',
     });
@@ -2009,7 +2029,7 @@ function renderProjectKcards() {
       steps: '',
       pct: p.progress_persen,
       state: p.status === 'selesai' ? 'done' : p.status_waktu === 'terlambat' ? 'late' : '',
-      nowLabel: PROJECT_STATUS_NAMA[p.status] || p.status,
+      nowLabel: t('journey.progresKerja'),
       next,
       nextKuat: p.status_waktu === 'terlambat' ? 'lewat' : p.status_waktu === 'segera_selesai' ? 'segera' : '',
     });
@@ -2152,10 +2172,10 @@ function renderPendampinganKcards() {
       judul: JENIS_PD_NAMA[r.jenis] || r.jenis,
       sub: [r.lokasi, r.pihak_terlibat, r.pic_nama].filter(Boolean).join(' · '),
       pill: `<span class="pill ${selesai ? 'p-aman' : r.status === 'menunggu' ? 'p-peringatan' : r.status === 'dibatalkan' ? 'p-tidak_dipantau' : 'p-pantau'}">${esc(STATUS_PD_NAMA[r.status])}</span>`,
-      steps: langkahHTML('pendampingan_status', r.status, STATUS_PD_NAMA, { ringkas: true, keluar: PENDAMPINGAN_KELUAR }),
+      steps: badgeTahapHTML('pendampingan_status', r.status, STATUS_PD_NAMA, { keluar: PENDAMPINGAN_KELUAR }),
       pct: selesai ? 100 : pos.pct,
       state: selesai ? 'done' : '',
-      nowLabel: pos.offJalur ? '' : STATUS_PD_NAMA[r.status] || r.status,
+      nowLabel: pos.offJalur ? '' : t('journey.tahapanProses'),
       next,
     });
   }).join('');
