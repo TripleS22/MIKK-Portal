@@ -141,13 +141,32 @@ const S = {
   reference: null, ledger: [], list: { rows: [], total: 0 },
   editing: null, draft: null, err: null,
   quickQueue: [], quickIdx: 0,
-  // Sisi klien peran 'viewer' baca-saja (RLS, lihat db/23_viewer_readonly_
-  // enforcement.sql) -- dihitung sekali di enterWorkspace(), dipakai
-  // banyak modul untuk menyembunyikan tombol "+Tambah"/"Edit" yang
-  // memang akan ditolak server. Selalu true untuk staf MIKK (nilai
-  // peran staf tidak pernah 'viewer').
-  bolehTulisKlien: true,
+  // Pengecualian hak akses PER ORANG di atas peran biasa, diatur admin
+  // lewat "Kelola Akses" (lihat db/25_permission_overrides.sql) --
+  // dimuat sekali di enterWorkspace(), bentuknya {modul: {lihat, tulis}}.
+  // Modul yang TIDAK ada di sini (kebanyakan orang) berarti tidak ada
+  // pengecualian -- pakai default peran biasa lewat bolehLihatModul()/
+  // bolehTulisModul() di bawah, bukan dibaca S.overrides langsung.
+  overrides: {},
 };
+
+// Baca: default TRUE utk siapa saja (RLS boleh_akses_klien/pihak tidak
+// pernah membedakan baca antar peran client-side -- yang membedakan
+// cuma tulis, lihat db/23) kecuali admin sengaja MENGUNCI modul itu
+// lewat override. Tulis: default ikut peran ('viewer' baca-saja, lihat
+// db/23_viewer_readonly_enforcement.sql), kecuali admin sengaja
+// mengubahnya (baik mengunci LEBIH ketat, maupun memberi izin LEBIH
+// longgar) lewat override. Sama logikanya dengan RLS db/25 di server --
+// UI ini sekadar tidak menawarkan pintu yang memang terkunci di sana.
+function bolehLihatModul(modul) {
+  const ov = S.overrides[modul];
+  return ov ? ov.lihat : true;
+}
+function bolehTulisModul(modul) {
+  const ov = S.overrides[modul];
+  if (ov) return ov.tulis;
+  return S.ws.peran !== 'viewer';
+}
 
 /* ----------------------------------------------------------------
    TOAST — satu komponen notifikasi standar untuk seluruh aplikasi,
@@ -340,13 +359,27 @@ async function enterWorkspace(ws) {
   $('#modStaffUsersBtn').style.display = bolehTarif ? 'flex' : 'none';
   $('#addKlienBaruBtn').style.display = bolehTarif ? '' : 'none';
 
-  // Sisi klien peran 'viewer' baca-saja sejak db/23 -- sembunyikan
-  // tombol "+Tambah"/tab Isi Cepat yang akan ditolak server (RLS tetap
-  // penegakan sesungguhnya, ini sekadar tidak menawarkan pintu terkunci,
-  // sama pola dengan bolehTarif di atas).
-  S.bolehTulisKlien = ws.peran !== 'viewer';
-  ['addPermitBtn', 'addCaseBtn', 'addProjectBtn', 'addPendampinganBtn', 'docUploadBtn', 'vQuick'].forEach((id) => {
-    const el = $('#' + id); if (el) el.style.display = S.bolehTulisKlien ? '' : 'none';
+  // Hak akses per modul -- default ikut peran ('viewer' baca-saja sejak
+  // db/23), TAPI admin bisa mengecualikan SATU ORANG tertentu lewat
+  // "Kelola Akses" (db/25_permission_overrides.sql). Dimuat di sini
+  // (bukan cuma dihitung dari peran) supaya pengecualian itu ikut
+  // berlaku di UI, bukan cuma di RLS server.
+  try { const { rows } = await Api.myPermissionOverrides();
+    S.overrides = {}; rows.forEach((r) => { S.overrides[r.modul] = { lihat: r.boleh_lihat, tulis: r.boleh_tulis }; });
+  } catch (e) { S.overrides = {}; /* non-fatal: jatuh ke default peran biasa */ }
+
+  const MODUL_SIDEBAR = {
+    kontrak: { sidebarBtn: 'modKontrakBtn', tulisBtns: ['vQuick'] },
+    permits: { sidebarBtn: 'modPermitsBtn', tulisBtns: ['addPermitBtn'] },
+    cases: { sidebarBtn: 'modCasesBtn', tulisBtns: ['addCaseBtn'] },
+    projects: { sidebarBtn: 'modProjectsBtn', tulisBtns: ['addProjectBtn'] },
+    pendampingan: { sidebarBtn: 'modPendampinganBtn', tulisBtns: ['addPendampinganBtn'] },
+    docs: { sidebarBtn: 'modDocsBtn', tulisBtns: ['docUploadBtn'] },
+  };
+  Object.entries(MODUL_SIDEBAR).forEach(([modul, cfg]) => {
+    const bLihat = bolehLihatModul(modul), bTulis = bolehTulisModul(modul);
+    const sb = $('#' + cfg.sidebarBtn); if (sb) sb.style.display = bLihat ? '' : 'none';
+    cfg.tulisBtns.forEach((id) => { const el = $('#' + id); if (el) el.style.display = bTulis ? '' : 'none'; });
   });
   // "Perkara Saya" lintas klien hanya relevan untuk staf MIKK — klien sisi
   // portal retainer sudah melihat perkaranya sendiri lewat modul Litigasi.
@@ -698,7 +731,7 @@ function bukaDrawerView(row) {
   renderLampiranPanel('lampiran_kontrak', 'contract', row.id, { clientOrgId: S.ws.client_org_id });
   $('#dSave').textContent = t('common.edit');
   $('#dSave').onclick = () => bukaDrawer(row);
-  $('#dSave').style.display = S.bolehTulisKlien ? '' : 'none';
+  $('#dSave').style.display = bolehTulisModul('kontrak') ? '' : 'none';
   $('#veil').classList.add('on'); $('#drawer').classList.add('on');
 }
 
@@ -1084,7 +1117,7 @@ function bukaPermitDrawerView(row) {
   renderLampiranPanel('lampiran_izin', 'permit', row.id, { clientOrgId: S.ws.client_org_id });
   $('#permitDSave').textContent = t('common.edit');
   $('#permitDSave').onclick = () => bukaPermitDrawer(row);
-  $('#permitDSave').style.display = S.bolehTulisKlien ? '' : 'none';
+  $('#permitDSave').style.display = bolehTulisModul('permits') ? '' : 'none';
   $('#veil').classList.add('on'); $('#permitDrawer').classList.add('on');
 }
 
@@ -1367,7 +1400,7 @@ function bukaAuxDrawer(kind, judul, bodyHtml, onSave, saveLabel) {
   // Default selalu terlihat -- pemanggil drawer View (yang tombolnya
   // dipakai untuk "Edit", bukan "Simpan") yang menyembunyikannya sendiri
   // SETELAH memanggil ini kalau memang tidak boleh (lihat pola RT.bolehUbah
-  // / S.bolehTulisKlien di masing-masing bukaXDrawerView).
+  // / bolehTulisModul() di masing-masing bukaXDrawerView).
   $('#auxDSave').style.display = '';
   $('#veil').classList.add('on'); $('#auxDrawer').classList.add('on');
 }
@@ -1505,8 +1538,8 @@ async function bukaCaseDrawerView(id) {
       <div id="lampiran_perkara"></div>
     </div>`;
   bukaAuxDrawer('case-view', t('cases.drawerTitle'), html,
-    S.bolehTulisKlien ? () => { tutupAuxDrawer(); bukaCaseDrawer(id); } : null, t('common.edit'));
-  $('#auxDSave').style.display = S.bolehTulisKlien ? '' : 'none';
+    bolehTulisModul('cases') ? () => { tutupAuxDrawer(); bukaCaseDrawer(id); } : null, t('common.edit'));
+  $('#auxDSave').style.display = bolehTulisModul('cases') ? '' : 'none';
   renderLampiranPanel('lampiran_perkara', 'case', id, { clientOrgId: S.ws.client_org_id });
 }
 function caseFormHTML(row, hearings, minutes) {
@@ -1699,8 +1732,8 @@ function bukaProjectDrawerView(row) {
       <div id="lampiran_proyek"></div>
     </div>`;
   bukaAuxDrawer('project-view', t('projects.drawerTitle'), html,
-    S.bolehTulisKlien ? () => { tutupAuxDrawer(); bukaProjectDrawer(row); } : null, t('common.edit'));
-  $('#auxDSave').style.display = S.bolehTulisKlien ? '' : 'none';
+    bolehTulisModul('projects') ? () => { tutupAuxDrawer(); bukaProjectDrawer(row); } : null, t('common.edit'));
+  $('#auxDSave').style.display = bolehTulisModul('projects') ? '' : 'none';
   renderLampiranPanel('lampiran_proyek', 'project', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function projectFormHTML(row) {
@@ -1806,8 +1839,8 @@ function bukaPendampinganDrawerView(row) {
       <div id="lampiran_pendampingan"></div>
     </div>`;
   bukaAuxDrawer('pendampingan-view', t('pendampingan.drawerTitle'), html,
-    S.bolehTulisKlien ? () => { tutupAuxDrawer(); bukaPendampinganDrawer(row); } : null, t('common.edit'));
-  $('#auxDSave').style.display = S.bolehTulisKlien ? '' : 'none';
+    bolehTulisModul('pendampingan') ? () => { tutupAuxDrawer(); bukaPendampinganDrawer(row); } : null, t('common.edit'));
+  $('#auxDSave').style.display = bolehTulisModul('pendampingan') ? '' : 'none';
   renderLampiranPanel('lampiran_pendampingan', 'pendampingan', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function pendampinganFormHTML(row) {
@@ -2542,6 +2575,8 @@ function renderTimTable() {
     const aksi = TM.bolehKelola ? `<div class="rowact">
       <button class="iconbtn" data-edit="${r.membership_id}" title="${esc(t('team.editRole'))}">
         <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+      <button class="iconbtn" data-akses="${r.user_id}" data-nama="${esc(r.nama)}" data-tulis-default="${r.peran !== 'viewer'}" title="${esc(t('kelolaAkses.tombol'))}">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 15v3"/></svg></button>
       <button class="iconbtn" data-reset="${r.user_id}" data-nama="${esc(r.nama)}" title="${esc(t('team.resetPass'))}">
         <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
     </div>` : '<span style="color:var(--muted-2)">—</span>';
@@ -2561,6 +2596,9 @@ function renderTimTable() {
 
   document.querySelectorAll('#teamBody [data-edit]').forEach((b) => {
     b.onclick = () => bukaTimDrawer(TM.rows.find((r) => r.membership_id === b.dataset.edit));
+  });
+  document.querySelectorAll('#teamBody [data-akses]').forEach((b) => {
+    b.onclick = () => bukaKelolaAksesDrawer(b.dataset.akses, b.dataset.nama, b.dataset.tulisDefault === 'true');
   });
   document.querySelectorAll('#teamBody [data-reset]').forEach((b) => {
     b.onclick = () => resetSandi(b.dataset.reset, b.dataset.nama);
@@ -2767,11 +2805,17 @@ function renderStaffUsersTable() {
       <td><div class="rowact">
         <button class="iconbtn" data-edit="${r.user_id}" title="${esc(t('team.editRole'))}">
           <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+        <button class="iconbtn" data-akses="${r.user_id}" data-nama="${esc(r.nama)}" data-tulis-default="true" title="${esc(t('kelolaAkses.tombol'))}">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 15v3"/></svg></button>
         <button class="iconbtn" data-reset="${r.user_id}" data-nama="${esc(r.nama)}" title="${esc(t('staffUsers.resetPw'))}">
           <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
       </div></td>
     </tr>`;
   }).join('');
+
+  document.querySelectorAll('#staffUsersBody [data-akses]').forEach((b) => {
+    b.onclick = () => bukaKelolaAksesDrawer(b.dataset.akses, b.dataset.nama, true);
+  });
 
   // Klik pada baris (bukan salah satu ikon aksi-nya) membuka halaman
   // Detail Staf -- lihat komentar bukaStaffDetail di bawah. Ikon Edit/
@@ -2923,6 +2967,89 @@ async function resetSandiStaf(userId, nama, targetId) {
   } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
 }
 
+/* ================================================================
+   KELOLA AKSES — hak akses PER ORANG, di atas aturan peran biasa
+   (lihat db/25_permission_overrides.sql; enforcement SUNGGUHAN ada di
+   RLS server, ini cuma layar kelola + cerminan tampilannya). Dipicu
+   dari ikon gembok di baris Akun Klien MAUPUN Staf MIKK -- satu drawer
+   yang sama, cuma beda "default tulis"-nya (peran client-side 'viewer'
+   defaultnya baca-saja; staf MIKK apa pun jabatannya defaultnya penuh).
+   Modul yang ditawarkan SENGAJA cuma 6 modul sisi-klien (bukan Master
+   Data/Tarif/Staf MIKK dst -- itu tetap murni is_mikk_admin(), tidak
+   butuh pengecualian per orang).
+   ================================================================ */
+const KELOLA_AKSES_MODUL = ['kontrak', 'permits', 'cases', 'projects', 'pendampingan', 'docs'];
+const KELOLA_AKSES_LABEL = { kontrak: 'nav.kontrak', permits: 'nav.permits', cases: 'nav.cases', projects: 'nav.projects', pendampingan: 'nav.pendampingan', docs: 'nav.docs' };
+
+function kelolaAksesFormHTML(overrides, defaultTulis) {
+  return `
+  <p class="hint" style="margin:0 0 14px">${esc(t('kelolaAkses.hint'))}</p>
+  <div class="tscroll"><table style="min-width:420px">
+    <thead><tr>
+      <th>${t('kelolaAkses.th.modul')}</th>
+      <th style="text-align:center;width:70px">${t('kelolaAkses.th.lihat')}</th>
+      <th style="text-align:center;width:70px">${t('kelolaAkses.th.tulis')}</th>
+    </tr></thead>
+    <tbody>
+      ${KELOLA_AKSES_MODUL.map((m) => {
+        const ov = overrides[m];
+        const lihat = ov ? ov.lihat : true;
+        const tulis = ov ? ov.tulis : defaultTulis;
+        return `<tr data-modul="${m}">
+          <td>${esc(t(KELOLA_AKSES_LABEL[m]))}</td>
+          <td style="text-align:center"><input type="checkbox" class="ka_lihat" ${lihat ? 'checked' : ''}></td>
+          <td style="text-align:center"><input type="checkbox" class="ka_tulis" ${tulis ? 'checked' : ''} ${lihat ? '' : 'disabled'}></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+async function bukaKelolaAksesDrawer(userId, nama, defaultTulis) {
+  let overrides = {};
+  try {
+    const { rows } = await Api.permissionOverrides(userId);
+    rows.forEach((r) => { overrides[r.modul] = { lihat: r.boleh_lihat, tulis: r.boleh_tulis }; });
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); return; }
+
+  bukaAuxDrawer('kelolaakses', t('kelolaAkses.judul', { nama }),
+    kelolaAksesFormHTML(overrides, defaultTulis),
+    () => simpanKelolaAkses(userId, defaultTulis), t('common.save'));
+
+  // Centang "Lihat" dimatikan -> "Tulis" ikut dimatikan & dikunci (tidak
+  // masuk akal boleh tulis tapi tidak boleh lihat modulnya sama sekali).
+  document.querySelectorAll('#auxDBody tr[data-modul]').forEach((tr) => {
+    const lihatEl = tr.querySelector('.ka_lihat'), tulisEl = tr.querySelector('.ka_tulis');
+    lihatEl.onchange = () => {
+      tulisEl.disabled = !lihatEl.checked;
+      if (!lihatEl.checked) tulisEl.checked = false;
+    };
+  });
+}
+
+async function simpanKelolaAkses(userId, defaultTulis) {
+  const btn = $('#auxDSave'); btn.disabled = true; const teksAsli = btn.textContent; btn.innerHTML = '<span class="spin"></span>';
+  try {
+    for (const tr of document.querySelectorAll('#auxDBody tr[data-modul]')) {
+      const modul = tr.dataset.modul;
+      const lihat = tr.querySelector('.ka_lihat').checked;
+      const tulis = tr.querySelector('.ka_tulis').checked;
+      // Sama dengan default (lihat selalu true, tulis ikut defaultTulis)
+      // -> cabut override kalau ada (biar rapi, bukan disimpan sebagai
+      // "pengecualian" yang sebenarnya sama saja dengan tidak ada apa-apa).
+      if (lihat === true && tulis === defaultTulis) {
+        await Api.clearPermissionOverride(userId, modul);
+      } else {
+        await Api.setPermissionOverride(userId, modul, { bolehLihat: lihat, bolehTulis: tulis });
+      }
+    }
+    tutupAuxDrawer();
+    toast(t('common.saved'), 'success');
+  } catch (e) {
+    toast(e.message || t('common.saveFailed'), 'error');
+  } finally { btn.disabled = false; btn.textContent = teksAsli; }
+}
+
 $('#addStaffBtn').onclick = () => bukaStaffDrawer(null);
 
 /* ================================================================
@@ -2951,6 +3078,7 @@ async function bukaStaffDetail(userId) {
   $('#sdFotoWrap').textContent = initials(row.nama);
 
   $('#sdEditBtn').onclick = () => bukaStaffDrawer(row);
+  $('#sdAksesBtn').onclick = () => bukaKelolaAksesDrawer(userId, row.nama, true);
   $('#sdResetBtn').onclick = () => resetSandiStaf(userId, row.nama, 'sdNewCred');
   $('#sdFotoInput').onchange = async () => {
     const file = $('#sdFotoInput').files[0]; if (!file) return;

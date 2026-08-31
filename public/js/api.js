@@ -211,5 +211,11 @@ const Api = (() => {
 
     /* ---- Notifikasi bel topbar ---- */
     notifications: (clientOrgId) => call('/notifications', { qs: { clientOrgId } }),
+
+    /* ---- Hak akses per pengguna (admin/super admin), lihat db/25 ---- */
+    myPermissionOverrides: () => call('/permission-overrides/me'),
+    permissionOverrides: (userId) => call(`/permission-overrides/${userId}`),
+    setPermissionOverride: (userId, modul, body) => call(`/permission-overrides/${userId}/${modul}`, { method: 'PUT', body }),
+    clearPermissionOverride: (userId, modul) => call(`/permission-overrides/${userId}/${modul}`, { method: 'DELETE' }),
   };
 })();

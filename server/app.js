@@ -25,6 +25,7 @@ const myRoutes = require('./routes/my.routes');
 const profileRoutes = require('./routes/profile.routes');
 const masterDataRoutes = require('./routes/master-data.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
+const permissionOverridesRoutes = require('./routes/permission-overrides.routes');
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use('/api/my', myRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/master-data', masterDataRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/permission-overrides', permissionOverridesRoutes);
 
 // Di Cloudflare Workers, frontend statis (public/) disajikan langsung
 // oleh Cloudflare lewat binding Assets (lihat wrangler.toml: [assets] +

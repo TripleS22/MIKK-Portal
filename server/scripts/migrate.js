@@ -44,6 +44,7 @@ const ORDER = [
   '22_client_org_custom_fields.sql',
   '23_viewer_readonly_enforcement.sql',
   '24_detail_staf.sql',
+  '25_permission_overrides.sql',
 ];
 
 async function main() {
