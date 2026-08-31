@@ -356,6 +356,7 @@ async function enterWorkspace(ws) {
   // keduanya tetap bisa saling pindah lewat toggle Kartu/Tabel di atas,
   // ini cuma titik AWAL yang beda per audiens.
   S.view = adalahStafMikk(ws.tipe) ? 'table' : 'cards';
+  P.view = S.view; CS.view = S.view; PJ.view = S.view; PD.view = S.view;
   // Tarif hanya relevan bagi Managing Partner. Menyembunyikan tombolnya
   // bukan pengamanan — RLS yang menahan penulisan; ini sekadar tidak
   // menawarkan pintu yang memang terkunci.
@@ -979,7 +980,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#draw
 /* ================================================================
    MODUL PERIZINAN
    ================================================================ */
-const P = { rows: [], ref: null, dashboard: null, gap: [], editing: null, draft: null, loaded: false };
+const P = { rows: [], ref: null, dashboard: null, gap: [], editing: null, draft: null, loaded: false, view: 'table' };
 
 /* Catatan: pemilih modul (switchModuleAll) didefinisikan di bagian bawah
    berkas ini, setelah seluruh modul (Litigasi, Proyek, Pendampingan, Dokumen)
@@ -995,7 +996,7 @@ async function muatPermitsSemua() {
       Api.permitGap(S.ws.client_org_id),
     ]);
     P.ref = ref; P.rows = list.rows; P.dashboard = dash.dashboard; P.gap = gap.rows; P.loaded = true;
-    renderPermitCards(); renderPermitTable(); renderGap();
+    renderPermitCards(); renderPermitView(); renderGap();
   } catch (err) {
     showApiErr(err.message || t('permits.loadError'));
   }
@@ -1045,6 +1046,43 @@ function renderPermitTable() {
     tr.onclick = () => bukaPermitDrawerView(P.rows.find((p) => p.id === tr.dataset.id));
   });
 }
+// Dispatcher tampilan Kartu/Tabel -- pola sama dengan CRM Kontrak
+// (render()/renderKontrakCards), lihat komentar di sana.
+function renderPermitView() {
+  $('#permitViewCards').style.display = P.view === 'cards' ? 'block' : 'none';
+  $('#permitViewTable').style.display = P.view === 'table' ? 'block' : 'none';
+  $('#permitVCards').classList.toggle('on', P.view === 'cards');
+  $('#permitVTable').classList.toggle('on', P.view === 'table');
+  if (P.view === 'cards') renderPermitKcards(); else renderPermitTable();
+}
+function renderPermitKcards() {
+  $('#permitKcardEmpty').style.display = P.rows.length ? 'none' : 'block';
+  $('#permitKcardEmpty').innerHTML = `<h3>${esc(t('permits.empty.title'))}</h3><p>${esc(t('permits.empty.desc'))}</p>`;
+  $('#permitKcardGrid').innerHTML = P.rows.map((p) => {
+    const sw = p.status_waktu, d = p.sisa_hari;
+    const sisa = (sw === 'tanpa_batas' || d == null) ? '' : `<span class="days ${d < 0 ? 'neg' : d <= 60 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
+    const pic = P.ref?.pic.find((x) => x.id === p.pic_id);
+    return `<button class="kcard" data-id="${p.id}">
+      <div class="kcard-top">
+        <span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>
+        ${sisa}
+      </div>
+      <h4>${esc(p.nama_izin)}</h4>
+      <div class="sub">${esc(p.instansi_penerbit || '—')}</div>
+      <div class="kcard-meta">
+        ${p.nomor_izin ? `<span>${esc(p.nomor_izin)}</span>` : ''}
+        ${pic ? `<span>${esc(pic.nama)}</span>` : ''}
+      </div>
+      <div class="kcard-dates">${p.tanggal_terbit ? esc(tglTampil(p.tanggal_terbit)) : '—'} – ${
+        p.tanggal_kedaluwarsa ? esc(tglTampil(p.tanggal_kedaluwarsa)) : (p.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—')}</div>
+    </button>`;
+  }).join('');
+  document.querySelectorAll('#permitKcardGrid [data-id]').forEach((b) => {
+    b.onclick = () => bukaPermitDrawerView(P.rows.find((p) => p.id === b.dataset.id));
+  });
+}
+$('#permitVCards').onclick = () => { P.view = 'cards'; renderPermitView(); };
+$('#permitVTable').onclick = () => { P.view = 'table'; renderPermitView(); };
 function renderGap() {
   if (!P.gap.length) {
     $('#gapBody').innerHTML = `<p style="font-size:12.5px;color:var(--muted);margin:0">${esc(t('permits.gap.none'))}</p>`;
@@ -1489,7 +1527,7 @@ const CASE_STATUS_NAMA = nameProxy('caseStatus', 'cases_status_siklus');
 /* ================================================================
    MODUL LITIGASI & SIDANG
    ================================================================ */
-const CS = { rows: [], ref: null, dashboard: null, loaded: false, editing: null };
+const CS = { rows: [], ref: null, dashboard: null, loaded: false, editing: null, view: 'table' };
 
 async function muatCasesSemua() {
   showApiErr('');
@@ -1498,7 +1536,7 @@ async function muatCasesSemua() {
       Api.casesReference(S.ws.client_org_id), Api.cases(S.ws.client_org_id), Api.casesDashboard(S.ws.client_org_id),
     ]);
     CS.ref = ref; CS.rows = list.rows; CS.dashboard = dash.dashboard; CS.loaded = true;
-    renderCaseCards(); renderCaseTable();
+    renderCaseCards(); renderCaseView();
   } catch (err) { showApiErr(err.message || t('cases.loadError')); }
 }
 function renderCaseCards() {
@@ -1545,6 +1583,41 @@ function renderCaseTable() {
     tr.onclick = () => bukaCaseDrawerView(tr.dataset.id);
   });
 }
+function renderCaseView() {
+  $('#caseViewCards').style.display = CS.view === 'cards' ? 'block' : 'none';
+  $('#caseViewTable').style.display = CS.view === 'table' ? 'block' : 'none';
+  $('#caseVCards').classList.toggle('on', CS.view === 'cards');
+  $('#caseVTable').classList.toggle('on', CS.view === 'table');
+  if (CS.view === 'cards') renderCaseKcards(); else renderCaseTable();
+}
+function renderCaseKcards() {
+  $('#caseKcardEmpty').style.display = CS.rows.length ? 'none' : 'block';
+  $('#caseKcardEmpty').innerHTML = `<h3>${esc(t('cases.empty.title'))}</h3><p>${esc(t('cases.empty.desc'))}</p>`;
+  $('#caseKcardGrid').innerHTML = CS.rows.map((c) => {
+    const pic = CS.ref?.pic.find((x) => x.id === c.pic_legal_id);
+    const sidang = c.sidang_terdekat_tanggal
+      ? `<span class="days ${c.hari_ke_sidang != null && c.hari_ke_sidang <= 7 ? 'soon' : ''}">${esc(tglTampil(c.sidang_terdekat_tanggal))}</span>`
+      : '';
+    return `<button class="kcard" data-id="${c.id}">
+      <div class="kcard-top">
+        <span class="pill ${c.status_siklus === 'aktif' ? 'p-aman' : 'p-tidak_dipantau'}">${esc(CASE_STATUS_NAMA[c.status_siklus] || c.status_siklus)}</span>
+        ${sidang}
+      </div>
+      <h4>${esc(c.nomor_perkara)}</h4>
+      <div class="sub">${c.lawan_pihak_teks ? 'vs ' + esc(c.lawan_pihak_teks) : esc(c.jenis_perkara || '—')}</div>
+      <div class="kcard-meta">
+        <span class="tag">${esc(TAHAP_NAMA[c.tahap] || c.tahap)}</span>
+        ${c.pengadilan ? `<span>${esc(c.pengadilan)}</span>` : ''}
+      </div>
+      ${pic ? `<div class="kcard-dates">${esc(t('cases.f.pic'))}: ${esc(pic.nama)}</div>` : ''}
+    </button>`;
+  }).join('');
+  document.querySelectorAll('#caseKcardGrid [data-id]').forEach((b) => {
+    b.onclick = () => bukaCaseDrawerView(b.dataset.id);
+  });
+}
+$('#caseVCards').onclick = () => { CS.view = 'cards'; renderCaseView(); };
+$('#caseVTable').onclick = () => { CS.view = 'table'; renderCaseView(); };
 /* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
    modul lain. Perkara punya sub-daftar (sidang, catatan sidang) selain
    field pokok — di View keduanya tetap ditampilkan (baca saja, tanpa
@@ -1699,7 +1772,7 @@ $('#addCaseBtn').onclick = () => bukaCaseDrawer(null);
 /* ================================================================
    MODUL PROYEK LEGAL
    ================================================================ */
-const PJ = { rows: [], ref: null, dashboard: null, loaded: false, editing: null };
+const PJ = { rows: [], ref: null, dashboard: null, loaded: false, editing: null, view: 'table' };
 const PROJECT_STATUS_NAMA = nameProxy('projStatus', 'legal_projects_status');
 const PROJECT_SW_NAMA = nameProxy('projSW');
 
@@ -1710,7 +1783,7 @@ async function muatProjectsSemua() {
       Api.projectsReference(S.ws.client_org_id), Api.projects(S.ws.client_org_id), Api.projectsDashboard(S.ws.client_org_id),
     ]);
     PJ.ref = ref; PJ.rows = list.rows; PJ.dashboard = dash.dashboard; PJ.loaded = true;
-    renderProjectCards(); renderProjectTable();
+    renderProjectCards(); renderProjectView();
   } catch (err) { showApiErr(err.message || t('projects.loadError')); }
 }
 function renderProjectCards() {
@@ -1766,6 +1839,34 @@ function renderProjectTable() {
     tr.onclick = () => bukaProjectDrawerView(PJ.rows.find((p) => p.id === tr.dataset.id));
   });
 }
+function renderProjectView() {
+  $('#projectViewCards').style.display = PJ.view === 'cards' ? 'block' : 'none';
+  $('#projectViewTable').style.display = PJ.view === 'table' ? 'block' : 'none';
+  $('#projectVCards').classList.toggle('on', PJ.view === 'cards');
+  $('#projectVTable').classList.toggle('on', PJ.view === 'table');
+  if (PJ.view === 'cards') renderProjectKcards(); else renderProjectTable();
+}
+function renderProjectKcards() {
+  $('#projectKcardEmpty').style.display = PJ.rows.length ? 'none' : 'block';
+  $('#projectKcardEmpty').innerHTML = `<h3>${esc(t('projects.empty.title'))}</h3><p>${esc(t('projects.empty.desc'))}</p>`;
+  $('#projectKcardGrid').innerHTML = PJ.rows.map((p) => {
+    const pic = PJ.ref?.pic.find((x) => x.id === p.pic_legal_id);
+    return `<button class="kcard" data-id="${p.id}">
+      <div class="kcard-top">
+        <span class="pill p-${p.status_waktu === 'terlambat' ? 'kritis' : p.status_waktu === 'segera_selesai' ? 'peringatan' : p.status === 'selesai' ? 'aman' : 'pantau'}">${esc(PROJECT_SW_NAMA[p.status_waktu] || PROJECT_STATUS_NAMA[p.status])}</span>
+        ${p.target_selesai ? `<span class="days">${esc(tglTampil(p.target_selesai))}</span>` : ''}
+      </div>
+      <h4>${esc(p.nama_proyek)}</h4>
+      <div class="sub">${p.kategori ? esc(p.kategori) : '—'}${pic ? ' · ' + esc(pic.nama) : ''}</div>
+      ${progHTML(p.progress_persen, p.status === 'selesai' ? 'done' : p.status_waktu === 'terlambat' ? 'late' : '')}
+    </button>`;
+  }).join('');
+  document.querySelectorAll('#projectKcardGrid [data-id]').forEach((b) => {
+    b.onclick = () => bukaProjectDrawerView(PJ.rows.find((p) => p.id === b.dataset.id));
+  });
+}
+$('#projectVCards').onclick = () => { PJ.view = 'cards'; renderProjectView(); };
+$('#projectVTable').onclick = () => { PJ.view = 'table'; renderProjectView(); };
 /* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
    bukaDrawerView (CRM Kontrak) / bukaPermitDrawerView (Perizinan). */
 function bukaProjectDrawerView(row) {
@@ -1839,7 +1940,7 @@ $('#addProjectBtn').onclick = () => bukaProjectDrawer(null);
 /* ================================================================
    MODUL HUB PENDAMPINGAN
    ================================================================ */
-const PD = { rows: [], ref: null, loaded: false, editing: null };
+const PD = { rows: [], ref: null, loaded: false, editing: null, view: 'table' };
 const JENIS_PD_NAMA = nameProxy('jenisPd', 'pendampingan_jenis');
 const STATUS_PD_NAMA = nameProxy('statusPd', 'pendampingan_status');
 
@@ -1848,7 +1949,7 @@ async function muatPendampinganSemua() {
   try {
     const [ref, list] = await Promise.all([Api.pendampinganReference(S.ws.client_org_id), Api.pendampingan(S.ws.client_org_id)]);
     PD.ref = ref; PD.rows = list.rows; PD.loaded = true;
-    renderPendampinganCards(); renderPendampinganTable();
+    renderPendampinganCards(); renderPendampinganView();
     $('#waLink').href = 'https://wa.me/62800000000?text=' + encodeURIComponent(t('pendampingan.waText', { ws: S.ws.nama_singkat }));
   } catch (err) { showApiErr(err.message || t('pendampingan.loadError')); }
 }
@@ -1876,6 +1977,34 @@ function renderPendampinganTable() {
     tr.onclick = () => bukaPendampinganDrawerView(PD.rows.find((r) => r.id === tr.dataset.id));
   });
 }
+function renderPendampinganView() {
+  $('#pendampinganViewCards').style.display = PD.view === 'cards' ? 'block' : 'none';
+  $('#pendampinganViewTable').style.display = PD.view === 'table' ? 'block' : 'none';
+  $('#pendampinganVCards').classList.toggle('on', PD.view === 'cards');
+  $('#pendampinganVTable').classList.toggle('on', PD.view === 'table');
+  if (PD.view === 'cards') renderPendampinganKcards(); else renderPendampinganTable();
+}
+function renderPendampinganKcards() {
+  $('#pendampinganKcardEmpty').style.display = PD.rows.length ? 'none' : 'block';
+  $('#pendampinganKcardEmpty').innerHTML = `<h3>${esc(t('pendampingan.empty.title'))}</h3><p>${esc(t('pendampingan.empty.desc'))}</p>`;
+  $('#pendampinganKcardGrid').innerHTML = PD.rows.map((r) => `<button class="kcard" data-id="${r.id}">
+      <div class="kcard-top">
+        <span class="pill ${r.status === 'selesai' ? 'p-aman' : r.status === 'menunggu' ? 'p-peringatan' : r.status === 'dibatalkan' ? 'p-tidak_dipantau' : 'p-pantau'}">${esc(STATUS_PD_NAMA[r.status])}</span>
+        ${r.tanggal_kegiatan ? `<span class="days">${esc(tglTampil(r.tanggal_kegiatan))}</span>` : ''}
+      </div>
+      <h4>${esc(JENIS_PD_NAMA[r.jenis] || r.jenis)}</h4>
+      <div class="sub">${esc(r.lokasi || '—')}</div>
+      <div class="kcard-meta">
+        ${r.pihak_terlibat ? `<span>${esc(r.pihak_terlibat)}</span>` : ''}
+        ${r.pic_nama ? `<span>${esc(r.pic_nama)}</span>` : ''}
+      </div>
+    </button>`).join('');
+  document.querySelectorAll('#pendampinganKcardGrid [data-id]').forEach((b) => {
+    b.onclick = () => bukaPendampinganDrawerView(PD.rows.find((r) => r.id === b.dataset.id));
+  });
+}
+$('#pendampinganVCards').onclick = () => { PD.view = 'cards'; renderPendampinganView(); };
+$('#pendampinganVTable').onclick = () => { PD.view = 'table'; renderPendampinganView(); };
 /* View — dibuka lebih dulu dari klik baris tabel, sama pola dengan
    modul lain (CRM Kontrak/Perizinan/Proyek Legal). */
 function bukaPendampinganDrawerView(row) {

@@ -410,9 +410,18 @@
       <div id="secPermits" style="display:none">
         <div class="cards" id="permitCards"></div>
         <div class="bar">
+          <div class="seg">
+            <button id="permitVCards" data-i18n="kontrak.view.cards">Kartu</button>
+            <button id="permitVTable" data-i18n="kontrak.view.table">Tabel</button>
+          </div>
           <div style="flex:1"></div>
           <button class="btn gold" id="addPermitBtn" data-i18n="permits.add">+ Tambah Izin</button>
         </div>
+        <div id="permitViewCards" style="display:none">
+          <div class="kcard-grid" id="permitKcardGrid"></div>
+          <div class="empty" id="permitKcardEmpty" style="display:none"></div>
+        </div>
+        <div id="permitViewTable" style="display:none">
         <div class="panel" style="margin-bottom:18px">
           <div class="tscroll"><table>
             <thead><tr>
@@ -424,6 +433,7 @@
           <div class="empty" id="permitEmpty" style="display:none">
             <h3 data-i18n="permits.empty.title">Belum ada izin tercatat</h3><p data-i18n="permits.empty.desc">Tambahkan izin pertama lewat tombol di atas.</p>
           </div>
+        </div>
         </div>
         <div class="grid-2">
           <div class="panel" id="permitDonutPanel">
@@ -446,9 +456,18 @@
       <div id="secCases" style="display:none">
         <div class="cards" id="caseCards"></div>
         <div class="bar">
+          <div class="seg">
+            <button id="caseVCards" data-i18n="kontrak.view.cards">Kartu</button>
+            <button id="caseVTable" data-i18n="kontrak.view.table">Tabel</button>
+          </div>
           <div style="flex:1"></div>
           <button class="btn gold" id="addCaseBtn" data-i18n="cases.add">+ Tambah Perkara</button>
         </div>
+        <div id="caseViewCards" style="display:none">
+          <div class="kcard-grid" id="caseKcardGrid"></div>
+          <div class="empty" id="caseKcardEmpty" style="display:none"></div>
+        </div>
+        <div id="caseViewTable" style="display:none">
         <div class="panel" style="margin-bottom:18px">
           <div class="tscroll"><table>
             <thead><tr>
@@ -461,6 +480,7 @@
             <h3 data-i18n="cases.empty.title">Belum ada perkara tercatat</h3><p data-i18n="cases.empty.desc">Tambahkan perkara pertama lewat tombol di atas.</p>
           </div>
         </div>
+        </div>
         <div class="panel">
           <div class="panelhead"><div class="ttl2"><h3 data-i18n="cases.stageTitle">Tahapan Perkara</h3></div></div>
           <div id="caseDonut"></div>
@@ -471,9 +491,18 @@
       <div id="secProjects" style="display:none">
         <div class="cards" id="projectCards"></div>
         <div class="bar">
+          <div class="seg">
+            <button id="projectVCards" data-i18n="kontrak.view.cards">Kartu</button>
+            <button id="projectVTable" data-i18n="kontrak.view.table">Tabel</button>
+          </div>
           <div style="flex:1"></div>
           <button class="btn gold" id="addProjectBtn" data-i18n="projects.add">+ Buat Proyek</button>
         </div>
+        <div id="projectViewCards" style="display:none">
+          <div class="kcard-grid" id="projectKcardGrid"></div>
+          <div class="empty" id="projectKcardEmpty" style="display:none"></div>
+        </div>
+        <div id="projectViewTable" style="display:none">
         <div class="panel" style="margin-bottom:18px">
           <div class="tscroll"><table>
             <thead><tr>
@@ -485,6 +514,7 @@
           <div class="empty" id="projectEmpty" style="display:none">
             <h3 data-i18n="projects.empty.title">Belum ada proyek tercatat</h3><p data-i18n="projects.empty.desc">Buat proyek pertama lewat tombol di atas.</p>
           </div>
+        </div>
         </div>
         <div class="grid-2">
           <div class="panel">
@@ -504,9 +534,18 @@
         <div class="grid-2" style="align-items:start">
           <div>
             <div class="bar">
+              <div class="seg">
+                <button id="pendampinganVCards" data-i18n="kontrak.view.cards">Kartu</button>
+                <button id="pendampinganVTable" data-i18n="kontrak.view.table">Tabel</button>
+              </div>
               <div style="flex:1"></div>
               <button class="btn gold" id="addPendampinganBtn" data-i18n="pendampingan.add">+ Ajukan Pendampingan</button>
             </div>
+            <div id="pendampinganViewCards" style="display:none">
+              <div class="kcard-grid" id="pendampinganKcardGrid"></div>
+              <div class="empty" id="pendampinganKcardEmpty" style="display:none"></div>
+            </div>
+            <div id="pendampinganViewTable" style="display:none">
             <div class="panel">
               <div class="tscroll"><table style="min-width:640px">
                 <thead><tr>
@@ -518,6 +557,7 @@
               <div class="empty" id="pendampinganEmpty" style="display:none">
                 <h3 data-i18n="pendampingan.empty.title">Belum ada permintaan pendampingan</h3><p data-i18n="pendampingan.empty.desc">Ajukan permintaan pertama lewat tombol di atas.</p>
               </div>
+            </div>
             </div>
           </div>
           <div class="panel">
