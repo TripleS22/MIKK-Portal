@@ -65,11 +65,16 @@ router.get('/', async (req, res, next) => {
          where client_org_id = $1 and status_waktu = 'terlambat'`, [clientOrgId]),
     ]);
 
+    // entityId (beda dari id komposit di atas) -- id baris ASLI-nya, dipakai
+    // sisi klien untuk memanggil endpoint /one/:id dan langsung membuka
+    // drawer View-nya (bukan cuma pindah modul). permitgap TIDAK punya
+    // entityId karena memang belum ada izinnya (belum ada apa pun untuk
+    // di-View) -- klik item itu cuma pindah ke modul Perizinan.
     const items = [];
     for (const r of kontrak.rows) {
       const exp = r.status_waktu === 'kedaluwarsa';
       items.push({
-        id: `contract:${r.id}`, modul: 'kontrak', tingkat: exp ? 'crit' : (r.status_waktu === 'kritis' ? 'crit' : 'warn'),
+        id: `contract:${r.id}`, entityId: r.id, modul: 'kontrak', tingkat: exp ? 'crit' : (r.status_waktu === 'kritis' ? 'crit' : 'warn'),
         judul: r.judul || r.nomor_dokumen || '(tanpa judul)',
         teks: exp ? 'Kontrak sudah kedaluwarsa' : `Kontrak akan berakhir ${fmtTgl(r.tanggal_berakhir)}`,
         tanggal: r.tanggal_berakhir,
@@ -78,7 +83,7 @@ router.get('/', async (req, res, next) => {
     for (const r of izin.rows) {
       const exp = r.status_waktu === 'kedaluwarsa';
       items.push({
-        id: `permit:${r.id}`, modul: 'permits', tingkat: exp ? 'crit' : (r.status_waktu === 'kritis' ? 'crit' : 'warn'),
+        id: `permit:${r.id}`, entityId: r.id, modul: 'permits', tingkat: exp ? 'crit' : (r.status_waktu === 'kritis' ? 'crit' : 'warn'),
         judul: r.nama_izin,
         teks: exp ? 'Izin sudah kedaluwarsa' : `Izin akan berakhir ${fmtTgl(r.tanggal_kedaluwarsa)}`,
         tanggal: r.tanggal_kedaluwarsa,
@@ -86,13 +91,13 @@ router.get('/', async (req, res, next) => {
     }
     for (const r of gap.rows) {
       items.push({
-        id: `permitgap:${r.permit_type_id}`, modul: 'permits', tingkat: 'crit',
+        id: `permitgap:${r.permit_type_id}`, entityId: null, modul: 'permits', tingkat: 'crit',
         judul: r.nama, teks: 'Izin wajib belum dimiliki', tanggal: null,
       });
     }
     for (const r of sidang.rows) {
       items.push({
-        id: `case:${r.id}`, modul: 'cases', tingkat: r.hari_ke_sidang <= 1 ? 'crit' : 'info',
+        id: `case:${r.id}`, entityId: r.id, modul: 'cases', tingkat: r.hari_ke_sidang <= 1 ? 'crit' : 'info',
         judul: r.nomor_perkara,
         teks: r.hari_ke_sidang === 0 ? 'Sidang hari ini' : `Sidang dalam ${r.hari_ke_sidang} hari (${fmtTgl(r.sidang_terdekat_tanggal)})`,
         tanggal: r.sidang_terdekat_tanggal,
@@ -100,7 +105,7 @@ router.get('/', async (req, res, next) => {
     }
     for (const r of proyek.rows) {
       items.push({
-        id: `project:${r.id}`, modul: 'projects', tingkat: 'warn',
+        id: `project:${r.id}`, entityId: r.id, modul: 'projects', tingkat: 'warn',
         judul: r.nama_proyek, teks: `Proyek terlambat dari target selesai (${fmtTgl(r.target_selesai)})`, tanggal: r.target_selesai,
       });
     }

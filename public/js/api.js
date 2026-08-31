@@ -117,6 +117,7 @@ const Api = (() => {
     addMinute: (caseId, body) => call(`/cases/${caseId}/minutes`, { method: 'POST', body }),
 
     projects: (clientOrgId) => call('/legal-projects', { qs: { clientOrgId } }),
+    getProject: (id) => call(`/legal-projects/one/${id}`),
     projectsDashboard: (clientOrgId) => call('/legal-projects/dashboard', { qs: { clientOrgId } }),
     projectsReference: (clientOrgId) => call('/legal-projects/reference', { qs: { clientOrgId } }),
     createProject: (body) => call('/legal-projects', { method: 'POST', body }),

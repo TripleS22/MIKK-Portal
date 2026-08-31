@@ -1083,9 +1083,12 @@ const MODULES = [
   { id: 'projects',     sec: 'secProjects',     btn: 'modProjectsBtn',     crumb: 'nav.projects',     desc: 'projects.desc' },
   { id: 'pendampingan', sec: 'secPendampingan', btn: 'modPendampinganBtn', crumb: 'nav.pendampingan', desc: 'pendampingan.desc' },
   { id: 'docs',         sec: 'secDocs',         btn: 'modDocsBtn',         crumb: 'nav.docs',         desc: 'docs.desc' },
-  { id: 'team',         sec: 'secTeam',         btn: 'modTeamBtn',         crumb: 'nav.team',         desc: 'team.desc' },
   { id: 'rates',        sec: 'secRates',        btn: 'modRatesBtn',        crumb: 'nav.rates',        desc: 'rates.desc' },
   { id: 'masterdata',   sec: 'secMasterData',   btn: 'modMasterDataBtn',  crumb: 'nav.masterData',  desc: 'masterData.desc' },
+  // Dikelompokkan berdekatan di sidebar (lihat index.html) karena
+  // sama-sama soal "kelola akun" -- beda tabel/audiens, lihat komentar
+  // modul masing-masing.
+  { id: 'team',         sec: 'secTeam',         btn: 'modTeamBtn',         crumb: 'nav.team',         desc: 'team.desc' },
   { id: 'staffusers',   sec: 'secStaffUsers',   btn: 'modStaffUsersBtn',  crumb: 'nav.staffUsers',  desc: 'staffUsers.desc' },
   { id: 'klienbaru',    sec: 'secKlienBaru',    btn: 'modKlienBaruBtn',   crumb: 'nav.klienBaru',   desc: 'klienBaru.desc' },
   // Dua di bawah ini pribadi/lintas klien — dipicu dari menu akun di
@@ -1226,11 +1229,46 @@ function gambarBellMenu() {
   document.querySelectorAll('#bellList [data-notif-id]').forEach((b) => {
     b.onclick = () => {
       const dibacaBaru = notifDibacaSet(); dibacaBaru.add(b.dataset.notifId); notifSimpanDibaca(dibacaBaru);
-      $('#bellMenu').style.display = 'none';
-      switchModuleAll(b.dataset.go);
       gambarBellBadge();
+      const it = NOTIF.items.find((x) => x.id === b.dataset.notifId);
+      $('#bellMenu').style.display = 'none';
+      if (it) bukaNotifikasi(it); else switchModuleAll(b.dataset.go);
     };
   });
+}
+/* Klik notifikasi langsung membuka drawer View baris aslinya (bukan cuma
+   pindah ke modulnya) -- ambil baris SEGAR lewat endpoint /one/:id (bukan
+   dicari dari cache tabel yang sedang ditampilkan, yang bisa saja lagi di
+   halaman/filter lain dan tidak memuat baris ini). Untuk Perizinan/Proyek
+   Legal, referensi (nama PIC dkk, dipakai drawer View-nya) baru ada
+   setelah modul itu pernah dimuat -- dipastikan dulu (muatXSemua) sebelum
+   drawer-nya dibuka, supaya tidak error kalau bel diklik sebelum pernah
+   membuka modul itu sama sekali sesi ini. */
+async function bukaNotifikasi(it) {
+  try {
+    if (it.modul === 'kontrak' && it.entityId) {
+      switchModuleAll('kontrak');
+      const { row } = await Api.getContract(it.entityId);
+      bukaDrawerView(row);
+    } else if (it.modul === 'permits' && it.entityId) {
+      if (!P.loaded) await muatPermitsSemua();
+      switchModuleAll('permits');
+      const { row } = await Api.getPermit(it.entityId);
+      bukaPermitDrawerView(row);
+    } else if (it.modul === 'cases' && it.entityId) {
+      switchModuleAll('cases');
+      bukaCaseDrawerView(it.entityId);
+    } else if (it.modul === 'projects' && it.entityId) {
+      if (!PJ.loaded) await muatProjectsSemua();
+      switchModuleAll('projects');
+      const { row } = await Api.getProject(it.entityId);
+      bukaProjectDrawerView(row);
+    } else {
+      // Tidak ada baris nyata untuk di-View (mis. permitgap -- izin wajib
+      // yang belum dimiliki sama sekali) -- pindah modulnya saja.
+      switchModuleAll(it.modul);
+    }
+  } catch (e) { toast(e.message || t('common.saveFailed'), 'error'); switchModuleAll(it.modul); }
 }
 $('#bellBtn').addEventListener('click', async (e) => {
   e.stopPropagation();
@@ -1849,37 +1887,18 @@ function gambarDashboard() {
       t('dashboard.card.proyek.note'), 'folder'),
   ].join('');
 
-  // Tiga panel pintasan: yang butuh perhatian lebih dulu.
-  const perluPerhatian = [
-    { k: t('dashboard.attn.kontrakExp'), v: n(d.kontrak, 'akan_berakhir_90h'), mod: 'kontrak',  ic: 'clock',  cls: 'warn' },
-    { k: t('dashboard.attn.kontrakLate'), v: n(d.kontrak, 'kedaluwarsa'),      mod: 'kontrak',  ic: 'alert',  cls: 'crit' },
-    { k: t('dashboard.attn.izinExp'),    v: n(d.izin, 'akan_berakhir'),        mod: 'permits',  ic: 'clock',  cls: 'warn' },
-    { k: t('dashboard.attn.izinGap'),    v: n(d.izin, 'gap_wajib'),            mod: 'permits',  ic: 'gap',    cls: 'crit' },
-    { k: t('dashboard.attn.sidang'),     v: n(d.perkara, 'sidang_7_hari'),     mod: 'cases',    ic: 'cal',    cls: 'info' },
-    { k: t('dashboard.attn.proyekLate'), v: n(d.proyek, 'terlambat'),          mod: 'projects', ic: 'alert',  cls: 'crit' },
-  ];
-  const feed = perluPerhatian.map((r) => `<button class="it" data-go="${r.mod}" style="width:100%;text-align:left">
-      <span class="ic ${r.cls}">${ico(r.ic)}</span>
-      <span class="tx"><b>${esc(r.k)}</b></span>
-      <span class="when" style="font-size:15px;font-weight:600;color:var(--ink)">${r.v}</span>
-    </button>`).join('');
-
+  // Panel "Perlu Perhatian" yang sebelumnya ada di sini SUDAH DIHAPUS --
+  // isinya sama persis dengan bel notifikasi topbar (sumber datanya memang
+  // sengaja dibuat sama, lihat server/routes/notifications.routes.js),
+  // jadi dua tempat menampilkan hal yang sama. Bel dijadikan SATU-SATUNYA
+  // tempat untuk ini karena selalu ada di semua halaman (bukan cuma
+  // Dashboard) dan klik-nya langsung membuka baris terkait, bukan cuma
+  // pindah modul.
   $('#dashPanels').innerHTML = `
-    <div class="panel" style="grid-column:span 2">
-      <div class="panelhead"><div class="ttl2">
-        <h3>${esc(t('dashboard.attnTitle'))}</h3>
-        <p>${esc(t('dashboard.attnDesc'))}</p>
-      </div></div>
-      <div class="feed">${feed}</div>
-    </div>
     <div class="panel">
       <div class="panelhead"><div class="ttl2"><h3>${esc(t('dashboard.stepperTitle'))}</h3></div></div>
       <div style="padding:14px 18px 18px" id="dashStepper"></div>
     </div>`;
-
-  document.querySelectorAll('#dashPanels [data-go]').forEach((b) => {
-    b.onclick = () => switchModuleAll(b.dataset.go);
-  });
   renderStepperWidget();
 }
 

@@ -37,7 +37,7 @@ const I18N = {
 
 
 
-    'nav.team': 'Team & Users',
+    'nav.team': 'Akun Klien',
     'team.desc': 'Akun pengguna yang bisa masuk ke workspace organisasi ini.',
     'team.add': '+ Tambah Pengguna',
     'team.loadError': 'Gagal memuat data pengguna.',
@@ -590,7 +590,7 @@ const I18N = {
     'staffUsers.desc': 'Kelola akun internal MIKK — Admin dan PIC & Legal.',
     'nav.klienBaru': 'Klien Baru',
     'klienBaru.desc': 'Buat organisasi klien baru.',
-    'klienBaru.hint': 'Buat organisasi klien baru. Setelah tersimpan, Anda akan diarahkan ke Team & Users organisasi ini untuk menambahkan akun pertamanya — detail akun & tautan masuk otomatis dikirim ke email klien.',
+    'klienBaru.hint': 'Buat organisasi klien baru. Setelah tersimpan, Anda akan diarahkan ke Akun Klien organisasi ini untuk menambahkan akun pertamanya — detail akun & tautan masuk otomatis dikirim ke email klien.',
     'klienBaru.formTitle': 'Profil Organisasi',
     'klienBaru.namaLegal': 'Nama Legal',
     'klienBaru.namaSingkat': 'Nama Singkat',
@@ -684,7 +684,7 @@ const I18N = {
 
 
 
-    'nav.team': 'Team & Users',
+    'nav.team': 'Client Accounts',
     'team.desc': 'User accounts that can sign in to this organisation\u2019s workspace.',
     'team.add': '+ Add User',
     'team.loadError': 'Failed to load user data.',
@@ -1238,7 +1238,7 @@ const I18N = {
     'staffUsers.desc': 'Manage internal MIKK accounts — Admin and PIC & Legal.',
     'nav.klienBaru': 'New Client',
     'klienBaru.desc': 'Create a new client organization.',
-    'klienBaru.hint': 'Create a new client organization. Once saved, you\'ll be taken to that client\'s Team & Users to add its first account — the account details & login link are emailed to the client automatically.',
+    'klienBaru.hint': 'Create a new client organization. Once saved, you\'ll be taken to that client\'s Client Accounts to add its first account — the account details & login link are emailed to the client automatically.',
     'klienBaru.formTitle': 'Organization Profile',
     'klienBaru.namaLegal': 'Legal Name',
     'klienBaru.namaSingkat': 'Short Name',
