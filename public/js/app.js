@@ -2057,12 +2057,21 @@ function bukaProjectDrawerView(row) {
     </div>
     ${row.keterangan ? `<div style="margin-top:12px">${fieldRowRoHTML(t('projects.f.keterangan'), row.keterangan)}</div>` : ''}
     <div style="margin-top:20px">
+      <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:2px">${esc(t('projects.tahapan.title'))}</div>
+      <p class="hint" style="margin:0 0 8px">${esc(t('projects.tahapan.desc'))}</p>
+      <div id="pj_milestones"></div>
+    </div>
+    <div style="margin-top:20px">
       <div class="hint" style="font-weight:600;color:var(--ink);margin-bottom:8px">${esc(t('lampiran.title'))}</div>
       <div id="lampiran_proyek"></div>
     </div>`;
   bukaAuxDrawer('project-view', t('projects.drawerTitle'), html,
     bolehTulisModul('projects') ? () => { tutupAuxDrawer(); bukaProjectDrawer(row); } : null, t('common.edit'));
   $('#auxDSave').style.display = bolehTulisModul('projects') ? '' : 'none';
+  // Daftar tahapan yang SAMA dipakai di View maupun Edit; yang membedakan
+  // cuma bolehTulisModul di dalamnya (centang & tombol hapus mati kalau
+  // baca-saja) -- bukan dua daftar terpisah yang bisa berbeda isinya.
+  renderMilestones(row.id);
   renderLampiranPanel('lampiran_proyek', 'project', row.id, { clientOrgId: S.ws.client_org_id });
 }
 function projectFormHTML(row) {
@@ -2073,29 +2082,107 @@ function projectFormHTML(row) {
     <div class="f"><label>${t('projects.f.kategori')}</label><input id="pj_kategori" placeholder="${esc(t('projects.f.kategoriPh'))}" value="${esc(row?.kategori || '')}"></div>
     <div class="f"><label>${t('projects.f.pic')}</label><select id="pj_pic">${opsi(r.pic.map((p) => ({ v: p.id, l: p.nama })), row?.pic_legal_id, t('common.none'))}</select></div>
   </div>
-  <div class="f" style="margin-top:12px"><label>${t('projects.f.progress')}<span id="pj_progress_val">${row?.progress_persen ?? 0}</span>%</label>
-    <input type="range" id="pj_progress" min="0" max="100" step="5" value="${row?.progress_persen ?? 0}"></div>
   <div class="grid2" style="margin-top:12px">
     <div class="f"><label>${t('projects.f.target')}</label><input type="date" id="pj_target" value="${esc(row?.target_selesai ? row.target_selesai.slice(0,10) : '')}"></div>
     <div class="f"><label>${t('projects.f.status')}</label><select id="pj_status">${opsi(r.status.map((v) => ({ v, l: PROJECT_STATUS_NAMA[v] })), row?.status || 'berjalan', t('common.none'))}</select></div>
   </div>
   <div class="f" style="margin-top:12px"><label>${t('projects.f.keterangan')}</label><textarea id="pj_ket" rows="3">${esc(row?.keterangan || '')}</textarea></div>
   <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+    <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 4px">${t('projects.tahapan.title')}</h4>
+    <p class="hint" style="margin:0 0 10px">${esc(t('projects.tahapan.desc'))}</p>
+    <div id="pj_milestones"></div>
+  </div>
+  <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
     <h4 style="font-family:var(--serif);font-size:14px;margin:0 0 10px">${t('lampiran.title')}</h4>
     <div id="lampiran_proyek"></div>
   </div>`;
 }
+
+/* ----------------------------------------------------------------
+   TAHAPAN PROYEK — parameter yang menentukan progres.
+
+   Sebelumnya di sini ada slider "Progress: __%" yang bisa digeser
+   bebas. Dilaporkan langsung: angka begitu tidak mengukur apa-apa, dia
+   cuma pendapat orang yang terakhir membuka formulirnya — padahal
+   justru angka itulah yang dilihat klien sebagai "sudah sampai mana
+   proyek saya". Slidernya dicabut; sekarang progres = tahapan yang
+   dicentang / total tahapan, dihitung trigger di basis data
+   (db/26_project_milestones.sql), jadi tetap benar dari mana pun
+   barisnya diubah.
+
+   Tahapan cuma bisa dikelola untuk proyek yang SUDAH tersimpan (perlu
+   id) — pola yang sama dengan panel Lampiran di seluruh aplikasi ini.
+   ---------------------------------------------------------------- */
+async function renderMilestones(projectId) {
+  const el = $('#pj_milestones');
+  if (!el) return;
+  if (!projectId) {
+    el.innerHTML = `<p class="hint" style="margin:0">${esc(t('projects.tahapan.simpanDulu'))}</p>`;
+    return;
+  }
+  const bolehTulis = bolehTulisModul('projects');
+  let rows = [];
+  try { rows = (await Api.projectMilestones(projectId)).rows; }
+  catch (e) { el.innerHTML = `<p class="hint" style="margin:0">${esc(e.message)}</p>`; return; }
+
+  const selesai = rows.filter((m) => m.selesai).length;
+  const pct = rows.length ? Math.round((selesai * 100) / rows.length) : 0;
+  el.innerHTML = `
+    ${rows.length ? `<div class="ms-sum">${progHTML(pct, pct >= 100 ? 'done' : '')}
+      <span>${esc(t('projects.tahapan.hitung', { a: selesai, b: rows.length }))}</span></div>` : ''}
+    <div class="ms-list">${rows.map((m) => `
+      <label class="ms-item ${m.selesai ? 'done' : ''}">
+        <input type="checkbox" data-ms="${esc(m.id)}" ${m.selesai ? 'checked' : ''} ${bolehTulis ? '' : 'disabled'}>
+        <span class="ms-nm">${esc(m.nama)}</span>
+        ${m.tanggal_selesai ? `<span class="ms-tgl">${esc(tglTampil(m.tanggal_selesai))}</span>` : ''}
+        ${bolehTulis ? `<button type="button" class="ms-del" data-msdel="${esc(m.id)}" title="${esc(t('common.delete'))}">×</button>` : ''}
+      </label>`).join('') || `<p class="hint" style="margin:0">${esc(t('projects.tahapan.kosong'))}</p>`}
+    </div>
+    ${bolehTulis ? `<div class="ms-add">
+      <input id="pj_ms_nama" placeholder="${esc(t('projects.tahapan.tambahPh'))}">
+      <button type="button" class="btn" id="pj_ms_add">${esc(t('projects.tahapan.tambah'))}</button>
+    </div>` : ''}`;
+
+  // Tiap perubahan langsung disimpan (bukan menunggu tombol Simpan
+  // drawer): centang tahapan itu tindakan tersendiri, dan progres proyek
+  // di daftar harus ikut berubah walau penggunanya lalu menekan Batal.
+  const segarkan = async () => { await renderMilestones(projectId); await muatProjectsSemua(); };
+  el.querySelectorAll('[data-ms]').forEach((cb) => {
+    cb.onchange = async () => {
+      try { await Api.updateProjectMilestone(cb.dataset.ms, { selesai: cb.checked }); await segarkan(); }
+      catch (e) { cb.checked = !cb.checked; toast(e.message || t('common.saveFailed'), 'error'); }
+    };
+  });
+  el.querySelectorAll('[data-msdel]').forEach((b) => {
+    b.onclick = async (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (!(await confirmDialog(t('projects.tahapan.hapusKonfirm'), { okText: t('common.delete') }))) return;
+      try { await Api.deleteProjectMilestone(b.dataset.msdel); await segarkan(); }
+      catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+    };
+  });
+  const tambah = async () => {
+    const inp = $('#pj_ms_nama');
+    if (!inp || !inp.value.trim()) return;
+    try { await Api.addProjectMilestone(projectId, inp.value.trim()); await segarkan(); }
+    catch (e) { toast(e.message || t('common.saveFailed'), 'error'); }
+  };
+  const addBtn = $('#pj_ms_add'); if (addBtn) addBtn.onclick = tambah;
+  const addInp = $('#pj_ms_nama');
+  if (addInp) addInp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); tambah(); } };
+}
+
 async function bukaProjectDrawer(row) {
   PJ.editing = row ? row.id : null;
   bukaAuxDrawer('project', row ? t('projects.editTitle') : t('projects.drawerTitleNew'), projectFormHTML(row), simpanProject);
   renderLampiranPanel('lampiran_proyek', 'project', row ? row.id : null, { clientOrgId: S.ws.client_org_id });
-  const range = $('#pj_progress');
-  if (range) range.addEventListener('input', () => { $('#pj_progress_val').textContent = range.value; });
+  renderMilestones(row ? row.id : null);
 }
 async function simpanProject() {
+  // progressPersen tidak lagi dikirim -- lihat renderMilestones di atas.
   const body = {
     namaProyek: $('#pj_nama').value.trim(), kategori: $('#pj_kategori').value.trim() || null,
-    picLegalId: $('#pj_pic').value || null, progressPersen: Number($('#pj_progress').value),
+    picLegalId: $('#pj_pic').value || null,
     targetSelesai: $('#pj_target').value || null, status: $('#pj_status').value,
     keterangan: $('#pj_ket').value.trim() || null,
   };

@@ -140,6 +140,13 @@ const Api = (() => {
     projectsReference: (clientOrgId) => call('/legal-projects/reference', { qs: { clientOrgId } }),
     createProject: (body) => call('/legal-projects', { method: 'POST', body }),
     updateProject: (id, body) => call(`/legal-projects/${id}`, { method: 'PATCH', body }),
+    // Tahapan proyek = parameter yang menentukan progres. Tidak ada
+    // setProgress() di sini dengan sengaja -- angkanya dihitung basis data
+    // dari tahapan yang dicentang (db/26_project_milestones.sql).
+    projectMilestones: (id) => call(`/legal-projects/${id}/milestones`),
+    addProjectMilestone: (id, nama) => call(`/legal-projects/${id}/milestones`, { method: 'POST', body: { nama } }),
+    updateProjectMilestone: (mid, body) => call(`/legal-projects/milestones/${mid}`, { method: 'PATCH', body }),
+    deleteProjectMilestone: (mid) => call(`/legal-projects/milestones/${mid}`, { method: 'DELETE' }),
 
     pendampingan: (clientOrgId) => call('/pendampingan', { qs: { clientOrgId } }),
     pendampinganReference: (clientOrgId) => call('/pendampingan/reference', { qs: { clientOrgId } }),

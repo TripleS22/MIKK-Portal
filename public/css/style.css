@@ -497,6 +497,31 @@ tbody tr:last-child td{border-bottom:none}
 .ag-txt span{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* =====================================================================
+   TAHAPAN PROYEK — daftar centang yang menghitung progres
+   (lihat renderMilestones di app.js, trigger di db/26)
+   ===================================================================== */
+.ms-sum{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:11.5px;color:var(--muted)}
+.ms-sum .prog{flex:1;min-width:100px}
+.ms-list{display:flex;flex-direction:column;gap:5px}
+.ms-item{
+  display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;
+  background:var(--paper);border:1px solid var(--line);border-radius:9px;font-size:12.5px;
+}
+.ms-item:hover{border-color:var(--gold-line)}
+.ms-item input{width:15px;height:15px;flex:none;accent-color:var(--ok);cursor:pointer}
+.ms-item input:disabled{cursor:default}
+.ms-nm{flex:1;min-width:0;color:var(--ink-2)}
+.ms-item.done .ms-nm{text-decoration:line-through;color:var(--muted-2)}
+.ms-tgl{font-size:10.5px;color:var(--muted-2);font-family:var(--mono);white-space:nowrap}
+.ms-del{
+  flex:none;width:20px;height:20px;border-radius:6px;line-height:1;font-size:15px;
+  color:var(--muted-2);background:transparent;cursor:pointer;
+}
+.ms-del:hover{background:var(--crit-sf);color:var(--crit)}
+.ms-add{display:flex;gap:7px;margin-top:9px}
+.ms-add input{flex:1;min-width:0}
+
+/* =====================================================================
    DONUT + LEGENDA
    ===================================================================== */
 .donutwrap{display:flex;align-items:center;gap:18px;padding:16px 18px;flex-wrap:wrap}

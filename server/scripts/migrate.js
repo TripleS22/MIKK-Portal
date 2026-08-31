@@ -45,6 +45,7 @@ const ORDER = [
   '23_viewer_readonly_enforcement.sql',
   '24_detail_staf.sql',
   '25_permission_overrides.sql',
+  '26_project_milestones.sql',
 ];
 
 async function main() {
