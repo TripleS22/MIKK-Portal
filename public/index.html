@@ -361,7 +361,8 @@
 
         <div class="bar">
           <div class="seg">
-            <button id="vTable" class="on" data-i18n="kontrak.view.table">Tabel</button>
+            <button id="vCards" data-i18n="kontrak.view.cards">Kartu</button>
+            <button id="vTable" data-i18n="kontrak.view.table">Tabel</button>
             <button id="vQuick" data-i18n="kontrak.view.quick">Isi cepat</button>
           </div>
           <input class="fld" id="q" placeholder="Cari nomor atau judul…" data-i18n-ph="kontrak.searchPh" style="flex:1;min-width:190px">
@@ -371,7 +372,13 @@
           <button class="btn ghost" id="resetBtn" data-i18n="kontrak.reset">Bersihkan</button>
         </div>
 
-        <div id="viewTable">
+        <div id="viewCards" style="display:none">
+          <div class="kcard-grid" id="kcardGrid"></div>
+          <div class="empty" id="kcardEmpty" style="display:none"></div>
+          <div class="foot" style="border:1px solid var(--line);border-top:0;border-radius:0 0 var(--r) var(--r);background:var(--surface)"><span id="kcardCount"></span><div class="pg" id="kcardPg"></div></div>
+        </div>
+
+        <div id="viewTable" style="display:none">
           <div class="panel">
             <div class="tscroll"><table>
               <thead><tr>

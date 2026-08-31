@@ -350,6 +350,12 @@ async function enterWorkspace(ws) {
   $('#whoRole').textContent = PERAN_LABEL[ws.peran] || ws.peran;
   $('#avInit').textContent = initials(S.user.nama);
   $('#sbLabel').textContent = t(adalahStafMikk(ws.tipe) ? 'sidebar.lawyerLabel' : 'sidebar.portalLabel');
+  // CRM Kontrak: staf tetap default ke tampilan Tabel (alat kerja
+  // sehari-hari, sudah pas). Sisi klien default ke Kartu -- ringkasan
+  // per baris, bukan tabel banyak kolom (lihat renderKontrakCards) --
+  // keduanya tetap bisa saling pindah lewat toggle Kartu/Tabel di atas,
+  // ini cuma titik AWAL yang beda per audiens.
+  S.view = adalahStafMikk(ws.tipe) ? 'table' : 'cards';
   // Tarif hanya relevan bagi Managing Partner. Menyembunyikan tombolnya
   // bukan pengamanan — RLS yang menahan penulisan; ini sekadar tidak
   // menawarkan pintu yang memang terkunci.
@@ -501,12 +507,19 @@ function renderTable() {
   }).join('');
 
   $('#count').textContent = total ? t('kontrak.count', { a: a + 1, b: Math.min(a + S.per, total), total }) : '';
+  $('#pg').innerHTML = paginasiHTML(total);
+}
+// Dipakai bersama renderTable() & renderKontrakCards() -- satu sumber
+// tombol halaman, dua kontainer beda (#pg / #kcardPg), klik keduanya
+// ditangani listener terpisah yang sama isinya (lihat bawah).
+function paginasiHTML(total) {
+  const pages = Math.max(1, Math.ceil(total / S.per));
   const btn = (lbl, pg, on, dis) => `<button data-pg="${pg}" class="${on ? 'on' : ''}" ${dis ? 'disabled' : ''}>${lbl}</button>`;
   let html = btn('‹', S.page - 1, false, S.page === 1);
   const win = []; for (let i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - S.page) <= 1) win.push(i);
   let last = 0; win.forEach((i) => { if (last && i - last > 1) html += `<button disabled>…</button>`; html += btn(i, i, i === S.page, false); last = i; });
   html += btn('›', S.page + 1, false, S.page === pages);
-  $('#pg').innerHTML = html;
+  return html;
 }
 
 /* ---------------------------------------------------------------- formulir kontrak */
@@ -838,14 +851,52 @@ function gambarQuick(q, c, err) {
 /* ---------------------------------------------------------------- render utama */
 function render() {
   renderCards();
+  $('#viewCards').style.display = S.view === 'cards' ? 'block' : 'none';
   $('#viewTable').style.display = S.view === 'table' ? 'block' : 'none';
   $('#viewQuick').style.display = S.view === 'quick' ? 'block' : 'none';
+  $('#vCards').classList.toggle('on', S.view === 'cards');
   $('#vTable').classList.toggle('on', S.view === 'table');
   $('#vQuick').classList.toggle('on', S.view === 'quick');
-  if (S.view === 'table') renderTable(); else renderQuick();
+  if (S.view === 'cards') renderKontrakCards();
+  else if (S.view === 'table') renderTable();
+  else renderQuick();
 }
 async function terapkanFilterLaluRender() {
-  await muatDaftar(); renderTable();
+  await muatDaftar(); render();
+}
+/* Tampilan kartu -- default utk portal klien (lihat enterWorkspace),
+   opsional juga utk staf lewat toggle "Kartu" yang sama. Ringkasan per
+   kartu, bukan tabel banyak kolom; klik kartu = View yang SAMA persis
+   dengan klik baris tabel (bukaDrawerView), tidak ada logika baru di situ. */
+function renderKontrakCards() {
+  const { rows, total } = S.list;
+  $('#kcardEmpty').style.display = rows.length ? 'none' : 'block';
+  $('#kcardEmpty').innerHTML = `<h3>${esc(t('kontrak.empty.title'))}</h3><p>${esc(t('kontrak.empty.desc'))}</p>`;
+  $('#kcardGrid').innerHTML = rows.map((c) => {
+    const sw = c.status_waktu, d = c.sisa_hari;
+    const sisa = (sw === 'tanpa_batas' || d == null) ? '' : `<span class="days ${d < 0 ? 'neg' : d <= 90 ? 'soon' : ''}">${sisaTeks(d)}</span>`;
+    return `<button class="kcard" data-id="${c.id}">
+      <div class="kcard-top">
+        <span class="pill p-${sw}">${esc(STATUS_NAMA[sw] || sw)}</span>
+        ${sisa}
+      </div>
+      <h4>${esc(c.judul)}</h4>
+      <div class="sub">${c.lawan_pihak ? esc(c.lawan_pihak) : esc(t('kontrak.belumDiisi'))}</div>
+      <div class="kcard-meta">
+        ${c.kategori_nama ? `<span class="tag">${esc(c.kategori_nama)}</span>` : ''}
+        ${c.nomor_dokumen ? `<span>${esc(c.nomor_dokumen)}</span>` : ''}
+      </div>
+      <div class="kcard-dates">${c.tanggal_mulai ? esc(tglTampil(c.tanggal_mulai)) : '—'} – ${
+        c.tanggal_berakhir ? esc(tglTampil(c.tanggal_berakhir)) : (c.tanpa_batas_waktu ? esc(t('kontrak.tanpaBatas')) : '—')}</div>
+      ${c.catatan_migrasi ? `<div class="kcard-flag"><span>⚑</span><span>${esc(c.catatan_migrasi)}</span></div>` : ''}
+    </button>`;
+  }).join('');
+  document.querySelectorAll('#kcardGrid [data-id]').forEach((b) => {
+    b.onclick = () => bukaDrawerView(S.list.rows.find((r) => r.id === b.dataset.id));
+  });
+  const a = (S.page - 1) * S.per;
+  $('#kcardCount').textContent = total ? t('kontrak.count', { a: a + 1, b: Math.min(a + S.per, total), total }) : '';
+  $('#kcardPg').innerHTML = paginasiHTML(total);
 }
 
 /* ---------------------------------------------------------------- event */
@@ -879,6 +930,7 @@ $('#switchWsBtn').onclick = () => {
   });
 };
 
+$('#vCards').onclick = () => { S.view = 'cards'; render(); };
 $('#vTable').onclick = () => { S.view = 'table'; render(); };
 $('#vQuick').onclick = () => { S.view = 'quick'; S.quickIdx = 0; S.draft = null; render(); };
 
@@ -899,6 +951,11 @@ $('#resetBtn').onclick = () => {
   terapkanFilterLaluRender();
 };
 $('#pg').onclick = (e) => {
+  const b = e.target.closest('button[data-pg]'); if (!b || b.disabled) return;
+  S.page = Number(b.dataset.pg); terapkanFilterLaluRender();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+$('#kcardPg').onclick = (e) => {
   const b = e.target.closest('button[data-pg]'); if (!b || b.disabled) return;
   S.page = Number(b.dataset.pg); terapkanFilterLaluRender();
   window.scrollTo({ top: 0, behavior: 'smooth' });
